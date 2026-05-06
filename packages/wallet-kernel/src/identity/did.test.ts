@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { formatTdipDid, parseTdipDid } from './did.ts';
 import type { TdipDid } from '../types/identity.ts';
+import { formatTdipDid, parseTdipDid } from './did.ts';
 
 describe('TDIP DID parsing', () => {
   it('parses a human DID', () => {

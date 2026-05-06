@@ -18,11 +18,8 @@
  * Spec ref: docs/canton + docs/bridge.
  */
 
-import {
-  bridgeAdapterFromClient,
-  type BridgeClientLike,
-} from './bridge-adapter-base.ts';
 import type { BridgeRoutePort } from '../bridge.ts';
+import { type BridgeClientLike, bridgeAdapterFromClient } from './bridge-adapter-base.ts';
 
 export class CantonBridgeAdapter implements BridgeRoutePort {
   readonly adapterId = 'canton' as const;

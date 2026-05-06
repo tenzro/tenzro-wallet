@@ -121,7 +121,7 @@ export function base58Decode(s: string): Uint8Array {
   let length = 0;
   for (let i = zeros; i < s.length; i++) {
     const code = s.charCodeAt(i);
-    const digit = code < 128 ? B58_INDEX[code] ?? -1 : -1;
+    const digit = code < 128 ? (B58_INDEX[code] ?? -1) : -1;
     if (digit < 0) throw new Error(`base58: invalid character at ${i}`);
     let carry = digit;
     let j = 0;

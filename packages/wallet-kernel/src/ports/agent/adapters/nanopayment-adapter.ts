@@ -60,11 +60,7 @@ export interface NanopaymentClientLike {
     deposit: string,
     asset?: string,
   ): Promise<RawChannelInfo>;
-  sendNanopayment(
-    channelId: string,
-    amount: string,
-    memo?: string,
-  ): Promise<RawNanopaymentReceipt>;
+  sendNanopayment(channelId: string, amount: string, memo?: string): Promise<RawNanopaymentReceipt>;
   flushBatch(channelId: string): Promise<RawBatchSettlement>;
   closeChannel(channelId: string): Promise<RawCloseResult>;
   getChannel(channelId: string): Promise<RawChannelInfo>;
@@ -103,11 +99,7 @@ export class NanopaymentSdkAdapter implements NanopaymentPort {
   }
 
   async sendNanopayment(req: SendNanopaymentRequest): Promise<NanopaymentReceipt> {
-    const raw = await this.client.sendNanopayment(
-      req.channelId,
-      req.amount.toString(),
-      req.memo,
-    );
+    const raw = await this.client.sendNanopayment(req.channelId, req.amount.toString(), req.memo);
     return {
       paymentId: raw.payment_id,
       channelId: raw.channel_id,

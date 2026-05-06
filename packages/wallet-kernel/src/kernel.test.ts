@@ -17,7 +17,7 @@ import {
   tenzroNativeSurface,
 } from './surfaces/index.ts';
 import type { AssetId } from './types/asset.ts';
-import type { TdipDid, TdipIdentity, SurfaceKey } from './types/identity.ts';
+import type { SurfaceKey, TdipDid, TdipIdentity } from './types/identity.ts';
 import type { Intent, TxStatus } from './types/intent.ts';
 import type { SurfaceModule } from './types/surface-module.ts';
 import type { SurfaceName } from './types/surface.ts';
@@ -257,8 +257,6 @@ describe('WalletKernel end-to-end', () => {
       amount: 10n * 10n ** 10n,
       memo: '4012745722',
     };
-    await expect(kernel.prepare(intent)).rejects.toThrow(
-      /prepareSubmission not implemented/,
-    );
+    await expect(kernel.prepare(intent)).rejects.toThrow(/prepareSubmission not implemented/);
   });
 });

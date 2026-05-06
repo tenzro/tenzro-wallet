@@ -18,24 +18,14 @@
  * consumed in M5.
  */
 
-import {
-  dustResidual,
-  truncateForView,
-  type CrossVmPointerOp,
-} from '../ports/cross-vm.ts';
+import { type CrossVmPointerOp, dustResidual, truncateForView } from '../ports/cross-vm.ts';
+import type { TenzroIdentityPort } from '../ports/tenzro-identity.ts';
+import type { TenzroRpcPort, TenzroTxStatus } from '../ports/tenzro-rpc.ts';
 import type { Consent } from '../types/consent.ts';
-import type {
-  Intent,
-  PreparedTx,
-  SignedTx,
-  TxHandle,
-  TxStatus,
-} from '../types/intent.ts';
 import type { SurfaceKey, TdipDid } from '../types/identity.ts';
+import type { Intent, PreparedTx, SignedTx, TxHandle, TxStatus } from '../types/intent.ts';
 import type { SigningDriver } from '../types/signing-driver.ts';
 import type { SurfaceModule } from '../types/surface-module.ts';
-import type { TenzroRpcPort, TenzroTxStatus } from '../ports/tenzro-rpc.ts';
-import type { TenzroIdentityPort } from '../ports/tenzro-identity.ts';
 import { makeHandle } from './util.ts';
 
 interface TenzroNativeBody {
@@ -149,10 +139,7 @@ export function tenzroNativeSurface(deps: TenzroNativeDeps): SurfaceModule {
       if (!fromKey || fromKey.surface !== 'tenzro-native') {
         throw new Error(`no tenzro-native key for ${intent.from}`);
       }
-      const [nonce, chainId] = await Promise.all([
-        rpc.getNonce(fromKey.address),
-        rpc.getChainId(),
-      ]);
+      const [nonce, chainId] = await Promise.all([rpc.getNonce(fromKey.address), rpc.getChainId()]);
 
       const body: TenzroNativePointerBody = {
         kind: 'tenzro-native-pointer',
@@ -213,9 +200,8 @@ export function tenzroNativeSurface(deps: TenzroNativeDeps): SurfaceModule {
         surfaceKey,
         scheme: 'ed25519+ml-dsa-65',
         preimage,
-        purpose: body.kind === 'tenzro-native-pointer'
-          ? 'tenzro-native-pointer'
-          : 'tenzro-native-send',
+        purpose:
+          body.kind === 'tenzro-native-pointer' ? 'tenzro-native-pointer' : 'tenzro-native-send',
       });
       return { prepared, signatures: result.signatures, body };
     },
@@ -231,21 +217,22 @@ export function tenzroNativeSurface(deps: TenzroNativeDeps): SurfaceModule {
       // node's RPC will branch on the body's `kind` to invoke the
       // `crossvm_pointer_move` syscall instead of value-transfer settlement.
       // When the SDK adds a dedicated pointer endpoint this branches.
-      const sendArgs = body.kind === 'tenzro-native-pointer'
-        ? {
-            from: body.fromAddress,
-            to: '0x1003',
-            value: 0n,
-            nonce: body.nonce,
-            chainId: body.chainId,
-          }
-        : {
-            from: body.fromAddress,
-            to: body.toAddress,
-            value: body.amount,
-            nonce: body.nonce,
-            chainId: body.chainId,
-          };
+      const sendArgs =
+        body.kind === 'tenzro-native-pointer'
+          ? {
+              from: body.fromAddress,
+              to: '0x1003',
+              value: 0n,
+              nonce: body.nonce,
+              chainId: body.chainId,
+            }
+          : {
+              from: body.fromAddress,
+              to: body.toAddress,
+              value: body.amount,
+              nonce: body.nonce,
+              chainId: body.chainId,
+            };
       const hash = await rpc.sendTransaction(sendArgs);
       return makeHandle('tenzro-native', signed.prepared.intent, hash);
     },
@@ -301,10 +288,7 @@ function canonicalize(body: TenzroNativeBody | TenzroNativePointerBody): Uint8Ar
   // docs, but server-side signing means the node owns canonicalization.
   // Local canonicalization here only matters for the local signing-driver
   // leg (which is a placeholder until M5).
-  const json = JSON.stringify(
-    body,
-    (_k, v) => (typeof v === 'bigint' ? v.toString() : v),
-  );
+  const json = JSON.stringify(body, (_k, v) => (typeof v === 'bigint' ? v.toString() : v));
   return new TextEncoder().encode(json);
 }
 
@@ -327,10 +311,7 @@ function stubRpc(): TenzroRpcPort {
  * `TENZRO_WATCH_INTERVAL_MS` / `TENZRO_WATCH_TIMEOUT_MS` env vars at
  * runtime — useful for smoke tests against slow testnets.
  */
-async function* watchViaPort(
-  handle: TxHandle,
-  rpc: TenzroRpcPort,
-): AsyncIterable<TxStatus> {
+async function* watchViaPort(handle: TxHandle, rpc: TenzroRpcPort): AsyncIterable<TxStatus> {
   const env = readEnv();
   const intervalMs = Number(env.TENZRO_WATCH_INTERVAL_MS ?? 250);
   const timeoutMs = Number(env.TENZRO_WATCH_TIMEOUT_MS ?? 60_000);
@@ -366,9 +347,7 @@ async function* watchViaPort(
         handle,
         phase,
         ...(handle.hash !== undefined ? { hash: handle.hash } : {}),
-        ...(nodeStatus?.blockHeight !== undefined
-          ? { blockHeight: nodeStatus.blockHeight }
-          : {}),
+        ...(nodeStatus?.blockHeight !== undefined ? { blockHeight: nodeStatus.blockHeight } : {}),
       };
       yield update;
       if (phase === 'finalized' || phase === 'failed') return;

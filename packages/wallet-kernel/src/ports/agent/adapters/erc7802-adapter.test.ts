@@ -7,10 +7,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import {
-  Erc7802SdkAdapter,
-  type Erc7802ClientLike,
-} from './erc7802-adapter.ts';
+import { type Erc7802ClientLike, Erc7802SdkAdapter } from './erc7802-adapter.ts';
 
 const TOKEN = '0xabc0000000000000000000000000000000000000';
 const TO = '0xdef0000000000000000000000000000000000000';

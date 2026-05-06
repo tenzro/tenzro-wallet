@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
+import { bytesToHex, hexToBytes } from './rlp.ts';
 import {
+  type CompiledMessage,
   base58Decode,
   base58Encode,
   compactArrayLength,
   readCompactArrayLength,
   serializeCompiledMessage,
   serializeTransaction,
-  type CompiledMessage,
 } from './solana.ts';
-import { bytesToHex, hexToBytes } from './rlp.ts';
 
 describe('solana / compactArrayLength (short_vec)', () => {
   it('encodes 0 as a single 0x00 byte', () => {
@@ -138,8 +138,6 @@ describe('solana / compiled message + tx serialisation', () => {
   });
 
   it('rejects non-64-byte signatures', () => {
-    expect(() =>
-      serializeTransaction(message, [new Uint8Array(32)]),
-    ).toThrow(/64 bytes/);
+    expect(() => serializeTransaction(message, [new Uint8Array(32)])).toThrow(/64 bytes/);
   });
 });

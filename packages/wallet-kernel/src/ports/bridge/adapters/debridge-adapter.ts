@@ -15,11 +15,8 @@
  * Spec ref: https://docs.debridge.finance/dln-the-debridge-liquidity-network-protocol
  */
 
-import {
-  bridgeAdapterFromClient,
-  type BridgeClientLike,
-} from './bridge-adapter-base.ts';
 import type { BridgeRoutePort } from '../bridge.ts';
+import { type BridgeClientLike, bridgeAdapterFromClient } from './bridge-adapter-base.ts';
 
 export class DeBridgeBridgeAdapter implements BridgeRoutePort {
   readonly adapterId = 'debridge' as const;

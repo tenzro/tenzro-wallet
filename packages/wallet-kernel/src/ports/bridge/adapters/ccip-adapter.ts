@@ -18,11 +18,8 @@
  * Spec ref: https://docs.chain.link/ccip
  */
 
-import {
-  bridgeAdapterFromClient,
-  type BridgeClientLike,
-} from './bridge-adapter-base.ts';
 import type { BridgeRoutePort } from '../bridge.ts';
+import { type BridgeClientLike, bridgeAdapterFromClient } from './bridge-adapter-base.ts';
 
 export class CcipBridgeAdapter implements BridgeRoutePort {
   readonly adapterId = 'ccip' as const;

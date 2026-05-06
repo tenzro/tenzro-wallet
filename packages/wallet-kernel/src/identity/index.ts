@@ -31,3 +31,7 @@ export type {
   WalletRecoverOptions,
   WalletRecoverResult,
 } from './wallet-recover.ts';
+export { ProvisioningHttpAdapter, ProvisioningHttpError } from './provisioning-http-adapter.ts';
+export type { ProvisioningHttpConfig } from './provisioning-http-adapter.ts';
+export { RecoveryHttpAdapter, RecoveryHttpError } from './recovery-http-adapter.ts';
+export type { RecoveryHttpConfig } from './recovery-http-adapter.ts';

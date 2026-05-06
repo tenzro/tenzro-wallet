@@ -3,12 +3,12 @@
  * dispatches the event; this kernel module just shapes the `info` half.
  */
 
-import { describe, expect, it } from 'vitest';
 import { TENZRO_PROVIDER_RDNS } from 'tenzro-sdk';
+import { describe, expect, it } from 'vitest';
 import {
-  buildEip6963Announcement,
   EIP6963_ANNOUNCE_EVENT,
   EIP6963_REQUEST_EVENT,
+  buildEip6963Announcement,
 } from './eip6963.ts';
 
 const VALID_UUID = '550e8400-e29b-41d4-a716-446655440000';
@@ -55,9 +55,9 @@ describe('buildEip6963Announcement', () => {
   });
 
   it('rejects malformed UUIDs', () => {
-    expect(() =>
-      buildEip6963Announcement({ uuid: 'not-a-uuid', icon: VALID_ICON }),
-    ).toThrow(/invalid uuid/);
+    expect(() => buildEip6963Announcement({ uuid: 'not-a-uuid', icon: VALID_ICON })).toThrow(
+      /invalid uuid/,
+    );
   });
 
   it('rejects non-data: icon URLs', () => {

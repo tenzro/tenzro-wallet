@@ -49,21 +49,13 @@ const RC: ReadonlyArray<readonly [number, number]> = [
 // Rotation offsets for ρ.
 // prettier-ignore
 const RHO: readonly number[] = [
-  0,  1, 62, 28, 27,
-  36, 44,  6, 55, 20,
-  3, 10, 43, 25, 39,
-  41, 45, 15, 21,  8,
-  18,  2, 61, 56, 14,
+  0, 1, 62, 28, 27, 36, 44, 6, 55, 20, 3, 10, 43, 25, 39, 41, 45, 15, 21, 8, 18, 2, 61, 56, 14,
 ];
 
 // Lane permutation for π: PI[x*5 + y] = src lane index.
 // prettier-ignore
 const PI: readonly number[] = [
-  0, 6, 12, 18, 24,
-  3, 9, 10, 16, 22,
-  1, 7, 13, 19, 20,
-  4, 5, 11, 17, 23,
-  2, 8, 14, 15, 21,
+  0, 6, 12, 18, 24, 3, 9, 10, 16, 22, 1, 7, 13, 19, 20, 4, 5, 11, 17, 23, 2, 8, 14, 15, 21,
 ];
 
 const RATE = 136; // bytes (1088 bits) for keccak-256
@@ -94,10 +86,7 @@ export function keccak256(input: Uint8Array): Uint8Array {
   for (let i = 0; i < OUTPUT; i++) {
     const laneIdx = (i / 8) | 0;
     const byteInLane = i % 8;
-    const word =
-      byteInLane < 4
-        ? state[laneIdx * 2]!
-        : state[laneIdx * 2 + 1]!;
+    const word = byteInLane < 4 ? state[laneIdx * 2]! : state[laneIdx * 2 + 1]!;
     out[i] = (word >>> ((byteInLane % 4) * 8)) & 0xff;
   }
   return out;
@@ -127,12 +116,7 @@ function permute(s: Uint32Array): void {
     const cLo = new Uint32Array(5);
     const cHi = new Uint32Array(5);
     for (let x = 0; x < 5; x++) {
-      cLo[x] =
-        s[x * 2]! ^
-        s[(x + 5) * 2]! ^
-        s[(x + 10) * 2]! ^
-        s[(x + 15) * 2]! ^
-        s[(x + 20) * 2]!;
+      cLo[x] = s[x * 2]! ^ s[(x + 5) * 2]! ^ s[(x + 10) * 2]! ^ s[(x + 15) * 2]! ^ s[(x + 20) * 2]!;
       cHi[x] =
         s[x * 2 + 1]! ^
         s[(x + 5) * 2 + 1]! ^
@@ -164,8 +148,10 @@ function permute(s: Uint32Array): void {
     for (let y = 0; y < 5; y++) {
       for (let x = 0; x < 5; x++) {
         const idx = x + y * 5;
-        s[idx * 2] = (bLo[idx]! ^ (~bLo[((x + 1) % 5) + y * 5]! & bLo[((x + 2) % 5) + y * 5]!)) >>> 0;
-        s[idx * 2 + 1] = (bHi[idx]! ^ (~bHi[((x + 1) % 5) + y * 5]! & bHi[((x + 2) % 5) + y * 5]!)) >>> 0;
+        s[idx * 2] =
+          (bLo[idx]! ^ (~bLo[((x + 1) % 5) + y * 5]! & bLo[((x + 2) % 5) + y * 5]!)) >>> 0;
+        s[idx * 2 + 1] =
+          (bHi[idx]! ^ (~bHi[((x + 1) % 5) + y * 5]! & bHi[((x + 2) % 5) + y * 5]!)) >>> 0;
       }
     }
 

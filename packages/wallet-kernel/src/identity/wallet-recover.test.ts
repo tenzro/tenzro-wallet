@@ -14,7 +14,7 @@ import type {
   PasskeyEnrolment,
   WrappedDeviceShare,
 } from './wallet-new.ts';
-import { walletRecover, type RecoveryPort } from './wallet-recover.ts';
+import { type RecoveryPort, walletRecover } from './wallet-recover.ts';
 
 const DID = 'did:tenzro:human:abc' as TdipDid;
 
@@ -36,9 +36,10 @@ function fakeEnrolment(credentialId = 'cred-new'): PasskeyEnrolment {
   return { credentialId, attestationObject: 'att', clientDataJson: 'cdj' };
 }
 
-function makeRecovery(
-  overrides: Partial<RecoveryPort> = {},
-): { port: RecoveryPort; calls: { name: string; args: unknown }[] } {
+function makeRecovery(overrides: Partial<RecoveryPort> = {}): {
+  port: RecoveryPort;
+  calls: { name: string; args: unknown }[];
+} {
   const calls: { name: string; args: unknown }[] = [];
   const start = vi.fn(async (args) => {
     calls.push({ name: 'start', args });

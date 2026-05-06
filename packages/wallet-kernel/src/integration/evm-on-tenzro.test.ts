@@ -37,8 +37,7 @@
 import { describe, expect, it } from 'vitest';
 
 const env =
-  (globalThis as { process?: { env?: Record<string, string | undefined> } })
-    .process?.env ?? {};
+  (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env ?? {};
 
 const RPC_URL = env.TENZRO_RPC_URL ?? '';
 const TEST_ADDRESS = env.TENZRO_TEST_ADDRESS ?? '';
@@ -88,10 +87,7 @@ describe.skipIf(!HAS_AUTH)('integration: evm-on-tenzro smoke', () => {
       //    against a real account succeeds; a mock-only EVM leg typically
       //    fails or returns 0 for any address. We accept 0 here (fresh
       //    account) but require the call to resolve without error.
-      const nonceHex = await rpc<string>('eth_getTransactionCount', [
-        TEST_ADDRESS,
-        'latest',
-      ]);
+      const nonceHex = await rpc<string>('eth_getTransactionCount', [TEST_ADDRESS, 'latest']);
       const nonce = Number.parseInt(nonceHex, 16);
       expect(Number.isFinite(nonce)).toBe(true);
       expect(nonce).toBeGreaterThanOrEqual(0);

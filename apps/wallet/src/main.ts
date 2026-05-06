@@ -19,22 +19,12 @@
  * without the extension installed (e.g. a hosted web wallet).
  */
 
-import type {
-  ProvisioningPort,
-  RecoveryPort,
-  WalletKernel,
-} from '@tenzro/wallet-kernel';
-import {
-  WebAuthnAuthenticatorAdapter,
-  type PasskeyEnroller,
-} from '@tenzro/wallet-kernel';
+import type { ProvisioningPort, RecoveryPort, WalletKernel } from '@tenzro/wallet-kernel';
+import { type PasskeyEnroller, WebAuthnAuthenticatorAdapter } from '@tenzro/wallet-kernel';
 
+import { KernelEip1193Provider, installTenzroProvider } from './dispatch/window-tenzro.ts';
 import { loadStubFrostWasm } from './host/frost-wasm.ts';
 import { mountOnboarding } from './ui/onboarding.ts';
-import {
-  installTenzroProvider,
-  KernelEip1193Provider,
-} from './dispatch/window-tenzro.ts';
 
 /**
  * What the embedder must supply. The kernel orchestrators reach the
@@ -88,9 +78,7 @@ export interface WalletAppOptions {
  *
  * Returns a handle the embedder can use to introspect / tear down.
  */
-export async function startWalletApp(
-  opts: WalletAppOptions,
-): Promise<{
+export async function startWalletApp(opts: WalletAppOptions): Promise<{
   readonly frostBackend: ReturnType<typeof loadStubFrostWasm>;
   readonly mountOnboarding: () => Promise<void>;
   readonly installProvider: (kernel: WalletKernel) => { dispose: () => void };

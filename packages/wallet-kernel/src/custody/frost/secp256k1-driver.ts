@@ -17,41 +17,26 @@
  * for the convention each surface uses).
  */
 
-import type {
-  SigningDriver,
-  SigningRequest,
-  SigningResult,
-} from '../../types/signing-driver.ts';
+import type { SigningDriver, SigningRequest, SigningResult } from '../../types/signing-driver.ts';
 import { surfaceKeyId } from '../surface-key-id.ts';
-import type {
-  FrostCoordinator,
-  FrostDeviceShareHolder,
-} from './coordinator.ts';
+import type { FrostCoordinator, FrostDeviceShareHolder } from './coordinator.ts';
 
 export interface FrostSecp256k1Options {
   readonly coordinator: FrostCoordinator;
-  readonly resolveShareHolder: (
-    req: SigningRequest,
-  ) => Promise<FrostDeviceShareHolder>;
+  readonly resolveShareHolder: (req: SigningRequest) => Promise<FrostDeviceShareHolder>;
 }
 
-export function frostSecp256k1Driver(
-  opts: FrostSecp256k1Options,
-): SigningDriver {
+export function frostSecp256k1Driver(opts: FrostSecp256k1Options): SigningDriver {
   return {
     id: 'frost-secp256k1',
     async sign(req: SigningRequest): Promise<SigningResult> {
       if (req.scheme !== 'secp256k1') {
-        throw new Error(
-          `frost-secp256k1 driver cannot sign scheme '${req.scheme}'`,
-        );
+        throw new Error(`frost-secp256k1 driver cannot sign scheme '${req.scheme}'`);
       }
 
       const holder = await opts.resolveShareHolder(req);
       if (holder.scheme !== 'secp256k1') {
-        throw new Error(
-          `share-holder scheme mismatch: expected secp256k1, got ${holder.scheme}`,
-        );
+        throw new Error(`share-holder scheme mismatch: expected secp256k1, got ${holder.scheme}`);
       }
 
       let sessionId: string | undefined;
@@ -83,15 +68,11 @@ export function frostSecp256k1Driver(
 
         const finalized = await opts.coordinator.finalize(sessionId);
         if (finalized.state !== 'finalized' || !finalized.signature) {
-          throw new Error(
-            `frost-secp256k1 finalize returned state=${finalized.state}`,
-          );
+          throw new Error(`frost-secp256k1 finalize returned state=${finalized.state}`);
         }
         const len = finalized.signature.length;
         if (len !== 64 && len !== 65) {
-          throw new Error(
-            `frost-secp256k1 signature has wrong length: ${len}`,
-          );
+          throw new Error(`frost-secp256k1 signature has wrong length: ${len}`);
         }
         return { signatures: [finalized.signature] };
       } catch (err) {

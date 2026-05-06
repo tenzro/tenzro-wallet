@@ -13,11 +13,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import {
-  PairingHttpAdapter,
-  PairingHttpError,
-  type PairingHttpConfig,
-} from './http-adapter.ts';
+import { PairingHttpAdapter, type PairingHttpConfig, PairingHttpError } from './http-adapter.ts';
 import type { PasskeyAssertion } from './port.ts';
 
 const ASSERTION: PasskeyAssertion = {
@@ -34,17 +30,17 @@ interface Captured {
   body: string;
 }
 
-function captureFetch(
-  respond: (path: string) => Response,
-): { fetch: typeof fetch; calls: Captured[] } {
+function captureFetch(respond: (path: string) => Response): {
+  fetch: typeof fetch;
+  calls: Captured[];
+} {
   const calls: Captured[] = [];
   const fetchImpl: typeof fetch = async (url, init) => {
     const u = url as string;
     calls.push({
       url: u,
       method: (init?.method ?? 'GET') as string,
-      contentType:
-        (init?.headers as Record<string, string> | undefined)?.['content-type'] ?? '',
+      contentType: (init?.headers as Record<string, string> | undefined)?.['content-type'] ?? '',
       body: (init?.body as string) ?? '',
     });
     return respond(u);
@@ -58,15 +54,16 @@ function cfg(fetchImpl: typeof fetch, baseUrl = 'https://rpc.tenzro.test'): Pair
 
 describe('PairingHttpAdapter.start', () => {
   it('POSTs JSON body and unwraps to camelCase result', async () => {
-    const { fetch, calls } = captureFetch(() =>
-      new Response(
-        JSON.stringify({
-          session_id: 'sess-1',
-          pairing_url: 'https://rpc.tenzro.test/p/abc',
-          expires_at: 1_700_000_000_000,
-        }),
-        { status: 200, headers: { 'content-type': 'application/json' } },
-      ),
+    const { fetch, calls } = captureFetch(
+      () =>
+        new Response(
+          JSON.stringify({
+            session_id: 'sess-1',
+            pairing_url: 'https://rpc.tenzro.test/p/abc',
+            expires_at: 1_700_000_000_000,
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
     );
     const adapter = new PairingHttpAdapter(cfg(fetch));
     const r = await adapter.start({ did: 'did:tenzro:human:alice', label: 'phone-2' });
@@ -85,11 +82,11 @@ describe('PairingHttpAdapter.start', () => {
   });
 
   it('omits label when not provided (no undefined in body)', async () => {
-    const { fetch, calls } = captureFetch(() =>
-      new Response(
-        JSON.stringify({ session_id: 's', pairing_url: 'u', expires_at: 1 }),
-        { status: 200 },
-      ),
+    const { fetch, calls } = captureFetch(
+      () =>
+        new Response(JSON.stringify({ session_id: 's', pairing_url: 'u', expires_at: 1 }), {
+          status: 200,
+        }),
     );
     const adapter = new PairingHttpAdapter(cfg(fetch));
     await adapter.start({ did: 'did:tenzro:human:alice' });
@@ -99,11 +96,11 @@ describe('PairingHttpAdapter.start', () => {
   });
 
   it('strips trailing slash on baseUrl', async () => {
-    const { fetch, calls } = captureFetch(() =>
-      new Response(
-        JSON.stringify({ session_id: 's', pairing_url: 'u', expires_at: 1 }),
-        { status: 200 },
-      ),
+    const { fetch, calls } = captureFetch(
+      () =>
+        new Response(JSON.stringify({ session_id: 's', pairing_url: 'u', expires_at: 1 }), {
+          status: 200,
+        }),
     );
     const adapter = new PairingHttpAdapter(cfg(fetch, 'https://rpc.tenzro.test/'));
     await adapter.start({ did: 'did:tenzro:human:alice' });
@@ -113,11 +110,9 @@ describe('PairingHttpAdapter.start', () => {
 
 describe('PairingHttpAdapter.claim', () => {
   it('POSTs assertion in snake_case and unwraps state', async () => {
-    const { fetch, calls } = captureFetch(() =>
-      new Response(
-        JSON.stringify({ session_id: 'sess-1', state: 'claimed' }),
-        { status: 200 },
-      ),
+    const { fetch, calls } = captureFetch(
+      () =>
+        new Response(JSON.stringify({ session_id: 'sess-1', state: 'claimed' }), { status: 200 }),
     );
     const adapter = new PairingHttpAdapter(cfg(fetch));
     const r = await adapter.claim({
@@ -144,15 +139,16 @@ describe('PairingHttpAdapter.claim', () => {
 
 describe('PairingHttpAdapter.poll', () => {
   it('returns claimedPublicKey when present', async () => {
-    const { fetch } = captureFetch(() =>
-      new Response(
-        JSON.stringify({
-          session_id: 'sess-1',
-          state: 'claimed',
-          claimed_public_key: 'newkey-b64u',
-        }),
-        { status: 200 },
-      ),
+    const { fetch } = captureFetch(
+      () =>
+        new Response(
+          JSON.stringify({
+            session_id: 'sess-1',
+            state: 'claimed',
+            claimed_public_key: 'newkey-b64u',
+          }),
+          { status: 200 },
+        ),
     );
     const adapter = new PairingHttpAdapter(cfg(fetch));
     const r = await adapter.poll('sess-1');
@@ -162,11 +158,9 @@ describe('PairingHttpAdapter.poll', () => {
   });
 
   it('omits claimedPublicKey/reason when engine omits them (pending)', async () => {
-    const { fetch } = captureFetch(() =>
-      new Response(
-        JSON.stringify({ session_id: 'sess-1', state: 'pending' }),
-        { status: 200 },
-      ),
+    const { fetch } = captureFetch(
+      () =>
+        new Response(JSON.stringify({ session_id: 'sess-1', state: 'pending' }), { status: 200 }),
     );
     const adapter = new PairingHttpAdapter(cfg(fetch));
     const r = await adapter.poll('sess-1');
@@ -176,15 +170,16 @@ describe('PairingHttpAdapter.poll', () => {
   });
 
   it('surfaces reason on cancelled/expired states', async () => {
-    const { fetch } = captureFetch(() =>
-      new Response(
-        JSON.stringify({
-          session_id: 'sess-1',
-          state: 'expired',
-          reason: 'ttl elapsed',
-        }),
-        { status: 200 },
-      ),
+    const { fetch } = captureFetch(
+      () =>
+        new Response(
+          JSON.stringify({
+            session_id: 'sess-1',
+            state: 'expired',
+            reason: 'ttl elapsed',
+          }),
+          { status: 200 },
+        ),
     );
     const adapter = new PairingHttpAdapter(cfg(fetch));
     const r = await adapter.poll('sess-1');
@@ -195,34 +190,35 @@ describe('PairingHttpAdapter.poll', () => {
 
 describe('PairingHttpAdapter.finalize', () => {
   it('POSTs originalDeviceAssertion and maps verificationMethods', async () => {
-    const { fetch, calls } = captureFetch(() =>
-      new Response(
-        JSON.stringify({
-          session_id: 'sess-1',
-          verification_methods: [
-            {
-              id: 'did:tenzro:human:alice#key-1',
-              type: 'Multikey',
-              controller: 'did:tenzro:human:alice',
-              public_key_multibase: 'z6Mk-orig',
-            },
-            {
-              id: 'did:tenzro:human:alice#key-2',
-              type: 'Multikey',
-              controller: 'did:tenzro:human:alice',
-              public_key_multibase: 'z6Mk-new',
-            },
-            {
-              id: 'did:tenzro:human:alice#node-tee',
-              type: 'Multikey',
-              controller: 'did:tenzro:node:tee',
-              public_key_multibase: 'z6Mk-tee',
-            },
-          ],
-          threshold: '2-of-3',
-        }),
-        { status: 200 },
-      ),
+    const { fetch, calls } = captureFetch(
+      () =>
+        new Response(
+          JSON.stringify({
+            session_id: 'sess-1',
+            verification_methods: [
+              {
+                id: 'did:tenzro:human:alice#key-1',
+                type: 'Multikey',
+                controller: 'did:tenzro:human:alice',
+                public_key_multibase: 'z6Mk-orig',
+              },
+              {
+                id: 'did:tenzro:human:alice#key-2',
+                type: 'Multikey',
+                controller: 'did:tenzro:human:alice',
+                public_key_multibase: 'z6Mk-new',
+              },
+              {
+                id: 'did:tenzro:human:alice#node-tee',
+                type: 'Multikey',
+                controller: 'did:tenzro:node:tee',
+                public_key_multibase: 'z6Mk-tee',
+              },
+            ],
+            threshold: '2-of-3',
+          }),
+          { status: 200 },
+        ),
     );
     const adapter = new PairingHttpAdapter(cfg(fetch));
     const r = await adapter.finalize({
@@ -265,9 +261,7 @@ describe('PairingHttpAdapter.cancel', () => {
 
 describe('PairingHttpAdapter error handling', () => {
   it('throws PairingHttpError with status and url on non-2xx', async () => {
-    const { fetch } = captureFetch(
-      () => new Response('session not found', { status: 404 }),
-    );
+    const { fetch } = captureFetch(() => new Response('session not found', { status: 404 }));
     const adapter = new PairingHttpAdapter(cfg(fetch));
     await expect(adapter.poll('missing')).rejects.toMatchObject({
       name: 'PairingHttpError',

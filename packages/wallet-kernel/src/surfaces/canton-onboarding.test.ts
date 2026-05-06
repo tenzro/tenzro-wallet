@@ -13,10 +13,6 @@
 import { describe, expect, it } from 'vitest';
 import { internalMpcDriver } from '../custody/internal-mpc.ts';
 import { provisionIdentity } from '../identity/provision.ts';
-import {
-  preparedTransactionHash,
-  topologyBundleHash,
-} from '../ports/canton/hash.ts';
 import type {
   CantonValidatorPort,
   GenerateTopologyRequest,
@@ -26,6 +22,7 @@ import type {
   SubmitAcceptSetupRequest,
   SubmitTopologyRequest,
 } from '../ports/canton/canton-validator.ts';
+import { preparedTransactionHash, topologyBundleHash } from '../ports/canton/hash.ts';
 import { onboardExternalParty } from './canton-onboarding.ts';
 
 interface Recording {
@@ -110,7 +107,11 @@ describe('onboardExternalParty', () => {
     const identity = await provisionIdentity({ uuid: 'onboarding-1' });
     const { port, recording } = await recordingPort();
     const result = await onboardExternalParty(
-      { keyResolver: (d) => (d === identity.did ? identity.keys.get('canton-external') : undefined), signingDriver: internalMpcDriver(), validatorPort: port },
+      {
+        keyResolver: (d) => (d === identity.did ? identity.keys.get('canton-external') : undefined),
+        signingDriver: internalMpcDriver(),
+        validatorPort: port,
+      },
       { did: identity.did, surface: 'canton-external', partyHint: 'alice' },
     );
 
@@ -149,7 +150,12 @@ describe('onboardExternalParty', () => {
     });
     await expect(
       onboardExternalParty(
-        { keyResolver: (d) => (d === identity.did ? identity.keys.get('canton-external') : undefined), signingDriver: internalMpcDriver(), validatorPort: port },
+        {
+          keyResolver: (d) =>
+            d === identity.did ? identity.keys.get('canton-external') : undefined,
+          signingDriver: internalMpcDriver(),
+          validatorPort: port,
+        },
         { did: identity.did, surface: 'canton-external', partyHint: 'mallory' },
       ),
     ).rejects.toThrow(/topology bundle hash mismatch/);
@@ -162,7 +168,12 @@ describe('onboardExternalParty', () => {
     });
     await expect(
       onboardExternalParty(
-        { keyResolver: (d) => (d === identity.did ? identity.keys.get('canton-external') : undefined), signingDriver: internalMpcDriver(), validatorPort: port },
+        {
+          keyResolver: (d) =>
+            d === identity.did ? identity.keys.get('canton-external') : undefined,
+          signingDriver: internalMpcDriver(),
+          validatorPort: port,
+        },
         { did: identity.did, surface: 'canton-external', partyHint: 'mallory' },
       ),
     ).rejects.toThrow(/accept-setup preparedTransactionHash mismatch/);
@@ -173,7 +184,11 @@ describe('onboardExternalParty', () => {
     const { port } = await recordingPort();
     await expect(
       onboardExternalParty(
-        { keyResolver: (d) => (d === identity.did ? identity.keys.get('tenzro-native') : undefined), signingDriver: internalMpcDriver(), validatorPort: port },
+        {
+          keyResolver: (d) => (d === identity.did ? identity.keys.get('tenzro-native') : undefined),
+          signingDriver: internalMpcDriver(),
+          validatorPort: port,
+        },
         { did: identity.did, surface: 'canton-external', partyHint: 'alice' },
       ),
     ).rejects.toThrow(/no canton-external key/);

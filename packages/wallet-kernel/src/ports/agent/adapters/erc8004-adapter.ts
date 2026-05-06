@@ -65,10 +65,7 @@ export class Erc8004SdkAdapter implements Erc8004Port {
     return new Erc8004SdkAdapter(client as unknown as Erc8004ClientLike);
   }
 
-  async deriveAgentId(
-    owner: `0x${string}`,
-    salt: `0x${string}`,
-  ): Promise<Erc8004DerivedAgentId> {
+  async deriveAgentId(owner: `0x${string}`, salt: `0x${string}`): Promise<Erc8004DerivedAgentId> {
     const raw = await this.client.deriveAgentId(owner, salt);
     return {
       agentId: raw.agent_id as Erc8004AgentIdHex,
@@ -82,9 +79,7 @@ export class Erc8004SdkAdapter implements Erc8004Port {
     registrationDataUri: string,
     owner: `0x${string}`,
   ): Promise<Erc8004Calldata> {
-    return mapCalldata(
-      await this.client.encodeRegister(agentId, registrationDataUri, owner),
-    );
+    return mapCalldata(await this.client.encodeRegister(agentId, registrationDataUri, owner));
   }
 
   async encodeGetAgent(agentId: Erc8004AgentIdHex): Promise<Erc8004Calldata> {
@@ -117,12 +112,7 @@ export class Erc8004SdkAdapter implements Erc8004Port {
     dataHash: `0x${string}`,
   ): Promise<Erc8004Calldata> {
     return mapCalldata(
-      await this.client.encodeRequestValidation(
-        agentId,
-        validatorId,
-        requestUri,
-        dataHash,
-      ),
+      await this.client.encodeRequestValidation(agentId, validatorId, requestUri, dataHash),
     );
   }
 

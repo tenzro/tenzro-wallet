@@ -43,10 +43,7 @@ export interface Erc8004Agent {
 
 export interface Erc8004Port {
   /** Derive `keccak256(abi.encode("TENZRO_ERC8004_AGENT", owner, salt))`. */
-  deriveAgentId(
-    owner: `0x${string}`,
-    salt: `0x${string}`,
-  ): Promise<Erc8004DerivedAgentId>;
+  deriveAgentId(owner: `0x${string}`, salt: `0x${string}`): Promise<Erc8004DerivedAgentId>;
 
   /** Encode `IdentityRegistry.register(agentId, registrationDataURI, owner)`. */
   encodeRegister(

@@ -70,10 +70,7 @@ export interface AgentPaymentClientLike {
     serviceType: string,
   ): Promise<RawAgentPaymentReceipt>;
   getDailySpend(agentDid: string): Promise<RawDailySpend>;
-  listAgentTransactions(
-    agentDid: string,
-    limit?: number,
-  ): Promise<RawAgentTransaction[]>;
+  listAgentTransactions(agentDid: string, limit?: number): Promise<RawAgentTransaction[]>;
 }
 
 function mapPolicy(raw: RawSpendingPolicy): AgentSpendingPolicy {

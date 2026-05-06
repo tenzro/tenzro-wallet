@@ -5,19 +5,17 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import {
-  AgentPaymentSdkAdapter,
-  type AgentPaymentClientLike,
-} from './agent-payment-adapter.ts';
+import { type AgentPaymentClientLike, AgentPaymentSdkAdapter } from './agent-payment-adapter.ts';
 
 interface Call {
   readonly method: string;
   readonly args: readonly unknown[];
 }
 
-function fakeClient(
-  overrides: Partial<AgentPaymentClientLike> = {},
-): { client: AgentPaymentClientLike; calls: Call[] } {
+function fakeClient(overrides: Partial<AgentPaymentClientLike> = {}): {
+  client: AgentPaymentClientLike;
+  calls: Call[];
+} {
   const calls: Call[] = [];
   const policy = {
     agent_did: 'did:tenzro:agent',

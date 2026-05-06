@@ -7,11 +7,7 @@ import type { SurfaceName } from '../types/surface.ts';
 
 let counter = 0;
 
-export function makeHandle(
-  surface: SurfaceName,
-  _intent: Intent,
-  hash?: string,
-): TxHandle {
+export function makeHandle(surface: SurfaceName, _intent: Intent, hash?: string): TxHandle {
   counter += 1;
   return {
     id: `${surface}-${Date.now().toString(36)}-${counter.toString(36)}`,

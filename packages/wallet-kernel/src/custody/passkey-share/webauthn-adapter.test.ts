@@ -28,9 +28,10 @@ function bytesFromU8(u: Uint8Array): ArrayBuffer {
   return ab;
 }
 
-function makeCredentials(
-  cred: PublicKeyCredentialLike,
-): { creds: CredentialsContainer; lastOptions: { value?: PublicKeyCredentialRequestOptionsLike } } {
+function makeCredentials(cred: PublicKeyCredentialLike): {
+  creds: CredentialsContainer;
+  lastOptions: { value?: PublicKeyCredentialRequestOptionsLike };
+} {
   const lastOptions: { value?: PublicKeyCredentialRequestOptionsLike } = {};
   return {
     lastOptions,
@@ -196,8 +197,8 @@ describe('WebAuthnAuthenticatorAdapter — environment guard', () => {
       typeof navigator !== 'undefined' &&
       (navigator as unknown as { credentials?: unknown }).credentials !== undefined;
     if (hasNavCreds) return;
-    await expect(
-      adapter.basicAssertion({ ...REQ, nonce: 'bm9uY2U' }),
-    ).rejects.toThrow(/navigator\.credentials/);
+    await expect(adapter.basicAssertion({ ...REQ, nonce: 'bm9uY2U' })).rejects.toThrow(
+      /navigator\.credentials/,
+    );
   });
 });

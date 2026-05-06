@@ -23,14 +23,10 @@
 import {
   type TenzroClient as SdkTenzroClient,
   TenzroClient,
-  TenzroNotInstalledError,
   type TenzroConfig,
+  TenzroNotInstalledError,
 } from 'tenzro-sdk';
-import type {
-  TenzroRpcPort,
-  TenzroSendArgs,
-  TenzroTxStatus,
-} from '../tenzro-rpc.ts';
+import type { TenzroRpcPort, TenzroSendArgs, TenzroTxStatus } from '../tenzro-rpc.ts';
 
 /**
  * Just the slice of `TenzroClient` the adapter touches. Listed explicitly so
@@ -124,8 +120,7 @@ export class TenzroSdkAdapter implements TenzroRpcPort {
       return { hash: tx.hash, status: 'pending' };
     }
     const finalized = await this.client.getFinalizedBlock();
-    const status: TenzroTxStatus['status'] =
-      tx.blockHeight <= finalized ? 'finalized' : 'included';
+    const status: TenzroTxStatus['status'] = tx.blockHeight <= finalized ? 'finalized' : 'included';
     return { hash: tx.hash, status, blockHeight: tx.blockHeight };
   }
 }

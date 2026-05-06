@@ -32,10 +32,7 @@
  * tests that don't exercise FROST never touch the WASM module.
  */
 
-import type {
-  FrostBackend,
-  ShareUnwrapRequest,
-} from '../passkey-share/unwrapper.ts';
+import type { FrostBackend, ShareUnwrapRequest } from '../passkey-share/unwrapper.ts';
 import type { FrostScheme } from './coordinator.ts';
 
 export class FrostBackendUnavailable extends Error {
@@ -59,7 +56,9 @@ export function frostBackendUnavailable(): FrostBackend {
     async commit({ scheme }: { share: Uint8Array; scheme: FrostScheme }) {
       throw new FrostBackendUnavailable(scheme);
     },
-    async respond({ scheme }: {
+    async respond({
+      scheme,
+    }: {
       share: Uint8Array;
       scheme: FrostScheme;
       preimage: Uint8Array;

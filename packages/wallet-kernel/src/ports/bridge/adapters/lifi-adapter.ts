@@ -36,11 +36,8 @@
  * Spec ref: https://docs.li.fi/
  */
 
-import {
-  bridgeAdapterFromClient,
-  type BridgeClientLike,
-} from './bridge-adapter-base.ts';
 import type { BridgeRoutePort } from '../bridge.ts';
+import { type BridgeClientLike, bridgeAdapterFromClient } from './bridge-adapter-base.ts';
 
 export class LiFiBridgeAdapter implements BridgeRoutePort {
   readonly adapterId = 'lifi' as const;

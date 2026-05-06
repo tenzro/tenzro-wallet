@@ -1,0 +1,41 @@
+{
+  "name": "@tenzro/extension",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Tenzro Wallet — official browser extension. EIP-6963 announce, MV3 service worker, popup, side panel.",
+  "scripts": {
+    "dev": "wxt",
+    "dev:firefox": "wxt -b firefox",
+    "build": "wxt build",
+    "build:firefox": "wxt build -b firefox",
+    "zip": "wxt zip",
+    "zip:firefox": "wxt zip -b firefox",
+    "typecheck": "wxt prepare && tsc --noEmit",
+    "compile": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "5.100.8",
+    "@tenzro/ui": "workspace:*",
+    "@tenzro/wallet-kernel": "workspace:*",
+    "lucide-react": "1.14.0",
+    "motion": "12.38.0",
+    "qrcode.react": "4.2.0",
+    "react": "19.2.5",
+    "react-dom": "19.2.5",
+    "sonner": "2.0.7",
+    "viem": "2.48.8",
+    "zod": "4.4.2",
+    "zustand": "5.0.12"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "4.2.4",
+    "@types/chrome": "0.0.287",
+    "@types/react": "19.2.7",
+    "@types/react-dom": "19.2.3",
+    "@wxt-dev/module-react": "1.1.4",
+    "tailwindcss": "4.2.4",
+    "typescript": "5.7.3",
+    "wxt": "0.20.25"
+  }
+}

@@ -5,19 +5,17 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import {
-  PaymentRailsSdkAdapter,
-  type PaymentClientLike,
-} from './payment-rails-adapter.ts';
+import { type PaymentClientLike, PaymentRailsSdkAdapter } from './payment-rails-adapter.ts';
 
 interface Call {
   readonly method: string;
   readonly args: readonly unknown[];
 }
 
-function fakeClient(
-  overrides: Partial<PaymentClientLike> = {},
-): { client: PaymentClientLike; calls: Call[] } {
+function fakeClient(overrides: Partial<PaymentClientLike> = {}): {
+  client: PaymentClientLike;
+  calls: Call[];
+} {
   const calls: Call[] = [];
   const client: PaymentClientLike = {
     createChallenge: async (resource, amount, asset, protocol) => {
@@ -105,12 +103,7 @@ describe('PaymentRailsSdkAdapter.createChallenge', () => {
     });
     expect(r.challengeId).toBe('ch-1');
     expect(r.protocol).toBe('mpp');
-    expect(calls[0]?.args).toEqual([
-      'https://api.x.com/data',
-      1_000,
-      undefined,
-      undefined,
-    ]);
+    expect(calls[0]?.args).toEqual(['https://api.x.com/data', 1_000, undefined, undefined]);
   });
 });
 
@@ -140,11 +133,7 @@ describe('PaymentRailsSdkAdapter.pay* rails', () => {
       url: 'https://z',
       amount: '1.234567',
     });
-    expect(calls[0]?.args).toEqual([
-      'did:tenzro:machine:agent-1',
-      'https://z',
-      '1.234567',
-    ]);
+    expect(calls[0]?.args).toEqual(['did:tenzro:machine:agent-1', 'https://z', '1.234567']);
     expect(r.txHash).toBe('0xap2');
     expect(r.status).toBe('Approved');
   });

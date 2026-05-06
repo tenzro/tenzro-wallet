@@ -49,10 +49,7 @@
  * WebAuthn glue.
  */
 
-import type {
-  FrostDeviceShareHolder,
-  FrostScheme,
-} from '../frost/coordinator.ts';
+import type { FrostDeviceShareHolder, FrostScheme } from '../frost/coordinator.ts';
 
 export type ShareUnwrapMode = 'prf' | 'large-blob' | 'escrow';
 
@@ -124,10 +121,12 @@ export interface ShareEnvelopePort {
   }>;
 
   /** POST /wallet/share/escrow/unwrap */
-  finishEscrow(req: ShareUnwrapRequest & {
-    readonly assertion: PasskeyAssertion;
-    readonly nonce: string;
-  }): Promise<{
+  finishEscrow(
+    req: ShareUnwrapRequest & {
+      readonly assertion: PasskeyAssertion;
+      readonly nonce: string;
+    },
+  ): Promise<{
     readonly wrappedShare: Uint8Array;
     readonly pepper: Uint8Array;
   }>;
@@ -180,10 +179,7 @@ export class PasskeyShareUnwrapper {
     if (this.opts.capabilities.prf && this.opts.authenticator.prfAssertion) {
       return 'prf';
     }
-    if (
-      this.opts.capabilities.largeBlob &&
-      this.opts.authenticator.readLargeBlob
-    ) {
+    if (this.opts.capabilities.largeBlob && this.opts.authenticator.readLargeBlob) {
       return 'large-blob';
     }
     return 'escrow';
@@ -195,10 +191,7 @@ export class PasskeyShareUnwrapper {
     return this.bindHolder(share, req.scheme);
   }
 
-  private async unwrapShare(
-    mode: ShareUnwrapMode,
-    req: ShareUnwrapRequest,
-  ): Promise<Uint8Array> {
+  private async unwrapShare(mode: ShareUnwrapMode, req: ShareUnwrapRequest): Promise<Uint8Array> {
     if (mode === 'prf') {
       const { prfOutput } = await this.opts.authenticator.prfAssertion!(req);
       const env = await this.opts.envelope.fetchEnvelope(req);
@@ -237,10 +230,7 @@ export class PasskeyShareUnwrapper {
     });
   }
 
-  private bindHolder(
-    share: Uint8Array,
-    scheme: FrostScheme,
-  ): FrostDeviceShareHolder {
+  private bindHolder(share: Uint8Array, scheme: FrostScheme): FrostDeviceShareHolder {
     const { frost } = this.opts;
     let disposed = false;
     const wipe = () => {

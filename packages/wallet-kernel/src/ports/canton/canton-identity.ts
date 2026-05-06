@@ -45,18 +45,14 @@ export interface CantonIdentityPort {
    * canton-external surface). Returns `undefined` if the DID has no
    * external party registered.
    */
-  resolveCantonExternalParty(
-    did: TdipDid,
-  ): Promise<TenzroSurfaceCantonParty | undefined>;
+  resolveCantonExternalParty(did: TdipDid): Promise<TenzroSurfaceCantonParty | undefined>;
 
   /**
    * Resolve a DID to its Canton party on the Tenzro-operated synchronizer
    * (the canton-internal surface). Returns `undefined` if the DID has no
    * internal party registered.
    */
-  resolveCantonInternalParty(
-    did: TdipDid,
-  ): Promise<TenzroSurfaceCantonParty | undefined>;
+  resolveCantonInternalParty(did: TdipDid): Promise<TenzroSurfaceCantonParty | undefined>;
 
   /**
    * Reverse direction: Canton Name Service entry → party id. Used for

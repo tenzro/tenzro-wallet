@@ -80,9 +80,7 @@ export class FrostHttpError extends Error {
     readonly url: string,
     readonly body: string,
   ) {
-    super(
-      `frost http ${status} on ${url}: ${body.length > 200 ? body.slice(0, 200) + '…' : body}`,
-    );
+    super(`frost http ${status} on ${url}: ${body.length > 200 ? body.slice(0, 200) + '…' : body}`);
     this.name = 'FrostHttpError';
   }
 }
@@ -166,9 +164,7 @@ export class FrostHttpAdapter implements FrostCoordinator {
     return {
       sessionId: raw.session_id,
       state: raw.state,
-      ...(raw.signature_b64 !== undefined
-        ? { signature: base64ToBytes(raw.signature_b64) }
-        : {}),
+      ...(raw.signature_b64 !== undefined ? { signature: base64ToBytes(raw.signature_b64) } : {}),
     };
   }
 
@@ -188,14 +184,10 @@ export class FrostHttpAdapter implements FrostCoordinator {
    */
   async #post<TRes>(action: string, body: unknown): Promise<TRes> {
     if (!this.#scheme) {
-      throw new Error(
-        `FrostHttpAdapter: cannot call ${action} before start() pins the scheme`,
-      );
+      throw new Error(`FrostHttpAdapter: cannot call ${action} before start() pins the scheme`);
     }
     const f = this.#cfg.fetch ?? globalThis.fetch;
-    const url =
-      this.#cfg.baseUrl.replace(/\/+$/, '') +
-      `/wallet/frost/${this.#scheme}/${action}`;
+    const url = this.#cfg.baseUrl.replace(/\/+$/, '') + `/wallet/frost/${this.#scheme}/${action}`;
     const extraHeaders = this.#cfg.headers ? await this.#cfg.headers() : {};
     const res = await f(url, {
       method: 'POST',

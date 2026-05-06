@@ -37,11 +37,7 @@
  * Browser-clean: `fetch` only.
  */
 
-import type {
-  PasskeyAssertion,
-  ShareEnvelopePort,
-  ShareUnwrapRequest,
-} from './unwrapper.ts';
+import type { PasskeyAssertion, ShareEnvelopePort, ShareUnwrapRequest } from './unwrapper.ts';
 
 export interface ShareEnvelopeHttpConfig {
   /** Base URL of the Tenzro RPC node, e.g. `https://rpc.tenzro.network`. */
@@ -61,9 +57,7 @@ export class ShareEnvelopeHttpError extends Error {
     readonly url: string,
     readonly body: string,
   ) {
-    super(
-      `share http ${status} on ${url}: ${body.length > 200 ? body.slice(0, 200) + '…' : body}`,
-    );
+    super(`share http ${status} on ${url}: ${body.length > 200 ? body.slice(0, 200) + '…' : body}`);
     this.name = 'ShareEnvelopeHttpError';
   }
 }
@@ -101,10 +95,7 @@ export class ShareEnvelopeHttpAdapter implements ShareEnvelopePort {
       surface_key: req.surfaceKeyId,
       scheme: req.scheme,
     });
-    const raw = await this.#request<RawEnvelope>(
-      'GET',
-      `envelope?${qs.toString()}`,
-    );
+    const raw = await this.#request<RawEnvelope>('GET', `envelope?${qs.toString()}`);
     return {
       wrappedShare: base64ToBytes(raw.wrapped_share_b64),
       alg: raw.alg,
@@ -116,15 +107,11 @@ export class ShareEnvelopeHttpAdapter implements ShareEnvelopePort {
     nonce: string;
     expiresAt: number;
   }> {
-    const raw = await this.#request<RawChallenge>(
-      'POST',
-      'escrow/challenge',
-      {
-        credential_id: req.credentialId,
-        surface_key: req.surfaceKeyId,
-        scheme: req.scheme,
-      },
-    );
+    const raw = await this.#request<RawChallenge>('POST', 'escrow/challenge', {
+      credential_id: req.credentialId,
+      surface_key: req.surfaceKeyId,
+      scheme: req.scheme,
+    });
     return { nonce: raw.nonce, expiresAt: raw.expires_at };
   }
 
@@ -134,22 +121,18 @@ export class ShareEnvelopeHttpAdapter implements ShareEnvelopePort {
       readonly nonce: string;
     },
   ): Promise<{ wrappedShare: Uint8Array; pepper: Uint8Array }> {
-    const raw = await this.#request<RawEscrowUnwrap>(
-      'POST',
-      'escrow/unwrap',
-      {
-        credential_id: req.credentialId,
-        surface_key: req.surfaceKeyId,
-        scheme: req.scheme,
-        nonce: req.nonce,
-        assertion: {
-          credential_id: req.assertion.credentialId,
-          client_data_json: req.assertion.clientDataJson,
-          authenticator_data: req.assertion.authenticatorData,
-          signature: req.assertion.signature,
-        },
+    const raw = await this.#request<RawEscrowUnwrap>('POST', 'escrow/unwrap', {
+      credential_id: req.credentialId,
+      surface_key: req.surfaceKeyId,
+      scheme: req.scheme,
+      nonce: req.nonce,
+      assertion: {
+        credential_id: req.assertion.credentialId,
+        client_data_json: req.assertion.clientDataJson,
+        authenticator_data: req.assertion.authenticatorData,
+        signature: req.assertion.signature,
       },
-    );
+    });
     return {
       wrappedShare: base64ToBytes(raw.wrapped_share_b64),
       pepper: base64ToBytes(raw.pepper_b64),
@@ -158,11 +141,7 @@ export class ShareEnvelopeHttpAdapter implements ShareEnvelopePort {
 
   // --- internals ---
 
-  async #request<TRes>(
-    method: 'GET' | 'POST',
-    action: string,
-    body?: unknown,
-  ): Promise<TRes> {
+  async #request<TRes>(method: 'GET' | 'POST', action: string, body?: unknown): Promise<TRes> {
     const f = this.#cfg.fetch ?? globalThis.fetch;
     const url = this.#cfg.baseUrl.replace(/\/+$/, '') + `/wallet/share/${action}`;
     const extraHeaders = this.#cfg.headers ? await this.#cfg.headers() : {};

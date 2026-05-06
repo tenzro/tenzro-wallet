@@ -113,9 +113,7 @@ export class WebAuthnAuthenticatorAdapter implements PasskeyAuthenticatorAdapter
       publicKey: {
         challenge,
         rpId: this.#cfg.rpId,
-        allowCredentials: [
-          { id: base64UrlDecode(req.credentialId), type: 'public-key' },
-        ],
+        allowCredentials: [{ id: base64UrlDecode(req.credentialId), type: 'public-key' }],
         userVerification: 'required',
         extensions: { prf: { eval: { first: salt } } },
       },
@@ -141,9 +139,7 @@ export class WebAuthnAuthenticatorAdapter implements PasskeyAuthenticatorAdapter
       publicKey: {
         challenge: randomBytes(32),
         rpId: this.#cfg.rpId,
-        allowCredentials: [
-          { id: base64UrlDecode(req.credentialId), type: 'public-key' },
-        ],
+        allowCredentials: [{ id: base64UrlDecode(req.credentialId), type: 'public-key' }],
         userVerification: 'required',
         extensions: { largeBlob: { read: true } },
       },
@@ -151,9 +147,7 @@ export class WebAuthnAuthenticatorAdapter implements PasskeyAuthenticatorAdapter
     const ext = cred.getClientExtensionResults?.();
     const blob = ext?.largeBlob?.blob;
     if (!blob) {
-      throw new Error(
-        'WebAuthn largeBlob read returned empty — caller must fall back to escrow',
-      );
+      throw new Error('WebAuthn largeBlob read returned empty — caller must fall back to escrow');
     }
     return { blob: new Uint8Array(blob), assertion: toAssertion(cred) };
   }
@@ -167,9 +161,7 @@ export class WebAuthnAuthenticatorAdapter implements PasskeyAuthenticatorAdapter
       publicKey: {
         challenge: base64UrlDecode(req.nonce),
         rpId: this.#cfg.rpId,
-        allowCredentials: [
-          { id: base64UrlDecode(req.credentialId), type: 'public-key' },
-        ],
+        allowCredentials: [{ id: base64UrlDecode(req.credentialId), type: 'public-key' }],
         userVerification: 'required',
       },
     });
@@ -178,13 +170,11 @@ export class WebAuthnAuthenticatorAdapter implements PasskeyAuthenticatorAdapter
 
   // --- internals ---
 
-  async #get(
-    options: PublicKeyCredentialRequestOptionsLike,
-  ): Promise<PublicKeyCredentialLike> {
+  async #get(options: PublicKeyCredentialRequestOptionsLike): Promise<PublicKeyCredentialLike> {
     const creds =
       this.#cfg.credentials ??
-      (globalThis as unknown as { navigator?: { credentials?: CredentialsContainer } })
-        .navigator?.credentials;
+      (globalThis as unknown as { navigator?: { credentials?: CredentialsContainer } }).navigator
+        ?.credentials;
     if (!creds) {
       throw new Error(
         'navigator.credentials unavailable — WebAuthnAuthenticatorAdapter requires a browser context',
@@ -210,9 +200,7 @@ function toAssertion(cred: PublicKeyCredentialLike): PasskeyAssertion {
   return {
     credentialId: base64UrlEncode(new Uint8Array(cred.rawId)),
     clientDataJson: base64UrlEncode(new Uint8Array(cred.response.clientDataJSON)),
-    authenticatorData: base64UrlEncode(
-      new Uint8Array(cred.response.authenticatorData),
-    ),
+    authenticatorData: base64UrlEncode(new Uint8Array(cred.response.authenticatorData)),
     signature: base64UrlEncode(new Uint8Array(cred.response.signature)),
   };
 }

@@ -25,15 +25,14 @@
  * the right line.
  */
 
-import { describe, expect, it } from 'vitest';
 import { TenzroClient } from 'tenzro-sdk';
+import { describe, expect, it } from 'vitest';
 import { TenzroSdkAdapter } from '../ports/adapters/tenzro-sdk-adapter.ts';
 
 // Read env via globalThis cast — kernel package is browser-clean and has no
 // @types/node, so `process` isn't a known global at typecheck time.
 const env =
-  (globalThis as { process?: { env?: Record<string, string | undefined> } })
-    .process?.env ?? {};
+  (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env ?? {};
 const HAS_AUTH = Boolean(env.TENZRO_BEARER_JWT && env.TENZRO_TEST_ADDRESS);
 const TEST_ADDRESS = env.TENZRO_TEST_ADDRESS ?? '';
 const TIMEOUT_MS = Number(env.TENZRO_TEST_TIMEOUT_MS ?? 60_000);

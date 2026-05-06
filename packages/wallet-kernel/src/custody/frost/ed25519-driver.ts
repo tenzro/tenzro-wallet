@@ -16,16 +16,9 @@
  * Returns a single 64-byte Ed25519 signature.
  */
 
-import type {
-  SigningDriver,
-  SigningRequest,
-  SigningResult,
-} from '../../types/signing-driver.ts';
+import type { SigningDriver, SigningRequest, SigningResult } from '../../types/signing-driver.ts';
 import { surfaceKeyId } from '../surface-key-id.ts';
-import type {
-  FrostCoordinator,
-  FrostDeviceShareHolder,
-} from './coordinator.ts';
+import type { FrostCoordinator, FrostDeviceShareHolder } from './coordinator.ts';
 
 export interface FrostEd25519Options {
   readonly coordinator: FrostCoordinator;
@@ -34,9 +27,7 @@ export interface FrostEd25519Options {
    * the host plug in passkey-unwrap (PRF/largeBlob) or escrow-envelope
    * unwrap without the driver knowing which.
    */
-  readonly resolveShareHolder: (
-    req: SigningRequest,
-  ) => Promise<FrostDeviceShareHolder>;
+  readonly resolveShareHolder: (req: SigningRequest) => Promise<FrostDeviceShareHolder>;
 }
 
 export function frostEd25519Driver(opts: FrostEd25519Options): SigningDriver {
@@ -44,16 +35,12 @@ export function frostEd25519Driver(opts: FrostEd25519Options): SigningDriver {
     id: 'frost-ed25519',
     async sign(req: SigningRequest): Promise<SigningResult> {
       if (req.scheme !== 'ed25519' && req.scheme !== 'ed25519+ml-dsa-65') {
-        throw new Error(
-          `frost-ed25519 driver cannot sign scheme '${req.scheme}'`,
-        );
+        throw new Error(`frost-ed25519 driver cannot sign scheme '${req.scheme}'`);
       }
 
       const holder = await opts.resolveShareHolder(req);
       if (holder.scheme !== 'ed25519') {
-        throw new Error(
-          `share-holder scheme mismatch: expected ed25519, got ${holder.scheme}`,
-        );
+        throw new Error(`share-holder scheme mismatch: expected ed25519, got ${holder.scheme}`);
       }
 
       let sessionId: string | undefined;
@@ -85,9 +72,7 @@ export function frostEd25519Driver(opts: FrostEd25519Options): SigningDriver {
 
         const finalized = await opts.coordinator.finalize(sessionId);
         if (finalized.state !== 'finalized' || !finalized.signature) {
-          throw new Error(
-            `frost-ed25519 finalize returned state=${finalized.state}`,
-          );
+          throw new Error(`frost-ed25519 finalize returned state=${finalized.state}`);
         }
         if (finalized.signature.length !== 64) {
           throw new Error(

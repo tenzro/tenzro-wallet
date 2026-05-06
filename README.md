@@ -27,7 +27,7 @@ Tenzro Wallet collapses that into:
 
 The wallet is built in layers so the same code runs in a browser extension, a hosted web wallet, a mobile app, and a service worker for agents. This repo ships:
 
-- **`packages/wallet-kernel/`** — the engine. Pure TypeScript, no Node dependencies, runs anywhere a browser does. Handles identity, custody, signing across all four VMs, balance aggregation, route selection, agent payment policies, and the bridge router. **328 unit tests, live on testnet today.**
+- **`packages/wallet-kernel/`** — the engine. Pure TypeScript, no Node dependencies, runs anywhere a browser does. Handles identity, custody, signing across all four VMs, balance aggregation, route selection, agent payment policies, and the bridge router. **395 unit tests, live on testnet today.**
 - **`apps/wallet/`** — the host scaffold. Wires the kernel into a real page: EIP-1193 provider on `window.tenzro`, EIP-6963 announcement so dApps discover it, device-provisioning UI for new wallets and recovery, and the seam where the WebAssembly FROST library plugs in.
 
 The full architecture and design rationale lives in [`docs/DESIGN.md`](./docs/DESIGN.md).
@@ -68,7 +68,7 @@ The kernel is testnet-functional today against the live Tenzro testnet at `rpc.t
 | M8 | Bridge router (LI.FI, CCIP, LayerZero, Wormhole, deBridge, Canton) | Ports + six adapters shipped, SDK-pending |
 | M9 | TDIP integration (delegate sets, recovery flows) | Kernel orchestrators shipped |
 
-`pnpm test` runs **328 unit tests** across the kernel; four env-gated integration smokes exercise the live testnet end-to-end (1-wei native self-transfer, EVM `eth_*` reads, SVM views via the unified `tenzro_*` namespace, Canton validator reachability).
+`pnpm test` runs **395 unit tests** across the kernel; four env-gated integration smokes exercise the live testnet end-to-end (1-wei native self-transfer, EVM `eth_*` reads, SVM views via the unified `tenzro_*` namespace, Canton validator reachability).
 
 ## Layout
 
@@ -121,7 +121,11 @@ Toolchain: pnpm 10.33.2, Node ≥ 22, TypeScript 5.7.3, Vitest 2.1.9, Turborepo 
 
 ### Use it as a library
 
-The kernel is browser-clean and ESM-only:
+The kernel ships on npm as [`@tenzro/wallet-kernel`](https://www.npmjs.com/package/@tenzro/wallet-kernel) — browser-clean, ESM-only:
+
+```bash
+npm install @tenzro/wallet-kernel tenzro-sdk
+```
 
 ```typescript
 import {

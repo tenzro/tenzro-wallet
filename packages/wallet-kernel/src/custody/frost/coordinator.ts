@@ -58,10 +58,10 @@
 export type FrostScheme = 'ed25519' | 'secp256k1';
 
 export type FrostSessionState =
-  | 'pending'        // round started, waiting for commitments
-  | 'committed'      // all commitments in, challenge ready
-  | 'responded'      // device submitted z_i, waiting for aggregation
-  | 'finalized'      // signature aggregated and returned
+  | 'pending' // round started, waiting for commitments
+  | 'committed' // all commitments in, challenge ready
+  | 'responded' // device submitted z_i, waiting for aggregation
+  | 'finalized' // signature aggregated and returned
   | 'aborted'
   | 'expired';
 

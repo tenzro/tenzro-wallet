@@ -58,9 +58,7 @@ export interface MlDsaSignResult {
 
 export class MlDsaThresholdUnavailable extends Error {
   constructor() {
-    super(
-      'threshold ML-DSA-65 unavailable: node advertises tee-only mode (DESIGN.md §11)',
-    );
+    super('threshold ML-DSA-65 unavailable: node advertises tee-only mode (DESIGN.md §11)');
     this.name = 'MlDsaThresholdUnavailable';
   }
 }

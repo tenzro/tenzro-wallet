@@ -11,10 +11,10 @@
 
 import { describe, expect, it } from 'vitest';
 import {
+  type CantonHttpConfig,
+  CantonHttpError,
   base64Decode,
   base64Encode,
-  CantonHttpError,
-  type CantonHttpConfig,
   postJson,
   streamNdjson,
 } from './http.ts';
@@ -47,12 +47,7 @@ describe('canton http: postJson', () => {
       });
     };
     const cfg = makeCfg(f);
-    const res = await postJson<{ x: number }, { ok: boolean }>(
-      cfg,
-      'ledger',
-      '/v2/foo',
-      { x: 1 },
-    );
+    const res = await postJson<{ x: number }, { ok: boolean }>(cfg, 'ledger', '/v2/foo', { x: 1 });
     expect(res.ok).toBe(true);
     expect(seenUrl).toBe('https://canton.test:7575/v2/foo');
     expect(seenAuth).toBe('Bearer tok-1');

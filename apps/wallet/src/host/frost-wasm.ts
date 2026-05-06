@@ -31,10 +31,7 @@
  * variant produced it.
  */
 
-import {
-  composeFrostBackend,
-  type FrostBackend,
-} from '@tenzro/wallet-kernel';
+import { type FrostBackend, composeFrostBackend } from '@tenzro/wallet-kernel';
 
 /**
  * What we need out of each per-curve WASM bundle. Pinned here so the
@@ -141,9 +138,7 @@ export function loadStubFrostWasm(): FrostBackend {
       );
     },
     async respond() {
-      throw new Error(
-        'FROST WASM stub: respond() called but no real binding loaded.',
-      );
+      throw new Error('FROST WASM stub: respond() called but no real binding loaded.');
     },
   };
   return wasmFrostBackend({ ed25519: stubModule, secp256k1: stubModule });

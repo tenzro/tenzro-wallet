@@ -6,14 +6,9 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import {
-  Erc8004SdkAdapter,
-  type Erc8004ClientLike,
-} from './erc8004-adapter.ts';
+import { type Erc8004ClientLike, Erc8004SdkAdapter } from './erc8004-adapter.ts';
 
-function fakeClient(
-  overrides: Partial<Erc8004ClientLike> = {},
-): Erc8004ClientLike {
+function fakeClient(overrides: Partial<Erc8004ClientLike> = {}): Erc8004ClientLike {
   return {
     deriveAgentId: async (owner, salt) => ({
       agent_id: '0x' + 'aa'.repeat(32),
@@ -48,8 +43,8 @@ function fakeClient(
 describe('Erc8004SdkAdapter', () => {
   it('deriveAgentId maps snake_case + brands hex', async () => {
     const adapter = new Erc8004SdkAdapter(fakeClient());
-    const owner: `0x${string}` = '0x' + '11'.repeat(20) as `0x${string}`;
-    const salt: `0x${string}` = '0x' + '22'.repeat(32) as `0x${string}`;
+    const owner: `0x${string}` = ('0x' + '11'.repeat(20)) as `0x${string}`;
+    const salt: `0x${string}` = ('0x' + '22'.repeat(32)) as `0x${string}`;
     const result = await adapter.deriveAgentId(owner, salt);
     expect(result.agentId.startsWith('0x')).toBe(true);
     expect(result.agentId).toHaveLength(2 + 64);
@@ -60,9 +55,9 @@ describe('Erc8004SdkAdapter', () => {
   it('encodeRegister returns Erc8004Calldata with branded hex', async () => {
     const adapter = new Erc8004SdkAdapter(fakeClient());
     const r = await adapter.encodeRegister(
-      '0x' + 'aa'.repeat(32) as `0x${string}`,
+      ('0x' + 'aa'.repeat(32)) as `0x${string}`,
       'ipfs://QmAgent',
-      '0x' + '11'.repeat(20) as `0x${string}`,
+      ('0x' + '11'.repeat(20)) as `0x${string}`,
     );
     expect(r.selector).toBe('0x12345678');
     expect(r.calldata).toBe('0x12345678abcd');
@@ -85,7 +80,7 @@ describe('Erc8004SdkAdapter', () => {
     });
     const adapter = new Erc8004SdkAdapter(client);
     await adapter.encodeFeedback(
-      '0x' + 'cc'.repeat(32) as `0x${string}`,
+      ('0x' + 'cc'.repeat(32)) as `0x${string}`,
       85,
       'auth-id-1',
       'ipfs://QmFb',

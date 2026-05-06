@@ -63,10 +63,7 @@ export class SessionKeySdkAdapter implements SessionKeyPort {
     const idRecord = raw.identity as { did?: string; agent_did?: string } | null;
     const agentDid = idRecord?.agent_did ?? idRecord?.did ?? '';
     const accessToken = raw.access_token ?? '';
-    const expiresAt =
-      typeof raw.expires_in === 'number'
-        ? Date.now() + raw.expires_in * 1000
-        : 0;
+    const expiresAt = typeof raw.expires_in === 'number' ? Date.now() + raw.expires_in * 1000 : 0;
     return {
       agentDid,
       accessToken,

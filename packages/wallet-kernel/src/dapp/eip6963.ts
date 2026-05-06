@@ -61,32 +61,23 @@ export interface Eip6963AnnouncementInput {
 const DEFAULT_NAME = 'Tenzro Wallet';
 const DEFAULT_RDNS = TENZRO_PROVIDER_RDNS;
 
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 /**
  * Build the `info` payload for an `eip6963:announceProvider` event. Pure —
  * no DOM access, no side effects. The browser-extension package consumes
  * this and pairs it with the EIP-1193 provider object before dispatch.
  */
-export function buildEip6963Announcement(
-  input: Eip6963AnnouncementInput,
-): Eip6963ProviderInfo {
+export function buildEip6963Announcement(input: Eip6963AnnouncementInput): Eip6963ProviderInfo {
   if (!UUID_RE.test(input.uuid)) {
-    throw new Error(
-      `buildEip6963Announcement: invalid uuid "${input.uuid}" — must be UUIDv1–v5`,
-    );
+    throw new Error(`buildEip6963Announcement: invalid uuid "${input.uuid}" — must be UUIDv1–v5`);
   }
   if (!input.icon || !/^data:image\/(svg\+xml|png|jpeg|webp)/i.test(input.icon)) {
-    throw new Error(
-      'buildEip6963Announcement: icon must be a data: URL with an image MIME type',
-    );
+    throw new Error('buildEip6963Announcement: icon must be a data: URL with an image MIME type');
   }
   const rdns = input.rdns ?? DEFAULT_RDNS;
   if (!/^[a-z0-9]+(\.[a-z0-9-]+)+$/i.test(rdns)) {
-    throw new Error(
-      `buildEip6963Announcement: invalid rdns "${rdns}" — expected reverse-DNS form`,
-    );
+    throw new Error(`buildEip6963Announcement: invalid rdns "${rdns}" — expected reverse-DNS form`);
   }
   return {
     uuid: input.uuid,

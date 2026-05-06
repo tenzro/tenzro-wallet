@@ -73,4 +73,18 @@ export interface EscrowPort {
 
   /** Inspect an escrow record. Returns null if unknown. */
   get(escrowId: string): Promise<EscrowRecord | null>;
+
+  /**
+   * Enumerate all escrows where `payer` is the locker. Backed by the
+   * `escrow_payer:` secondary index in CF_SETTLEMENTS. Order is unspecified.
+   * Returns `[]` if the payer has no escrows.
+   */
+  listByPayer(payer: string): Promise<EscrowRecord[]>;
+
+  /**
+   * Enumerate all escrows where `payee` is the destination on release. Backed
+   * by the `escrow_payee:` secondary index in CF_SETTLEMENTS. Order is
+   * unspecified. Returns `[]` if the payee has none.
+   */
+  listByPayee(payee: string): Promise<EscrowRecord[]>;
 }

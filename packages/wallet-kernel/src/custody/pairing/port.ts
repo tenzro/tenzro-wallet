@@ -67,9 +67,9 @@ export interface PairingStartResult {
 }
 
 export type PairingState =
-  | 'pending'    // Session created, waiting for the second device.
-  | 'claimed'    // Second device finished its passkey ceremony.
-  | 'finalized'  // Threshold-redeal complete; quorum is now 2-of-3.
+  | 'pending' // Session created, waiting for the second device.
+  | 'claimed' // Second device finished its passkey ceremony.
+  | 'finalized' // Threshold-redeal complete; quorum is now 2-of-3.
   | 'expired'
   | 'cancelled';
 

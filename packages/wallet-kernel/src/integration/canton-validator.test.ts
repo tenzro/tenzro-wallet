@@ -30,8 +30,7 @@ import { describe, expect, it } from 'vitest';
 import { LedgerApiAdapter } from '../ports/canton/adapters/ledger-api-adapter.ts';
 
 const env =
-  (globalThis as { process?: { env?: Record<string, string | undefined> } })
-    .process?.env ?? {};
+  (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env ?? {};
 
 const HAS_AUTH = Boolean(
   env.CANTON_LEDGER_BASE_URL &&

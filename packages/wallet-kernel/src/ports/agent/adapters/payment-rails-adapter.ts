@@ -108,9 +108,7 @@ export class PaymentRailsSdkAdapter implements PaymentRailsPort {
   }
 
   async payAp2(req: PayAp2Request): Promise<PaymentReceipt> {
-    return normaliseReceipt(
-      await this.client.payAp2(req.agentDid, req.url, req.amount),
-    );
+    return normaliseReceipt(await this.client.payAp2(req.agentDid, req.url, req.amount));
   }
 
   async payVisaTap(req: PayVisaTapRequest): Promise<PaymentReceipt> {
@@ -152,9 +150,7 @@ export class PaymentRailsSdkAdapter implements PaymentRailsPort {
     };
   }
 
-  async issueMastercardToken(
-    req: IssueMastercardTokenRequest,
-  ): Promise<MastercardToken> {
+  async issueMastercardToken(req: IssueMastercardTokenRequest): Promise<MastercardToken> {
     if (!this.client.issueMastercardToken) {
       throw new Error(
         'PaymentRailsSdkAdapter.issueMastercardToken: SDK pending — tenzro-sdk PaymentClient does not yet expose issueMastercardToken (DESIGN.md §11.1)',
@@ -197,10 +193,10 @@ function normaliseReceipt(raw: unknown): PaymentReceipt {
     ...(r.txHash !== undefined
       ? { txHash: r.txHash }
       : r.tx_hash !== undefined
-      ? { txHash: r.tx_hash }
-      : r.transaction_hash !== undefined
-      ? { txHash: r.transaction_hash }
-      : {}),
+        ? { txHash: r.tx_hash }
+        : r.transaction_hash !== undefined
+          ? { txHash: r.transaction_hash }
+          : {}),
     meta: r,
   };
 }

@@ -20,9 +20,7 @@ const ZERO = new Uint8Array(0);
 describe('frostBackendUnavailable', () => {
   it('throws FrostBackendUnavailable on commit, with scheme in message', async () => {
     const b = frostBackendUnavailable();
-    const err = await b
-      .commit({ share: ZERO, scheme: 'ed25519' })
-      .catch((e) => e);
+    const err = await b.commit({ share: ZERO, scheme: 'ed25519' }).catch((e) => e);
     expect(err).toBeInstanceOf(FrostBackendUnavailable);
     expect((err as FrostBackendUnavailable).scheme).toBe('ed25519');
     expect((err as Error).message).toMatch(/ed25519/);
@@ -44,7 +42,10 @@ describe('frostBackendUnavailable', () => {
 });
 
 describe('composeFrostBackend', () => {
-  function fakeBackend(): FrostBackend & { commit: ReturnType<typeof vi.fn>; respond: ReturnType<typeof vi.fn> } {
+  function fakeBackend(): FrostBackend & {
+    commit: ReturnType<typeof vi.fn>;
+    respond: ReturnType<typeof vi.fn>;
+  } {
     return {
       commit: vi.fn(async () => new Uint8Array([0xc0])),
       respond: vi.fn(async () => new Uint8Array([0xaa])),
@@ -83,8 +84,8 @@ describe('composeFrostBackend', () => {
   it('throws FrostBackendUnavailable when target scheme missing', async () => {
     const ed = fakeBackend();
     const b = composeFrostBackend({ ed25519: ed }); // no secp256k1
-    await expect(
-      b.commit({ share: ZERO, scheme: 'secp256k1' }),
-    ).rejects.toBeInstanceOf(FrostBackendUnavailable);
+    await expect(b.commit({ share: ZERO, scheme: 'secp256k1' })).rejects.toBeInstanceOf(
+      FrostBackendUnavailable,
+    );
   });
 });

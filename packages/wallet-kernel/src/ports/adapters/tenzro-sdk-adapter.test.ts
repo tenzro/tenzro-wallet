@@ -5,12 +5,12 @@
  * us where the seam is.
  */
 
-import { afterEach, describe, expect, it, vi } from 'vitest';
 import { TenzroClient } from 'tenzro-sdk';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  type TenzroClientLike,
   TenzroNotInstalledError,
   TenzroSdkAdapter,
-  type TenzroClientLike,
 } from './tenzro-sdk-adapter.ts';
 
 interface FakeCall {
@@ -18,9 +18,10 @@ interface FakeCall {
   readonly args: unknown;
 }
 
-function fakeClient(
-  overrides: Partial<TenzroClientLike> = {},
-): { client: TenzroClientLike; calls: FakeCall[] } {
+function fakeClient(overrides: Partial<TenzroClientLike> = {}): {
+  client: TenzroClientLike;
+  calls: FakeCall[];
+} {
   const calls: FakeCall[] = [];
   const client: TenzroClientLike = {
     getNonce: async (address) => {
@@ -170,8 +171,6 @@ describe('TenzroSdkAdapter.fromInjected (M6 — injected-provider path)', () => 
     vi.spyOn(TenzroClient, 'fromInjected').mockRejectedValue(
       new TenzroNotInstalledError('Tenzro provider not announced'),
     );
-    await expect(TenzroSdkAdapter.fromInjected()).rejects.toBeInstanceOf(
-      TenzroNotInstalledError,
-    );
+    await expect(TenzroSdkAdapter.fromInjected()).rejects.toBeInstanceOf(TenzroNotInstalledError);
   });
 });

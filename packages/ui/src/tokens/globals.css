@@ -1,0 +1,223 @@
+/**
+ * Tenzro Wallet — design tokens.
+ *
+ * Restrained dark palette modelled on Coinbase / Revolut / Phantom 2026:
+ * mono UI chrome (deep black + neutral greys + hairline borders), one
+ * brand accent for primary actions and selected state, status colors
+ * only on explicit states. Chain identity is conveyed by the chain's
+ * own logo color in `chain-badge.tsx` — never splashed across cards.
+ *
+ * The four "surface-*" colors stay as kernel-internal accents (used by
+ * the cross-VM route preview to differentiate pointer-op from bridge),
+ * but we no longer paint Card top-lines with them — that produced
+ * visual noise the asset list didn't need.
+ */
+
+@import "tailwindcss";
+
+@theme {
+  /* ── Base palette (deep mono) ────────────────────────────────────── */
+  --color-background: oklch(0.115 0.003 280);
+  --color-background-elevated: oklch(0.14 0.003 280);
+  --color-surface-1: oklch(0.155 0.003 280);
+  --color-surface-2: oklch(0.185 0.004 280);
+  --color-surface-3: oklch(0.22 0.005 280);
+  --color-overlay: oklch(0.06 0.002 280 / 0.7);
+
+  /* Hairline borders — Coinbase-style, low opacity neutrals */
+  --color-border-subtle: oklch(1 0 0 / 0.06);
+  --color-border-default: oklch(1 0 0 / 0.1);
+  --color-border-strong: oklch(1 0 0 / 0.16);
+
+  --color-foreground: oklch(0.98 0.002 280);
+  --color-foreground-muted: oklch(0.68 0.005 280);
+  --color-foreground-subtle: oklch(0.5 0.005 280);
+  --color-foreground-disabled: oklch(0.36 0.005 280);
+
+  /* ── Brand — single accent, used sparingly ───────────────────────── */
+  --color-brand: oklch(0.7 0.18 285);
+  --color-brand-hover: oklch(0.74 0.19 285);
+  --color-brand-press: oklch(0.66 0.17 285);
+  --color-brand-soft: oklch(0.7 0.18 285 / 0.12);
+  --color-brand-glow: oklch(0.7 0.18 285 / 0.32);
+  --color-brand-foreground: oklch(0.99 0 0);
+
+  /* ── Surface accents (kernel-internal, used by router preview) ──── */
+  /* These are NOT used on cards/badges anymore — they live only in the
+     CrossVmRoute glyph color and the chain-logo dot for Tenzro chains. */
+  --color-surface-native: oklch(0.78 0.14 195);
+  --color-surface-native-soft: oklch(0.78 0.14 195 / 0.1);
+  --color-surface-native-glow: oklch(0.78 0.14 195 / 0.28);
+
+  --color-surface-evm: oklch(0.66 0.16 265);
+  --color-surface-evm-soft: oklch(0.66 0.16 265 / 0.1);
+  --color-surface-evm-glow: oklch(0.66 0.16 265 / 0.28);
+
+  --color-surface-svm: oklch(0.78 0.18 165);
+  --color-surface-svm-soft: oklch(0.78 0.18 165 / 0.1);
+  --color-surface-svm-glow: oklch(0.78 0.18 165 / 0.28);
+
+  --color-surface-canton: oklch(0.74 0.16 50);
+  --color-surface-canton-soft: oklch(0.74 0.16 50 / 0.1);
+  --color-surface-canton-glow: oklch(0.74 0.16 50 / 0.28);
+
+  /* ── Agent-stack accent — only used on the AGENT chip and avatar ring ── */
+  --color-agent: oklch(0.78 0.16 250);
+  --color-agent-soft: oklch(0.78 0.16 250 / 0.12);
+  --color-agent-glow: oklch(0.78 0.16 250 / 0.32);
+
+  /* ── Status — only for explicit states ───────────────────────────── */
+  --color-success: oklch(0.74 0.16 145);
+  --color-success-soft: oklch(0.74 0.16 145 / 0.12);
+  --color-warning: oklch(0.78 0.16 75);
+  --color-warning-soft: oklch(0.78 0.16 75 / 0.12);
+  --color-danger: oklch(0.66 0.22 25);
+  --color-danger-soft: oklch(0.66 0.22 25 / 0.12);
+  --color-info: oklch(0.72 0.13 240);
+  --color-info-soft: oklch(0.72 0.13 240 / 0.12);
+
+  /* ── Typography ──────────────────────────────────────────────────── */
+  --font-sans: "Geist", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono", "JetBrains Mono", ui-monospace, monospace;
+  --font-display: "Geist", "Inter", ui-sans-serif, system-ui, sans-serif;
+
+  --text-display-2xl: 4.5rem;
+  --text-display-xl: 3.75rem;
+  --text-display-lg: 3rem;
+  --text-display-md: 2.25rem;
+  --text-display-sm: 1.875rem;
+  --text-display-xs: 1.5rem;
+
+  /* ── Radii ───────────────────────────────────────────────────────── */
+  --radius-xs: 0.375rem;
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.25rem;
+  --radius-2xl: 1.5rem;
+  --radius-3xl: 2rem;
+  --radius-full: 9999px;
+
+  /* ── Motion ──────────────────────────────────────────────────────── */
+  --ease-out-expo: cubic-bezier(0.19, 1, 0.22, 1);
+  --ease-in-out-quart: cubic-bezier(0.76, 0, 0.24, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  --animate-pulse-soft: pulse-soft 2.4s var(--ease-in-out-quart) infinite;
+  --animate-shimmer: shimmer 1.6s linear infinite;
+  --animate-fade-up: fade-up 0.36s var(--ease-out-expo);
+  --animate-fade-in: fade-in 0.24s var(--ease-out-expo);
+  --animate-scale-in: scale-in 0.2s var(--ease-out-expo);
+}
+
+@keyframes pulse-soft {
+  0%,
+  100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 8px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* ── Base layer ───────────────────────────────────────────────────── */
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  html,
+  body {
+    background: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    font-feature-settings: "ss01", "cv01", "cv11";
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    background: var(--color-brand-soft);
+    color: var(--color-foreground);
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: oklch(1 0 0 / 0.08);
+    border-radius: 9999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: oklch(1 0 0 / 0.14);
+  }
+
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* ── Utility components ───────────────────────────────────────────── */
+@layer components {
+  .skeleton {
+    background: linear-gradient(
+      90deg,
+      var(--color-surface-2) 0%,
+      var(--color-surface-3) 50%,
+      var(--color-surface-2) 100%
+    );
+    background-size: 200% 100%;
+    animation: var(--animate-shimmer);
+  }
+
+  /* Hairline divider — same colour as border-subtle, but explicit name
+     so consumers don't reach for arbitrary opacities. */
+  .hairline {
+    border-color: var(--color-border-subtle);
+  }
+}

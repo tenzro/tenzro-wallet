@@ -18,11 +18,8 @@
  * Spec ref: https://docs.layerzero.network/v2
  */
 
-import {
-  bridgeAdapterFromClient,
-  type BridgeClientLike,
-} from './bridge-adapter-base.ts';
 import type { BridgeRoutePort } from '../bridge.ts';
+import { type BridgeClientLike, bridgeAdapterFromClient } from './bridge-adapter-base.ts';
 
 export class LayerZeroBridgeAdapter implements BridgeRoutePort {
   readonly adapterId = 'layerzero' as const;

@@ -16,8 +16,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   ShareEnvelopeHttpAdapter,
-  ShareEnvelopeHttpError,
   type ShareEnvelopeHttpConfig,
+  ShareEnvelopeHttpError,
 } from './http-adapter.ts';
 
 interface Captured {
@@ -27,9 +27,10 @@ interface Captured {
   body: string;
 }
 
-function captureFetch(
-  respond: (path: string) => Response,
-): { fetch: typeof fetch; calls: Captured[] } {
+function captureFetch(respond: (path: string) => Response): {
+  fetch: typeof fetch;
+  calls: Captured[];
+} {
   const calls: Captured[] = [];
   const fetchImpl: typeof fetch = async (url, init) => {
     const u = url as string;
@@ -54,15 +55,16 @@ function cfg(
 describe('ShareEnvelopeHttpAdapter.fetchEnvelope', () => {
   it('GETs /wallet/share/envelope with snake_case query and decodes bytes', async () => {
     // wrapped_share = [10,20,30] → 'ChQe', salt = [1,2] → 'AQI='
-    const { fetch, calls } = captureFetch(() =>
-      new Response(
-        JSON.stringify({
-          wrapped_share_b64: 'ChQe',
-          alg: 'aes-256-gcm',
-          salt_b64: 'AQI=',
-        }),
-        { status: 200, headers: { 'content-type': 'application/json' } },
-      ),
+    const { fetch, calls } = captureFetch(
+      () =>
+        new Response(
+          JSON.stringify({
+            wrapped_share_b64: 'ChQe',
+            alg: 'aes-256-gcm',
+            salt_b64: 'AQI=',
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
     );
     const adapter = new ShareEnvelopeHttpAdapter(cfg(fetch));
     const r = await adapter.fetchEnvelope({
@@ -89,8 +91,8 @@ describe('ShareEnvelopeHttpAdapter.fetchEnvelope', () => {
 
 describe('ShareEnvelopeHttpAdapter.startEscrow', () => {
   it('POSTs snake_case body and renames expires_at', async () => {
-    const { fetch, calls } = captureFetch(() =>
-      new Response(JSON.stringify({ nonce: 'abc', expires_at: 1700 })),
+    const { fetch, calls } = captureFetch(
+      () => new Response(JSON.stringify({ nonce: 'abc', expires_at: 1700 })),
     );
     const adapter = new ShareEnvelopeHttpAdapter(cfg(fetch));
     const r = await adapter.startEscrow({
@@ -115,10 +117,8 @@ describe('ShareEnvelopeHttpAdapter.startEscrow', () => {
 describe('ShareEnvelopeHttpAdapter.finishEscrow', () => {
   it('POSTs snake_case assertion and decodes wrapped_share_b64 + pepper_b64', async () => {
     // wrapped = [99] → 'Yw==', pepper = [7,7] → 'Bwc='
-    const { fetch, calls } = captureFetch(() =>
-      new Response(
-        JSON.stringify({ wrapped_share_b64: 'Yw==', pepper_b64: 'Bwc=' }),
-      ),
+    const { fetch, calls } = captureFetch(
+      () => new Response(JSON.stringify({ wrapped_share_b64: 'Yw==', pepper_b64: 'Bwc=' })),
     );
     const adapter = new ShareEnvelopeHttpAdapter(cfg(fetch));
     const r = await adapter.finishEscrow({
@@ -155,23 +155,23 @@ describe('ShareEnvelopeHttpAdapter.finishEscrow', () => {
 
 describe('ShareEnvelopeHttpAdapter — config knobs', () => {
   it('normalises trailing slash on baseUrl', async () => {
-    const { fetch, calls } = captureFetch(() =>
-      new Response(JSON.stringify({ nonce: 'n', expires_at: 1 })),
+    const { fetch, calls } = captureFetch(
+      () => new Response(JSON.stringify({ nonce: 'n', expires_at: 1 })),
     );
     const adapter = new ShareEnvelopeHttpAdapter(
       cfg(fetch, { baseUrl: 'https://rpc.tenzro.test///' }),
     );
     await adapter.startEscrow({
-      credentialId: 'c', surfaceKeyId: 'k', scheme: 'ed25519',
+      credentialId: 'c',
+      surfaceKeyId: 'k',
+      scheme: 'ed25519',
     });
-    expect(calls[0]?.url).toBe(
-      'https://rpc.tenzro.test/wallet/share/escrow/challenge',
-    );
+    expect(calls[0]?.url).toBe('https://rpc.tenzro.test/wallet/share/escrow/challenge');
   });
 
   it('awaits headers() and merges into POST request', async () => {
-    const { fetch, calls } = captureFetch(() =>
-      new Response(JSON.stringify({ nonce: 'n', expires_at: 1 })),
+    const { fetch, calls } = captureFetch(
+      () => new Response(JSON.stringify({ nonce: 'n', expires_at: 1 })),
     );
     const adapter = new ShareEnvelopeHttpAdapter(
       cfg(fetch, {
@@ -179,7 +179,9 @@ describe('ShareEnvelopeHttpAdapter — config knobs', () => {
       }),
     );
     await adapter.startEscrow({
-      credentialId: 'c', surfaceKeyId: 'k', scheme: 'ed25519',
+      credentialId: 'c',
+      surfaceKeyId: 'k',
+      scheme: 'ed25519',
     });
     expect(calls[0]?.headers).toEqual({
       'content-type': 'application/json',
@@ -188,18 +190,23 @@ describe('ShareEnvelopeHttpAdapter — config knobs', () => {
   });
 
   it('sends headers on GET without content-type', async () => {
-    const { fetch, calls } = captureFetch(() =>
-      new Response(
-        JSON.stringify({
-          wrapped_share_b64: '', alg: 'aes-256-gcm', salt_b64: '',
-        }),
-      ),
+    const { fetch, calls } = captureFetch(
+      () =>
+        new Response(
+          JSON.stringify({
+            wrapped_share_b64: '',
+            alg: 'aes-256-gcm',
+            salt_b64: '',
+          }),
+        ),
     );
     const adapter = new ShareEnvelopeHttpAdapter(
       cfg(fetch, { headers: () => ({ 'X-Trace': 'abc' }) }),
     );
     await adapter.fetchEnvelope({
-      credentialId: 'c', surfaceKeyId: 'k', scheme: 'ed25519',
+      credentialId: 'c',
+      surfaceKeyId: 'k',
+      scheme: 'ed25519',
     });
     expect(calls[0]?.headers).toEqual({ 'X-Trace': 'abc' });
   });
@@ -207,17 +214,20 @@ describe('ShareEnvelopeHttpAdapter — config knobs', () => {
 
 describe('ShareEnvelopeHttpAdapter error handling', () => {
   it('throws ShareEnvelopeHttpError on non-2xx', async () => {
-    const fetchImpl: typeof fetch = async () =>
-      new Response('rate limited', { status: 429 });
+    const fetchImpl: typeof fetch = async () => new Response('rate limited', { status: 429 });
     const adapter = new ShareEnvelopeHttpAdapter(cfg(fetchImpl));
     await expect(
       adapter.fetchEnvelope({
-        credentialId: 'c', surfaceKeyId: 'k', scheme: 'ed25519',
+        credentialId: 'c',
+        surfaceKeyId: 'k',
+        scheme: 'ed25519',
       }),
     ).rejects.toBeInstanceOf(ShareEnvelopeHttpError);
     await expect(
       adapter.startEscrow({
-        credentialId: 'c', surfaceKeyId: 'k', scheme: 'ed25519',
+        credentialId: 'c',
+        surfaceKeyId: 'k',
+        scheme: 'ed25519',
       }),
     ).rejects.toBeInstanceOf(ShareEnvelopeHttpError);
   });

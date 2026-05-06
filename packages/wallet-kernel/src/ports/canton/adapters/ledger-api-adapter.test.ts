@@ -62,15 +62,16 @@ describe('LedgerApiAdapter.prepareSubmission', () => {
   });
 
   it('rejects unknown hashing scheme versions (V3+)', async () => {
-    const adapter = makeAdapter(() =>
-      new Response(
-        JSON.stringify({
-          prepared_transaction: 'AA==',
-          prepared_transaction_hash: 'AA==',
-          hashing_scheme_version: 'HASHING_SCHEME_VERSION_V3',
-        }),
-        { status: 200 },
-      ),
+    const adapter = makeAdapter(
+      () =>
+        new Response(
+          JSON.stringify({
+            prepared_transaction: 'AA==',
+            prepared_transaction_hash: 'AA==',
+            hashing_scheme_version: 'HASHING_SCHEME_VERSION_V3',
+          }),
+          { status: 200 },
+        ),
     );
     await expect(
       adapter.prepareSubmission({
@@ -168,20 +169,21 @@ describe('LedgerApiAdapter.tailCompletions', () => {
 
 describe('LedgerApiAdapter.lookupPreapproval', () => {
   it('parses ISO-8601 expiry to unix milliseconds', async () => {
-    const adapter = makeAdapter(() =>
-      new Response(
-        JSON.stringify({
-          transfer_preapproval: {
-            contract_id: 'cid-1',
-            payload: {
-              receiver: 'bob::1220fff',
-              provider: 'tenzro::1220val',
-              expires_at: '2026-12-31T23:59:59Z',
+    const adapter = makeAdapter(
+      () =>
+        new Response(
+          JSON.stringify({
+            transfer_preapproval: {
+              contract_id: 'cid-1',
+              payload: {
+                receiver: 'bob::1220fff',
+                provider: 'tenzro::1220val',
+                expires_at: '2026-12-31T23:59:59Z',
+              },
             },
-          },
-        }),
-        { status: 200 },
-      ),
+          }),
+          { status: 200 },
+        ),
     );
     const r = await adapter.lookupPreapproval('bob::1220fff');
     expect(r).not.toBeNull();
@@ -190,9 +192,7 @@ describe('LedgerApiAdapter.lookupPreapproval', () => {
   });
 
   it('returns null on 404', async () => {
-    const adapter = makeAdapter(() =>
-      new Response('not found', { status: 404 }),
-    );
+    const adapter = makeAdapter(() => new Response('not found', { status: 404 }));
     // The adapter currently rethrows `CantonHttpError` (it inspects `status`,
     // not `e.status`). Verify the contract: 404 → null when the error carries
     // the http status.

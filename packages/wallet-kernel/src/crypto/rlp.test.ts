@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
+  type RLPItem,
   bigintToBytes,
   bytesToHex,
   hexToBytes,
   numberToBytes,
   rlpDecode,
   rlpEncode,
-  type RLPItem,
 } from './rlp.ts';
 
 describe('rlp', () => {
@@ -30,10 +30,7 @@ describe('rlp', () => {
   });
 
   it('encodes ["cat","dog"] correctly', () => {
-    const items: RLPItem = [
-      new TextEncoder().encode('cat'),
-      new TextEncoder().encode('dog'),
-    ];
+    const items: RLPItem = [new TextEncoder().encode('cat'), new TextEncoder().encode('dog')];
     expect(bytesToHex(rlpEncode(items))).toBe('0xc88363617483646f67');
   });
 

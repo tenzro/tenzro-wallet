@@ -24,16 +24,13 @@
  * We accept that gap until the proto schema lands in the kernel.
  */
 
-import {
-  bytesEqualConstantTime,
-  preparedTransactionHash,
-} from '../ports/canton/hash.ts';
-import {
-  type CantonValidatorPort,
-  type ExecuteSubmissionRequest,
-  type PrepareSubmissionRequest,
-  type PrepareSubmissionResponse,
+import type {
+  CantonValidatorPort,
+  ExecuteSubmissionRequest,
+  PrepareSubmissionRequest,
+  PrepareSubmissionResponse,
 } from '../ports/canton/canton-validator.ts';
+import { bytesEqualConstantTime, preparedTransactionHash } from '../ports/canton/hash.ts';
 import type { Consent } from '../types/consent.ts';
 import type { CantonPartyKey, SurfaceKey, TdipDid } from '../types/identity.ts';
 import type { Intent, PreparedTx, SignedTx, TxHandle, TxStatus } from '../types/intent.ts';
@@ -125,9 +122,7 @@ export function cantonExternalSurface(deps: CantonExternalDeps): SurfaceModule {
           assetSymbol: intent.asset.symbol,
           memo: intent.memo,
           viaPreapproval,
-          ...(preapproval !== null
-            ? { preapprovalContractId: preapproval.contractId }
-            : {}),
+          ...(preapproval !== null ? { preapprovalContractId: preapproval.contractId } : {}),
         }),
       };
       const prepared = await port.prepareSubmission(req);
@@ -276,9 +271,7 @@ function shapePartySignatures(
   signatures: ReadonlyArray<Uint8Array>,
 ): ExecuteSubmissionRequest['partySignatures'] {
   if (signatures.length < key.threshold) {
-    throw new Error(
-      `canton-external: need ${key.threshold} signatures, got ${signatures.length}`,
-    );
+    throw new Error(`canton-external: need ${key.threshold} signatures, got ${signatures.length}`);
   }
   return signatures.slice(0, key.threshold).map((sig, i) => {
     const sk = key.signingKeys[i];

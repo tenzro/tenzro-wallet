@@ -6,17 +6,17 @@
  */
 
 import {
+  type Eip1559Tx,
   encodeForSigning,
   serializeSigned,
   signingHash,
   splitSignature,
-  type Eip1559Tx,
 } from '../crypto/eip1559.ts';
 import {
   CROSS_VM_PRECOMPILE,
+  type CrossVmPointerOp,
   dustResidual,
   truncateForView,
-  type CrossVmPointerOp,
 } from '../ports/cross-vm.ts';
 import type { Consent } from '../types/consent.ts';
 import type { SurfaceKey, TdipDid } from '../types/identity.ts';
@@ -292,10 +292,7 @@ function canonicalize(body: EvmBody | EvmPointerBody): Uint8Array {
  * Driver-supplied signatures may be 65-byte r||s||v (legacy) or
  * (r, s, yParity) split — `splitSignature` normalises.
  */
-function serializeForSubmit(
-  body: EvmBody | EvmPointerBody,
-  signature: Uint8Array,
-): Uint8Array {
+function serializeForSubmit(body: EvmBody | EvmPointerBody, signature: Uint8Array): Uint8Array {
   return serializeSigned(toEip1559(body), splitSignature(signature));
 }
 

@@ -148,6 +148,62 @@ export type {
 export { AcpSdkAdapter } from './adapters/acp-adapter.ts';
 export type { AcpClientLike } from './adapters/acp-adapter.ts';
 
+// AgentBond (Spec 9) — controller-posted bonds backing autonomous-tier agents.
+export type {
+  AgentBondPort,
+  AgentBondRecord,
+  AgentBondStatus,
+  PostAgentBondRequest,
+  IncreaseAgentBondRequest,
+  WithdrawAgentBondRequest,
+} from './agent-bond.ts';
+export { AgentBondSdkAdapter } from './adapters/agent-bond-adapter.ts';
+export type { BondClientLike } from './adapters/agent-bond-adapter.ts';
+
+// Insurance pool — claims against bonded agents.
+export type {
+  InsurancePort,
+  InsuranceClaimRecord,
+  ClaimStatus,
+  FileInsuranceClaimRequest,
+} from './insurance.ts';
+export { InsuranceSdkAdapter } from './adapters/insurance-adapter.ts';
+export type { InsuranceClientLike } from './adapters/insurance-adapter.ts';
+
+// Lifecycle — agent state machine + Spec 1 KillSwitch receipts.
+export type {
+  LifecyclePort,
+  AgentLifecycleRecord,
+  AgentState,
+  KillSwitchAction,
+  KillSwitchReceiptRecord,
+} from './lifecycle.ts';
+export { LifecycleSdkAdapter } from './adapters/lifecycle-adapter.ts';
+export type { LifecycleClientLike } from './adapters/lifecycle-adapter.ts';
+
+// Principal-chain (Spec 5) — frozen-at-write delegation receipts.
+export type {
+  PrincipalChainPort,
+  PrincipalChainRecord,
+  PrincipalChainSummaryRecord,
+  ControllerActivitySummaryRecord,
+  PrincipalLink,
+  PrincipalRole,
+  IdentityType,
+} from './principal-chain.ts';
+export { PrincipalChainSdkAdapter } from './adapters/principal-chain-adapter.ts';
+export type { PrincipalChainClientLike } from './adapters/principal-chain-adapter.ts';
+
+// Fee estimator (EIP-1559) — gas / tip / fee-history reads + suggestFees().
+export type {
+  FeeEstimatorPort,
+  FeeHistoryRecord,
+  FeeSpeed,
+  SuggestedFees,
+} from './fee-estimator.ts';
+export { FeeEstimatorSdkAdapter } from './adapters/fee-estimator-adapter.ts';
+export type { FeeEstimatorClientLike } from './adapters/fee-estimator-adapter.ts';
+
 // Payment rails (MPP / x402 / AP2 / Visa TAP / Mastercard) — settlement only.
 // Visa TAP credential signing + Mastercard token issuance + ACP buyer-side
 // flow are SDK gaps tracked in DESIGN.md §11; the wallet wraps them when

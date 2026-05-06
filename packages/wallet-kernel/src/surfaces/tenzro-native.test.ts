@@ -9,10 +9,7 @@
 import { describe, expect, it } from 'vitest';
 import { internalMpcDriver } from '../custody/internal-mpc.ts';
 import { provisionIdentity } from '../identity/provision.ts';
-import type {
-  TenzroRpcPort,
-  TenzroSendArgs,
-} from '../ports/tenzro-rpc.ts';
+import type { TenzroRpcPort, TenzroSendArgs } from '../ports/tenzro-rpc.ts';
 import type { Intent } from '../types/intent.ts';
 import { tenzroNativeSurface } from './tenzro-native.ts';
 
@@ -162,9 +159,7 @@ describe('tenzroNativeSurface', () => {
       asset: { scope: 'tenzro-native', symbol: 'TNZO', decimals: 18 },
       amount: 1n,
     };
-    await expect(surface.prepare(intent)).rejects.toThrow(
-      /no identity port wired/,
-    );
+    await expect(surface.prepare(intent)).rejects.toThrow(/no identity port wired/);
   });
 
   it('resolves a remote TDIP recipient via the identity port and forwards the address to sendTransaction', async () => {
@@ -226,8 +221,6 @@ describe('tenzroNativeSurface', () => {
       asset: { scope: 'tenzro-native', symbol: 'TNZO', decimals: 18 },
       amount: 1n,
     };
-    await expect(surface.prepare(intent)).rejects.toThrow(
-      /has no tenzro-native key/,
-    );
+    await expect(surface.prepare(intent)).rejects.toThrow(/has no tenzro-native key/);
   });
 });

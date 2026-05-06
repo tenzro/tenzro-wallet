@@ -6,7 +6,8 @@
  * module's `sign()`. A policy violation throws — there's no "warn and proceed."
  */
 
-import type { Consent, SpendingPolicy } from '../types/consent.ts';
+import type { Consent, KycTier, SpendingPolicy } from '../types/consent.ts';
+import { compareKycTier } from '../types/consent.ts';
 import type { Intent } from '../types/intent.ts';
 
 export class PolicyViolationError extends Error {
@@ -23,13 +24,14 @@ export interface PolicyContext {
   readonly sessionPolicy?: SpendingPolicy;
   /** Total spend already debited under the active session, in canonical units. */
   readonly spentSoFarToday?: bigint;
+  /**
+   * Current KYC tier of the signing identity. When `effective.minKycTier`
+   * is set, this must be ≥ that tier. Defaults to `Unverified` when omitted.
+   */
+  readonly signerKycTier?: KycTier;
 }
 
-export function enforcePolicy(
-  intent: Intent,
-  consent: Consent,
-  ctx: PolicyContext,
-): void {
+export function enforcePolicy(intent: Intent, consent: Consent, ctx: PolicyContext): void {
   if (intent.kind !== 'send') return;
 
   const effective = intersect(ctx.delegationScope, ctx.sessionPolicy);
@@ -54,6 +56,14 @@ export function enforcePolicy(
       (a) => a.symbol === intent.asset.symbol && a.scope === intent.asset.scope,
     );
     if (!allowed) throw new PolicyViolationError(`asset ${intent.asset.symbol} not in whitelist`);
+  }
+  if (effective.minKycTier !== undefined) {
+    const signerTier: KycTier = ctx.signerKycTier ?? 'Unverified';
+    if (compareKycTier(signerTier, effective.minKycTier) < 0) {
+      throw new PolicyViolationError(
+        `signer KYC tier ${signerTier} is below required ${effective.minKycTier}`,
+      );
+    }
   }
 }
 
@@ -83,7 +93,20 @@ function intersect(
   if (ops !== undefined) out.operationWhitelist = ops;
   const expiresAt = minNumber(a.expiresAt, b.expiresAt);
   if (expiresAt !== undefined) out.expiresAt = expiresAt;
+  const minKycTier = maxKycTier(a.minKycTier, b.minKycTier);
+  if (minKycTier !== undefined) out.minKycTier = minKycTier;
   return out as SpendingPolicy;
+}
+
+/**
+ * Intersection picks the *more restrictive* KYC requirement: when both
+ * sides specify a tier, the higher one wins. Undefined on a side means
+ * "no KYC requirement from this layer".
+ */
+function maxKycTier(a: KycTier | undefined, b: KycTier | undefined): KycTier | undefined {
+  if (a === undefined) return b;
+  if (b === undefined) return a;
+  return compareKycTier(a, b) >= 0 ? a : b;
 }
 
 function minBigint(a: bigint | undefined, b: bigint | undefined): bigint | undefined {

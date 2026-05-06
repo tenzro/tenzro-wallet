@@ -32,7 +32,12 @@ export type {
 } from './intent.ts';
 export { MEMO_SPEC_NONE } from './intent.ts';
 
-export type { SigningDriver, SigningRequest, SigningResult, SigningScheme } from './signing-driver.ts';
+export type {
+  SigningDriver,
+  SigningRequest,
+  SigningResult,
+  SigningScheme,
+} from './signing-driver.ts';
 
 export {
   SURFACE_IS_ON_TENZRO,

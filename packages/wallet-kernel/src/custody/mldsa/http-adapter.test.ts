@@ -14,11 +14,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import {
-  MlDsaHttpAdapter,
-  MlDsaHttpError,
-  type MlDsaHttpConfig,
-} from './http-adapter.ts';
+import { MlDsaHttpAdapter, type MlDsaHttpConfig, MlDsaHttpError } from './http-adapter.ts';
 
 interface Captured {
   url: string;
@@ -27,9 +23,10 @@ interface Captured {
   body: string;
 }
 
-function captureFetch(
-  respond: (path: string) => Response,
-): { fetch: typeof fetch; calls: Captured[] } {
+function captureFetch(respond: (path: string) => Response): {
+  fetch: typeof fetch;
+  calls: Captured[];
+} {
   const calls: Captured[] = [];
   const fetchImpl: typeof fetch = async (url, init) => {
     const u = url as string;
@@ -44,10 +41,7 @@ function captureFetch(
   return { fetch: fetchImpl, calls };
 }
 
-function cfg(
-  fetchImpl: typeof fetch,
-  extra: Partial<MlDsaHttpConfig> = {},
-): MlDsaHttpConfig {
+function cfg(fetchImpl: typeof fetch, extra: Partial<MlDsaHttpConfig> = {}): MlDsaHttpConfig {
   return { baseUrl: 'https://rpc.tenzro.test', fetch: fetchImpl, ...extra };
 }
 
@@ -56,11 +50,12 @@ const PREIMAGE_B64 = 'AQIDBA==';
 
 describe('MlDsaHttpAdapter.capabilities', () => {
   it('GETs /wallet/mldsa/capabilities and unwraps mode + publicKey', async () => {
-    const { fetch, calls } = captureFetch(() =>
-      new Response(
-        JSON.stringify({ mode: 'tee-only', public_key: 'z6Mk…abc' }),
-        { status: 200, headers: { 'content-type': 'application/json' } },
-      ),
+    const { fetch, calls } = captureFetch(
+      () =>
+        new Response(JSON.stringify({ mode: 'tee-only', public_key: 'z6Mk…abc' }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
     );
     const adapter = new MlDsaHttpAdapter(cfg(fetch));
     const r = await adapter.capabilities();
@@ -76,9 +71,7 @@ describe('MlDsaHttpAdapter.capabilities', () => {
   });
 
   it('omits publicKey when node has not bound one yet', async () => {
-    const { fetch } = captureFetch(() =>
-      new Response(JSON.stringify({ mode: 'tee-only' })),
-    );
+    const { fetch } = captureFetch(() => new Response(JSON.stringify({ mode: 'tee-only' })));
     const adapter = new MlDsaHttpAdapter(cfg(fetch));
     const r = await adapter.capabilities();
     expect(r.mode).toBe('tee-only');
@@ -87,8 +80,8 @@ describe('MlDsaHttpAdapter.capabilities', () => {
   });
 
   it('passes through threshold mode unchanged', async () => {
-    const { fetch } = captureFetch(() =>
-      new Response(JSON.stringify({ mode: 'threshold', public_key: 'z6Mk…' })),
+    const { fetch } = captureFetch(
+      () => new Response(JSON.stringify({ mode: 'threshold', public_key: 'z6Mk…' })),
     );
     const adapter = new MlDsaHttpAdapter(cfg(fetch));
     const r = await adapter.capabilities();
@@ -101,8 +94,8 @@ describe('MlDsaHttpAdapter.sign', () => {
     // signature filled with 0xAB × 4
     const sigBytes = new Uint8Array(4).fill(0xab);
     const sigB64 = btoa(String.fromCharCode(...sigBytes));
-    const { fetch, calls } = captureFetch(() =>
-      new Response(JSON.stringify({ signature_b64: sigB64 })),
+    const { fetch, calls } = captureFetch(
+      () => new Response(JSON.stringify({ signature_b64: sigB64 })),
     );
 
     const adapter = new MlDsaHttpAdapter(cfg(fetch));
@@ -128,8 +121,8 @@ describe('MlDsaHttpAdapter.sign', () => {
 
   it('omits purpose when not provided (no undefined in body)', async () => {
     const sigB64 = btoa(String.fromCharCode(...new Uint8Array(4)));
-    const { fetch, calls } = captureFetch(() =>
-      new Response(JSON.stringify({ signature_b64: sigB64 })),
+    const { fetch, calls } = captureFetch(
+      () => new Response(JSON.stringify({ signature_b64: sigB64 })),
     );
     const adapter = new MlDsaHttpAdapter(cfg(fetch));
     await adapter.sign({
@@ -147,20 +140,16 @@ describe('MlDsaHttpAdapter.sign', () => {
 
 describe('MlDsaHttpAdapter — config knobs', () => {
   it('normalises trailing slash on baseUrl', async () => {
-    const { fetch, calls } = captureFetch(() =>
-      new Response(JSON.stringify({ mode: 'tee-only' })),
-    );
-    const adapter = new MlDsaHttpAdapter(
-      cfg(fetch, { baseUrl: 'https://rpc.tenzro.test///' }),
-    );
+    const { fetch, calls } = captureFetch(() => new Response(JSON.stringify({ mode: 'tee-only' })));
+    const adapter = new MlDsaHttpAdapter(cfg(fetch, { baseUrl: 'https://rpc.tenzro.test///' }));
     await adapter.capabilities();
     expect(calls[0]?.url).toBe('https://rpc.tenzro.test/wallet/mldsa/capabilities');
   });
 
   it('awaits headers() and merges into request', async () => {
     const sigB64 = btoa(String.fromCharCode(...new Uint8Array(4)));
-    const { fetch, calls } = captureFetch(() =>
-      new Response(JSON.stringify({ signature_b64: sigB64 })),
+    const { fetch, calls } = captureFetch(
+      () => new Response(JSON.stringify({ signature_b64: sigB64 })),
     );
     const adapter = new MlDsaHttpAdapter(
       cfg(fetch, {
@@ -168,7 +157,9 @@ describe('MlDsaHttpAdapter — config knobs', () => {
       }),
     );
     await adapter.sign({
-      did: 'd', surfaceKey: 'k', preimage: PREIMAGE,
+      did: 'd',
+      surfaceKey: 'k',
+      preimage: PREIMAGE,
     });
     expect(calls[0]?.headers).toEqual({
       'content-type': 'application/json',
@@ -178,9 +169,7 @@ describe('MlDsaHttpAdapter — config knobs', () => {
   });
 
   it('sends headers on GET without content-type', async () => {
-    const { fetch, calls } = captureFetch(() =>
-      new Response(JSON.stringify({ mode: 'tee-only' })),
-    );
+    const { fetch, calls } = captureFetch(() => new Response(JSON.stringify({ mode: 'tee-only' })));
     const adapter = new MlDsaHttpAdapter(
       cfg(fetch, { headers: () => ({ Authorization: 'DPoP tok' }) }),
     );
@@ -191,8 +180,7 @@ describe('MlDsaHttpAdapter — config knobs', () => {
 
 describe('MlDsaHttpAdapter error handling', () => {
   it('throws MlDsaHttpError on non-2xx', async () => {
-    const fetchImpl: typeof fetch = async () =>
-      new Response('tee unavailable', { status: 503 });
+    const fetchImpl: typeof fetch = async () => new Response('tee unavailable', { status: 503 });
     const adapter = new MlDsaHttpAdapter(cfg(fetchImpl));
     await expect(adapter.capabilities()).rejects.toBeInstanceOf(MlDsaHttpError);
     await expect(

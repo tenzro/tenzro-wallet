@@ -30,7 +30,12 @@ import type {
  */
 export type EscrowClientLike = Pick<
   SettlementClient,
-  'createEscrow' | 'releaseEscrow' | 'refundEscrow' | 'getEscrow'
+  | 'createEscrow'
+  | 'releaseEscrow'
+  | 'refundEscrow'
+  | 'getEscrow'
+  | 'listEscrowsByPayer'
+  | 'listEscrowsByPayee'
 >;
 
 interface RawEscrow {
@@ -71,22 +76,43 @@ export class EscrowSdkAdapter implements EscrowPort {
 
   async get(escrowId: string): Promise<EscrowRecord | null> {
     const raw = (await this.client.getEscrow(escrowId)) as RawEscrow | null;
-    if (raw === null || raw === undefined) return null;
-    const id = raw.escrow_id ?? raw.id;
-    if (id === undefined) return null;
-    return {
-      escrowId: id,
-      payer: raw.payer ?? '',
-      payee: raw.payee ?? '',
-      amount: raw.amount !== undefined ? BigInt(raw.amount) : 0n,
-      asset: raw.asset ?? raw.asset_id ?? 'TNZO',
-      expiresAt: raw.expires_at ?? 0,
-      releaseMode: normaliseMode(
-        raw.release_conditions?.type ?? raw.release_mode,
-      ),
-      status: normaliseStatus(raw.status),
-    };
+    return raw === null || raw === undefined ? null : decodeEscrow(raw);
   }
+
+  async listByPayer(payer: string): Promise<EscrowRecord[]> {
+    const raws = (await this.client.listEscrowsByPayer(payer)) as RawEscrow[] | null | undefined;
+    return decodeEscrowList(raws);
+  }
+
+  async listByPayee(payee: string): Promise<EscrowRecord[]> {
+    const raws = (await this.client.listEscrowsByPayee(payee)) as RawEscrow[] | null | undefined;
+    return decodeEscrowList(raws);
+  }
+}
+
+function decodeEscrowList(raws: RawEscrow[] | null | undefined): EscrowRecord[] {
+  if (!Array.isArray(raws)) return [];
+  const out: EscrowRecord[] = [];
+  for (const raw of raws) {
+    const rec = decodeEscrow(raw);
+    if (rec !== null) out.push(rec);
+  }
+  return out;
+}
+
+function decodeEscrow(raw: RawEscrow): EscrowRecord | null {
+  const id = raw.escrow_id ?? raw.id;
+  if (id === undefined) return null;
+  return {
+    escrowId: id,
+    payer: raw.payer ?? '',
+    payee: raw.payee ?? '',
+    amount: raw.amount !== undefined ? BigInt(raw.amount) : 0n,
+    asset: raw.asset ?? raw.asset_id ?? 'TNZO',
+    expiresAt: raw.expires_at ?? 0,
+    releaseMode: normaliseMode(raw.release_conditions?.type ?? raw.release_mode),
+    status: normaliseStatus(raw.status),
+  };
 }
 
 function normaliseMode(raw: string | undefined): EscrowReleaseMode {

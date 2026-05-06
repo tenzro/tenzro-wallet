@@ -26,15 +26,15 @@
  */
 
 import {
-  asTdipDid,
-  walletNew,
-  walletRecover,
   type PasskeyEnroller,
   type ProvisioningPort,
   type RecoveryPort,
   type RecoveryProof,
   type WalletNewResult,
   type WalletRecoverResult,
+  asTdipDid,
+  walletNew,
+  walletRecover,
 } from '@tenzro/wallet-kernel';
 
 /**
@@ -183,20 +183,19 @@ function renderState(state: UiState, dispatch: (a: Action) => void): HTMLElement
     case 'choose': {
       root.append(
         h2('Set up your Tenzro Wallet'),
-        p('Pick how you want to start. Both paths are passkey-bound; ' +
-          'no seed phrases.'),
+        p('Pick how you want to start. Both paths are passkey-bound; ' + 'no seed phrases.'),
         button('Create new wallet', () => dispatch({ type: 'choose-new' })),
-        button('Recover existing wallet', () =>
-          dispatch({ type: 'choose-recover' }),
-        ),
+        button('Recover existing wallet', () => dispatch({ type: 'choose-recover' })),
       );
       break;
     }
     case 'recover-params': {
       root.append(
         h2('Recover your wallet'),
-        p('Pick a recovery proof. The node-side recovery flow accepts ' +
-          'email-OTP, social-delegate signatures, or a Tenzro ID KYC token.'),
+        p(
+          'Pick a recovery proof. The node-side recovery flow accepts ' +
+            'email-OTP, social-delegate signatures, or a Tenzro ID KYC token.',
+        ),
         button('Email OTP', () => {
           const did = prompt('Wallet DID (did:tenzro:…)')?.trim() ?? '';
           const otp = prompt('OTP')?.trim() ?? '';

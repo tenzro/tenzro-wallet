@@ -6,21 +6,14 @@
 
 import { describe, expect, it } from 'vitest';
 import { WalletKernel } from './kernel.ts';
-import {
-  MEMO_SPEC_NONE,
-  type Intent,
-  type MemoSpec,
-} from './types/intent.ts';
-import type { SurfaceModule } from './types/surface-module.ts';
-import type { TdipDid, TdipIdentity } from './types/identity.ts';
 import type { AssetId } from './types/asset.ts';
+import type { TdipDid, TdipIdentity } from './types/identity.ts';
+import { type Intent, MEMO_SPEC_NONE, type MemoSpec } from './types/intent.ts';
+import type { SurfaceModule } from './types/surface-module.ts';
 
 const DID = 'did:tdip:0xabc' as TdipDid;
 
-function stubSurface(
-  name: SurfaceModule['name'],
-  spec?: MemoSpec,
-): SurfaceModule {
+function stubSurface(name: SurfaceModule['name'], spec?: MemoSpec): SurfaceModule {
   const base: SurfaceModule = {
     name,
     prepare: async () => {

@@ -5,17 +5,13 @@
  */
 
 import {
+  type CompiledMessage,
   base58Decode,
   base58Encode,
   serializeCompiledMessage,
   serializeTransaction,
-  type CompiledMessage,
 } from '../crypto/solana.ts';
-import {
-  dustResidual,
-  truncateForView,
-  type CrossVmPointerOp,
-} from '../ports/cross-vm.ts';
+import { type CrossVmPointerOp, dustResidual, truncateForView } from '../ports/cross-vm.ts';
 import type { Consent } from '../types/consent.ts';
 import type { SurfaceKey, TdipDid } from '../types/identity.ts';
 import type { Intent, PreparedTx, SignedTx, TxHandle, TxStatus } from '../types/intent.ts';
@@ -102,9 +98,7 @@ export function svmOnTenzroSurface(deps: SvmOnTenzroDeps): SurfaceModule {
       return {
         route: { kind: 'native', surface: 'svm-on-tenzro' },
         intent,
-        fees: [
-          { asset: intent.asset, amount: 5000n, label: 'solana-style fee (lamports)' },
-        ],
+        fees: [{ asset: intent.asset, amount: 5000n, label: 'solana-style fee (lamports)' }],
         etaMs: 800,
         reversibility: 'final-on-submit',
         warnings: dustTruncated
@@ -148,9 +142,7 @@ export function svmOnTenzroSurface(deps: SvmOnTenzroDeps): SurfaceModule {
           precompile: '0x1003',
         },
         intent,
-        fees: [
-          { asset: intent.asset, amount: 5000n, label: 'solana-style fee (lamports)' },
-        ],
+        fees: [{ asset: intent.asset, amount: 5000n, label: 'solana-style fee (lamports)' }],
         etaMs: 800,
         reversibility: 'final-on-submit',
         warnings,

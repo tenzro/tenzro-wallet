@@ -59,9 +59,7 @@ export class MlDsaHttpError extends Error {
     readonly url: string,
     readonly body: string,
   ) {
-    super(
-      `mldsa http ${status} on ${url}: ${body.length > 200 ? body.slice(0, 200) + '…' : body}`,
-    );
+    super(`mldsa http ${status} on ${url}: ${body.length > 200 ? body.slice(0, 200) + '…' : body}`);
     this.name = 'MlDsaHttpError';
   }
 }
@@ -102,11 +100,7 @@ export class MlDsaHttpAdapter implements MlDsaCoordinator {
 
   // --- internals ---
 
-  async #request<TRes>(
-    method: 'GET' | 'POST',
-    action: string,
-    body?: unknown,
-  ): Promise<TRes> {
+  async #request<TRes>(method: 'GET' | 'POST', action: string, body?: unknown): Promise<TRes> {
     const f = this.#cfg.fetch ?? globalThis.fetch;
     const url = this.#cfg.baseUrl.replace(/\/+$/, '') + `/wallet/mldsa/${action}`;
     const extraHeaders = this.#cfg.headers ? await this.#cfg.headers() : {};

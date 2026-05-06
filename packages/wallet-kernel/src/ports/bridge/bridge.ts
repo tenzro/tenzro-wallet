@@ -26,13 +26,7 @@
  *   - `debridge` — deBridge DLN (intent-based, post-fulfilment hooks)
  *   - `canton` — Canton-side adapter for Canton/external-chain corridors
  */
-export type BridgeAdapterId =
-  | 'lifi'
-  | 'ccip'
-  | 'layerzero'
-  | 'wormhole'
-  | 'debridge'
-  | 'canton';
+export type BridgeAdapterId = 'lifi' | 'ccip' | 'layerzero' | 'wormhole' | 'debridge' | 'canton';
 
 /**
  * Identifies a destination chain in a bridge-vendor-neutral way. The
@@ -117,11 +111,7 @@ export interface BridgeBuildResult {
   readonly trackerId: string;
 }
 
-export type BridgeStatusPhase =
-  | 'pending-source'
-  | 'in-flight'
-  | 'delivered'
-  | 'failed';
+export type BridgeStatusPhase = 'pending-source' | 'in-flight' | 'delivered' | 'failed';
 
 export interface BridgeStatus {
   readonly trackerId: string;

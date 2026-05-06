@@ -15,11 +15,7 @@
  * Returns one 3293-byte ML-DSA-65 signature.
  */
 
-import type {
-  SigningDriver,
-  SigningRequest,
-  SigningResult,
-} from '../../types/signing-driver.ts';
+import type { SigningDriver, SigningRequest, SigningResult } from '../../types/signing-driver.ts';
 import { surfaceKeyId } from '../surface-key-id.ts';
 import type { MlDsaCoordinator } from './coordinator.ts';
 
@@ -27,9 +23,7 @@ export interface ThresholdMlDsaOptions {
   readonly coordinator: MlDsaCoordinator;
 }
 
-export function thresholdMlDsaDriver(
-  opts: ThresholdMlDsaOptions,
-): SigningDriver {
+export function thresholdMlDsaDriver(opts: ThresholdMlDsaOptions): SigningDriver {
   return {
     // Reuse `tenzro-tee` until the node flips to threshold mode; the
     // surface modules already classify this id as "node-attested".
@@ -50,9 +44,7 @@ export function thresholdMlDsaDriver(
         ...(req.purpose !== undefined ? { purpose: req.purpose } : {}),
       });
       if (signature.length !== 3293) {
-        throw new Error(
-          `ml-dsa-65 signature wrong length: ${signature.length}`,
-        );
+        throw new Error(`ml-dsa-65 signature wrong length: ${signature.length}`);
       }
       return { signatures: [signature] };
     },

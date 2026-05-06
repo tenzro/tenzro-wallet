@@ -20,16 +20,13 @@
  * synchronizer's economics diverge from MainNet.
  */
 
-import {
-  bytesEqualConstantTime,
-  preparedTransactionHash,
-} from '../ports/canton/hash.ts';
-import {
-  type CantonValidatorPort,
-  type ExecuteSubmissionRequest,
-  type PrepareSubmissionRequest,
-  type PrepareSubmissionResponse,
+import type {
+  CantonValidatorPort,
+  ExecuteSubmissionRequest,
+  PrepareSubmissionRequest,
+  PrepareSubmissionResponse,
 } from '../ports/canton/canton-validator.ts';
+import { bytesEqualConstantTime, preparedTransactionHash } from '../ports/canton/hash.ts';
 import type { Consent } from '../types/consent.ts';
 import type { CantonPartyKey, SurfaceKey, TdipDid } from '../types/identity.ts';
 import type { Intent, PreparedTx, SignedTx, TxHandle, TxStatus } from '../types/intent.ts';
@@ -132,9 +129,7 @@ export function cantonInternalSurface(deps: CantonInternalDeps): SurfaceModule {
       }
       const recomputed = await preparedTransactionHash(body.preparedTransaction);
       if (!bytesEqualConstantTime(recomputed, body.preparedTransactionHash)) {
-        throw new Error(
-          'canton-internal: preparedTransactionHash mismatch — refusing to sign.',
-        );
+        throw new Error('canton-internal: preparedTransactionHash mismatch — refusing to sign.');
       }
       const result = await deps.signingDriver.sign({
         did,
@@ -175,9 +170,7 @@ function shapePartySignatures(
   signatures: ReadonlyArray<Uint8Array>,
 ): ExecuteSubmissionRequest['partySignatures'] {
   if (signatures.length < key.threshold) {
-    throw new Error(
-      `canton-internal: need ${key.threshold} signatures, got ${signatures.length}`,
-    );
+    throw new Error(`canton-internal: need ${key.threshold} signatures, got ${signatures.length}`);
   }
   return signatures.slice(0, key.threshold).map((sig, i) => {
     const sk = key.signingKeys[i];

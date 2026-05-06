@@ -23,9 +23,9 @@ import type {
   PairingFinalizeResult,
   PairingPollResult,
   PairingPort,
-  PairingState,
   PairingStartRequest,
   PairingStartResult,
+  PairingState,
   VerificationMethod,
 } from './port.ts';
 
@@ -116,9 +116,7 @@ export class PairingHttpAdapter implements PairingPort {
     return {
       sessionId: raw.session_id,
       state: raw.state,
-      ...(raw.claimed_public_key !== undefined
-        ? { claimedPublicKey: raw.claimed_public_key }
-        : {}),
+      ...(raw.claimed_public_key !== undefined ? { claimedPublicKey: raw.claimed_public_key } : {}),
       ...(raw.reason !== undefined ? { reason: raw.reason } : {}),
     };
   }

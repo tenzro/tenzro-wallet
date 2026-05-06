@@ -9,7 +9,7 @@
   },
   "dependencies": {
     "@tenzro/wallet-kernel": "workspace:*",
-    "tenzro-sdk": "github:tenzro/tenzro-sdk-typescript"
+    "tenzro-sdk": "^0.2.0"
   },
   "devDependencies": {
     "typescript": "5.7.3"

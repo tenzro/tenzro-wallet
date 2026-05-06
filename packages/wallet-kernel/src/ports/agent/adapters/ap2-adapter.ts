@@ -35,9 +35,7 @@ export type Ap2ClientLike = Pick<
   | 'listAgentSessions'
 >;
 
-function mapSession(raw: Awaited<
-  ReturnType<Ap2Client['getSession']>
->): Ap2Session {
+function mapSession(raw: Awaited<ReturnType<Ap2Client['getSession']>>): Ap2Session {
   return {
     sessionId: raw.session_id,
     agentDid: raw.agent_did,
@@ -87,15 +85,9 @@ export class Ap2SdkAdapter implements Ap2Port {
     return {
       valid: raw.valid,
       delegationEnforced: raw.delegation_enforced,
-      ...(raw.intent_mandate_id !== undefined
-        ? { intentMandateId: raw.intent_mandate_id }
-        : {}),
-      ...(raw.cart_mandate_id !== undefined
-        ? { cartMandateId: raw.cart_mandate_id }
-        : {}),
-      ...(raw.principal_did !== undefined
-        ? { principalDid: raw.principal_did }
-        : {}),
+      ...(raw.intent_mandate_id !== undefined ? { intentMandateId: raw.intent_mandate_id } : {}),
+      ...(raw.cart_mandate_id !== undefined ? { cartMandateId: raw.cart_mandate_id } : {}),
+      ...(raw.principal_did !== undefined ? { principalDid: raw.principal_did } : {}),
       ...(raw.agent_did !== undefined ? { agentDid: raw.agent_did } : {}),
       ...(raw.error !== undefined ? { error: raw.error } : {}),
     };
@@ -113,10 +105,7 @@ export class Ap2SdkAdapter implements Ap2Port {
     );
   }
 
-  async authorizePayment(
-    sessionId: string,
-    amount: bigint,
-  ): Promise<Ap2Authorization> {
+  async authorizePayment(sessionId: string, amount: bigint): Promise<Ap2Authorization> {
     const raw = await this.client.authorizePayment(sessionId, amount.toString());
     return {
       authorizationId: raw.authorization_id,
@@ -126,10 +115,7 @@ export class Ap2SdkAdapter implements Ap2Port {
     };
   }
 
-  async executePayment(
-    sessionId: string,
-    authorizationId: string,
-  ): Promise<Ap2PaymentReceipt> {
+  async executePayment(sessionId: string, authorizationId: string): Promise<Ap2PaymentReceipt> {
     const raw = await this.client.executePayment(sessionId, authorizationId);
     // SDK PaymentReceipt is camelCase + decimal-number; coerce amount → bigint
     // through string round-trip to avoid IEEE-754 truncation for large values.
@@ -146,9 +132,7 @@ export class Ap2SdkAdapter implements Ap2Port {
     return {
       sessionId: raw.session_id,
       status: raw.status,
-      ...(raw.refunded_amount !== undefined
-        ? { refundedAmount: BigInt(raw.refunded_amount) }
-        : {}),
+      ...(raw.refunded_amount !== undefined ? { refundedAmount: BigInt(raw.refunded_amount) } : {}),
     };
   }
 

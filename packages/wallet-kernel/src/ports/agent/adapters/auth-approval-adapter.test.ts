@@ -4,19 +4,17 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import {
-  AuthApprovalSdkAdapter,
-  type AuthClientLike,
-} from './auth-approval-adapter.ts';
+import { AuthApprovalSdkAdapter, type AuthClientLike } from './auth-approval-adapter.ts';
 
 interface Call {
   readonly method: string;
   readonly args: readonly unknown[];
 }
 
-function fakeClient(
-  overrides: Partial<AuthClientLike> = {},
-): { client: AuthClientLike; calls: Call[] } {
+function fakeClient(overrides: Partial<AuthClientLike> = {}): {
+  client: AuthClientLike;
+  calls: Call[];
+} {
   const calls: Call[] = [];
   const client: AuthClientLike = {
     listPendingApprovals: async (approverDid) => {

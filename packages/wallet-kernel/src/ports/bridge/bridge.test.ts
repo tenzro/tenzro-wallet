@@ -10,19 +10,15 @@
  * `adapterId` through the SDK's `adapter` arg.
  */
 
-import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { BridgeClientLike } from './adapters/bridge-adapter-base.ts';
 import { CantonBridgeAdapter } from './adapters/canton-bridge-adapter.ts';
 import { CcipBridgeAdapter } from './adapters/ccip-adapter.ts';
 import { DeBridgeBridgeAdapter } from './adapters/debridge-adapter.ts';
 import { LayerZeroBridgeAdapter } from './adapters/layerzero-adapter.ts';
 import { LiFiBridgeAdapter } from './adapters/lifi-adapter.ts';
 import { WormholeBridgeAdapter } from './adapters/wormhole-adapter.ts';
-import type { BridgeClientLike } from './adapters/bridge-adapter-base.ts';
-import type {
-  BridgeBuildRequest,
-  BridgeQuoteRequest,
-  BridgeRoutePort,
-} from './bridge.ts';
+import type { BridgeBuildRequest, BridgeQuoteRequest, BridgeRoutePort } from './bridge.ts';
 
 const SAMPLE_QUOTE: BridgeQuoteRequest = {
   fromChain: { chain: 'tenzro' },
@@ -59,9 +55,7 @@ describe.each(adapters)('$name bridge adapter (no client → SDK pending)', ({ m
   const adapter = make();
 
   it('exposes its adapterId', () => {
-    expect(adapter.adapterId).toMatch(
-      /^(lifi|ccip|layerzero|wormhole|debridge|canton)$/,
-    );
+    expect(adapter.adapterId).toMatch(/^(lifi|ccip|layerzero|wormhole|debridge|canton)$/);
   });
 
   it('quote() throws "SDK pending"', async () => {
@@ -230,9 +224,7 @@ describe('Bridge adapter — present client forwards + normalises', () => {
       },
     };
     const adapter = new WormholeBridgeAdapter(partial);
-    await expect(adapter.quote(SAMPLE_QUOTE)).rejects.toThrow(
-      /vendor not in SDK route list/,
-    );
+    await expect(adapter.quote(SAMPLE_QUOTE)).rejects.toThrow(/vendor not in SDK route list/);
   });
 
   it('partial client (getRoutes only) keeps build/track in SDK pending', async () => {

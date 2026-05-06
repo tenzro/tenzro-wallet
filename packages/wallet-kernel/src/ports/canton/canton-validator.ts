@@ -211,8 +211,6 @@ export interface CantonValidatorPort {
   generateTopology(req: GenerateTopologyRequest): Promise<GenerateTopologyResponse>;
   submitTopology(req: SubmitTopologyRequest): Promise<void>;
   setupProposal(req: SetupProposalRequest): Promise<void>;
-  prepareAcceptSetup(
-    req: PrepareAcceptSetupRequest,
-  ): Promise<PrepareAcceptSetupResponse>;
+  prepareAcceptSetup(req: PrepareAcceptSetupRequest): Promise<PrepareAcceptSetupResponse>;
   submitAcceptSetup(req: SubmitAcceptSetupRequest): Promise<void>;
 }

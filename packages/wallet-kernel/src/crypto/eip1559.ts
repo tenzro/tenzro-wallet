@@ -17,13 +17,7 @@
  */
 
 import { keccak256 } from './keccak256.ts';
-import {
-  bigintToBytes,
-  hexToBytes,
-  numberToBytes,
-  rlpEncode,
-  type RLPItem,
-} from './rlp.ts';
+import { type RLPItem, bigintToBytes, hexToBytes, numberToBytes, rlpEncode } from './rlp.ts';
 
 export interface Eip1559Tx {
   readonly chainId: number;
@@ -35,7 +29,10 @@ export interface Eip1559Tx {
   readonly value: bigint;
   readonly data: Uint8Array;
   /** Access list entries: `[address, [storageKey, storageKey, …]]`. */
-  readonly accessList?: readonly { readonly address: `0x${string}`; readonly storageKeys: readonly `0x${string}`[] }[];
+  readonly accessList?: readonly {
+    readonly address: `0x${string}`;
+    readonly storageKeys: readonly `0x${string}`[];
+  }[];
 }
 
 const TX_TYPE = 0x02;
@@ -85,12 +82,7 @@ export interface Eip1559Signature {
 /** Wire-format serialized tx: `0x02 || rlp(body || [yParity, r, s])`. */
 export function serializeSigned(tx: Eip1559Tx, sig: Eip1559Signature): Uint8Array {
   const body = bodyItems(tx) as RLPItem[];
-  const full: RLPItem = [
-    ...body,
-    numberToBytes(sig.yParity),
-    sig.r,
-    sig.s,
-  ];
+  const full: RLPItem = [...body, numberToBytes(sig.yParity), sig.r, sig.s];
   const enc = rlpEncode(full);
   const out = new Uint8Array(1 + enc.length);
   out[0] = TX_TYPE;

@@ -12,14 +12,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { SurfaceKey, TdipDid } from '../../types/identity.ts';
 import type { SigningRequest } from '../../types/signing-driver.ts';
-import { frostEd25519Driver } from './ed25519-driver.ts';
-import { frostSecp256k1Driver } from './secp256k1-driver.ts';
-import { hybridEd25519MlDsaDriver } from './hybrid-driver.ts';
-import type {
-  FrostCoordinator,
-  FrostDeviceShareHolder,
-} from './coordinator.ts';
 import type { MlDsaCoordinator } from '../mldsa/coordinator.ts';
+import type { FrostCoordinator, FrostDeviceShareHolder } from './coordinator.ts';
+import { frostEd25519Driver } from './ed25519-driver.ts';
+import { hybridEd25519MlDsaDriver } from './hybrid-driver.ts';
+import { frostSecp256k1Driver } from './secp256k1-driver.ts';
 
 const DID = 'did:tenzro:human:abc' as TdipDid;
 
@@ -125,9 +122,9 @@ describe('frostEd25519Driver', () => {
       coordinator: fakeCoordinator({ signature: new Uint8Array(64) }),
       resolveShareHolder: async () => fakeShareHolder('ed25519'),
     });
-    await expect(
-      driver.sign({ ...baseReq, scheme: 'secp256k1' }),
-    ).rejects.toThrow(/cannot sign scheme/);
+    await expect(driver.sign({ ...baseReq, scheme: 'secp256k1' })).rejects.toThrow(
+      /cannot sign scheme/,
+    );
   });
 
   it('rejects share-holder scheme mismatch', async () => {

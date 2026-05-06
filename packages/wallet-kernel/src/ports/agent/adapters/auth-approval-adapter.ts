@@ -40,7 +40,7 @@ export class AuthApprovalSdkAdapter implements AuthApprovalPort {
     const raw = await this.client.listPendingApprovals(approverDid);
     return {
       count: raw.count ?? raw.pending?.length ?? 0,
-      pending: ((raw.pending ?? []) as PendingApproval[]),
+      pending: (raw.pending ?? []) as PendingApproval[],
     };
   }
 

@@ -4,19 +4,17 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import {
-  SessionKeySdkAdapter,
-  type SessionKeyClientLike,
-} from './session-key-adapter.ts';
+import { type SessionKeyClientLike, SessionKeySdkAdapter } from './session-key-adapter.ts';
 
 interface Call {
   readonly method: string;
   readonly args: readonly unknown[];
 }
 
-function fakeClient(
-  overrides: Partial<SessionKeyClientLike> = {},
-): { client: SessionKeyClientLike; calls: Call[] } {
+function fakeClient(overrides: Partial<SessionKeyClientLike> = {}): {
+  client: SessionKeyClientLike;
+  calls: Call[];
+} {
   const calls: Call[] = [];
   const client: SessionKeyClientLike = {
     onboardDelegatedAgent: async (controllerDid, caps, scope, jkt) => {
@@ -96,9 +94,7 @@ describe('SessionKeySdkAdapter.list', () => {
   it('throws when engine has no listSessions endpoint', async () => {
     const { client } = fakeClient();
     const adapter = new SessionKeySdkAdapter(client);
-    await expect(adapter.list('did:tenzro:human:alice')).rejects.toThrow(
-      /listSessions/,
-    );
+    await expect(adapter.list('did:tenzro:human:alice')).rejects.toThrow(/listSessions/);
   });
 
   it('maps snake_case session records', async () => {

@@ -6,12 +6,8 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { sha256, concatBytes } from '../../crypto/sha256.ts';
-import {
-  bytesEqualConstantTime,
-  preparedTransactionHash,
-  topologyBundleHash,
-} from './hash.ts';
+import { concatBytes, sha256 } from '../../crypto/sha256.ts';
+import { bytesEqualConstantTime, preparedTransactionHash, topologyBundleHash } from './hash.ts';
 
 describe('canton hash', () => {
   it('preparedTransactionHash prepends purpose=11 + algo=0 to SHA-256', async () => {
@@ -41,14 +37,10 @@ describe('canton hash', () => {
   });
 
   it('bytesEqualConstantTime returns false on different lengths', () => {
-    expect(
-      bytesEqualConstantTime(new Uint8Array([1, 2]), new Uint8Array([1, 2, 3])),
-    ).toBe(false);
+    expect(bytesEqualConstantTime(new Uint8Array([1, 2]), new Uint8Array([1, 2, 3]))).toBe(false);
   });
 
   it('bytesEqualConstantTime returns true for byte-equal slices of equal length', () => {
-    expect(
-      bytesEqualConstantTime(new Uint8Array([1, 2, 3]), new Uint8Array([1, 2, 3])),
-    ).toBe(true);
+    expect(bytesEqualConstantTime(new Uint8Array([1, 2, 3]), new Uint8Array([1, 2, 3]))).toBe(true);
   });
 });

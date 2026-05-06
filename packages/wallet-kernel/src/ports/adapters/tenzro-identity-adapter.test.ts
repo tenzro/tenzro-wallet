@@ -7,10 +7,7 @@
 import { describe, expect, it } from 'vitest';
 import { base58Encode } from '../../crypto/solana.ts';
 import type { TdipDid } from '../../types/identity.ts';
-import {
-  TenzroIdentityAdapter,
-  type IdentityClientLike,
-} from './tenzro-identity-adapter.ts';
+import { type IdentityClientLike, TenzroIdentityAdapter } from './tenzro-identity-adapter.ts';
 
 const DID = 'did:tenzro:human:adapter-test' as TdipDid;
 
@@ -111,8 +108,6 @@ describe('TenzroIdentityAdapter', () => {
       }),
     );
 
-    await expect(adapter.resolveTenzroAddress(DID)).rejects.toThrow(
-      /unsupported prefix/,
-    );
+    await expect(adapter.resolveTenzroAddress(DID)).rejects.toThrow(/unsupported prefix/);
   });
 });

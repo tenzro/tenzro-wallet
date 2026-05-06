@@ -5,19 +5,17 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import {
-  NanopaymentSdkAdapter,
-  type NanopaymentClientLike,
-} from './nanopayment-adapter.ts';
+import { type NanopaymentClientLike, NanopaymentSdkAdapter } from './nanopayment-adapter.ts';
 
 interface Call {
   readonly method: string;
   readonly args: readonly unknown[];
 }
 
-function fakeClient(
-  overrides: Partial<NanopaymentClientLike> = {},
-): { client: NanopaymentClientLike; calls: Call[] } {
+function fakeClient(overrides: Partial<NanopaymentClientLike> = {}): {
+  client: NanopaymentClientLike;
+  calls: Call[];
+} {
   const calls: Call[] = [];
   const channel = {
     channel_id: 'ch-1',
@@ -87,12 +85,7 @@ describe('NanopaymentSdkAdapter', () => {
       payee: '0xpayee',
       deposit: 1n * 10n ** 18n,
     });
-    expect(calls[0]?.args).toEqual([
-      '0xpayer',
-      '0xpayee',
-      '1000000000000000000',
-      'TNZO',
-    ]);
+    expect(calls[0]?.args).toEqual(['0xpayer', '0xpayee', '1000000000000000000', 'TNZO']);
     expect(ch.deposit).toBe(1n * 10n ** 18n);
     expect(ch.balance).toBe(900_000_000_000_000_000n);
     expect(ch.totalPaid).toBe(100_000_000_000_000_000n);

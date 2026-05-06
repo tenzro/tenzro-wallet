@@ -58,10 +58,7 @@ export const DELEGATE_SET_OPTIONS: readonly DelegateSetSizeOption[] = [
  * `selfDid` is the wallet's own DID; if provided, the validator rejects
  * configs where the wallet is in its own delegate list.
  */
-export function validateDelegateSet(
-  cfg: DelegateSetConfig,
-  selfDid?: TdipDid,
-): DelegateSetConfig {
+export function validateDelegateSet(cfg: DelegateSetConfig, selfDid?: TdipDid): DelegateSetConfig {
   if (!Number.isInteger(cfg.k) || !Number.isInteger(cfg.n)) {
     throw new Error(`validateDelegateSet: k and n must be integers; got ${cfg.k}/${cfg.n}`);
   }

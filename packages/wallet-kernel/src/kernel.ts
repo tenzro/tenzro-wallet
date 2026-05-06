@@ -3,8 +3,8 @@
  * consent. UI/SDK consumers only ever touch this class.
  */
 
-import { aggregateBalances, type BalanceProvider } from './balance/index.ts';
-import { enforcePolicy, type PolicyContext } from './consent/index.ts';
+import { type BalanceProvider, aggregateBalances } from './balance/index.ts';
+import { type PolicyContext, enforcePolicy } from './consent/index.ts';
 import type {
   AcpPort,
   AgentPaymentPort,
@@ -19,15 +19,14 @@ import type {
   SessionKeyPort,
   TeeAttestationPort,
 } from './ports/agent/index.ts';
-import type {
-  BridgeAdapterId,
-  BridgeRoutePort,
-} from './ports/bridge/index.ts';
+import type { BridgeAdapterId, BridgeRoutePort } from './ports/bridge/index.ts';
+import { selectRoute } from './router/index.ts';
+import type { UnifiedBalance } from './types/asset.ts';
 import type { Consent, SpendingPolicy } from './types/consent.ts';
 import type { SurfaceKey, TdipDid, TdipIdentity } from './types/identity.ts';
 import {
-  MEMO_SPEC_NONE,
   type Intent,
+  MEMO_SPEC_NONE,
   type MemoSpec,
   type PreparedTx,
   type SignedTx,
@@ -36,8 +35,6 @@ import {
 } from './types/intent.ts';
 import type { SurfaceModule } from './types/surface-module.ts';
 import type { SurfaceName } from './types/surface.ts';
-import type { UnifiedBalance } from './types/asset.ts';
-import { selectRoute } from './router/index.ts';
 
 /**
  * Optional bundle of agent-payment ports. None of these are surfaces in the
@@ -107,9 +104,7 @@ export class WalletKernel {
     this.#delegationScope = opts.delegationScope;
     this.#sessionPolicy = opts.sessionPolicy;
     this.#agentPorts = opts.agentPorts ?? {};
-    this.#bridgeAdapters = new Map(
-      (opts.bridgeAdapters ?? []).map((a) => [a.adapterId, a]),
-    );
+    this.#bridgeAdapters = new Map((opts.bridgeAdapters ?? []).map((a) => [a.adapterId, a]));
   }
 
   /**
@@ -119,11 +114,9 @@ export class WalletKernel {
    */
   readonly bridge = {
     /** All registered adapters, in registration order. */
-    adapters: (): readonly BridgeRoutePort[] =>
-      Array.from(this.#bridgeAdapters.values()),
+    adapters: (): readonly BridgeRoutePort[] => Array.from(this.#bridgeAdapters.values()),
     /** Look up a single adapter by `adapterId`. */
-    get: (id: BridgeAdapterId): BridgeRoutePort | undefined =>
-      this.#bridgeAdapters.get(id),
+    get: (id: BridgeAdapterId): BridgeRoutePort | undefined => this.#bridgeAdapters.get(id),
   } as const;
 
   /**
@@ -147,9 +140,7 @@ export class WalletKernel {
     erc7802: (): Erc7802Port => this.#requireAgent('erc7802'),
   } as const;
 
-  #requireAgent<K extends keyof AgentPortsBundle>(
-    key: K,
-  ): NonNullable<AgentPortsBundle[K]> {
+  #requireAgent<K extends keyof AgentPortsBundle>(key: K): NonNullable<AgentPortsBundle[K]> {
     const port = this.#agentPorts[key];
     if (!port) {
       throw new Error(
@@ -189,9 +180,7 @@ export class WalletKernel {
     const surface = this.#surfaceFor(sel.fromSurface);
     if (sel.route.kind === 'cross-vm-pointer') {
       if (!surface.preparePointer) {
-        throw new Error(
-          `surface ${surface.name} cannot source cross-VM pointer ops`,
-        );
+        throw new Error(`surface ${surface.name} cannot source cross-VM pointer ops`);
       }
       if (intent.kind !== 'send') {
         throw new Error(`pointer ops only support send intents`);
@@ -214,9 +203,11 @@ export class WalletKernel {
       spentSoFarToday: this.#spentToday,
     };
     enforcePolicy(prepared.intent, consent, ctx);
-    const surface = this.#surfaceFor(prepared.route.kind === 'native'
-      ? prepared.route.surface
-      : (prepared.route as { fromSurface: SurfaceName }).fromSurface);
+    const surface = this.#surfaceFor(
+      prepared.route.kind === 'native'
+        ? prepared.route.surface
+        : (prepared.route as { fromSurface: SurfaceName }).fromSurface,
+    );
     const signed = await surface.sign(prepared, consent);
     if (prepared.intent.kind === 'send') {
       this.#spentToday += prepared.intent.amount;

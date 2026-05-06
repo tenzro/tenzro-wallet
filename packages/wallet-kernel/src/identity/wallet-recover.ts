@@ -33,11 +33,11 @@
 
 import type { TdipDid, TdipIdentity } from '../types/identity.ts';
 import type {
+  DeviceShareStore,
   PasskeyEnroller,
   PasskeyEnrolment,
   WalletThresholdRecord,
   WrappedDeviceShare,
-  DeviceShareStore,
 } from './wallet-new.ts';
 
 /**
@@ -126,9 +126,7 @@ export interface WalletRecoverResult {
   readonly credentialId: string;
 }
 
-export async function walletRecover(
-  opts: WalletRecoverOptions,
-): Promise<WalletRecoverResult> {
+export async function walletRecover(opts: WalletRecoverOptions): Promise<WalletRecoverResult> {
   const start = await opts.recovery.start({
     did: opts.did,
     proof: opts.proof,

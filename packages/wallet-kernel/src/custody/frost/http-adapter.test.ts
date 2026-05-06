@@ -17,11 +17,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import {
-  FrostHttpAdapter,
-  FrostHttpError,
-  type FrostHttpConfig,
-} from './http-adapter.ts';
+import { FrostHttpAdapter, type FrostHttpConfig, FrostHttpError } from './http-adapter.ts';
 
 interface Captured {
   url: string;
@@ -30,9 +26,10 @@ interface Captured {
   body: string;
 }
 
-function captureFetch(
-  respond: (path: string) => Response,
-): { fetch: typeof fetch; calls: Captured[] } {
+function captureFetch(respond: (path: string) => Response): {
+  fetch: typeof fetch;
+  calls: Captured[];
+} {
   const calls: Captured[] = [];
   const fetchImpl: typeof fetch = async (url, init) => {
     const u = url as string;
@@ -47,10 +44,7 @@ function captureFetch(
   return { fetch: fetchImpl, calls };
 }
 
-function cfg(
-  fetchImpl: typeof fetch,
-  extra: Partial<FrostHttpConfig> = {},
-): FrostHttpConfig {
+function cfg(fetchImpl: typeof fetch, extra: Partial<FrostHttpConfig> = {}): FrostHttpConfig {
   return { baseUrl: 'https://rpc.tenzro.test', fetch: fetchImpl, ...extra };
 }
 
@@ -60,15 +54,16 @@ const PREIMAGE_B64 = 'AQIDBA==';
 
 describe('FrostHttpAdapter.start', () => {
   it('POSTs to /wallet/frost/<scheme>/start and unwraps to camelCase', async () => {
-    const { fetch, calls } = captureFetch(() =>
-      new Response(
-        JSON.stringify({
-          session_id: 's-1',
-          expires_at: 1_700_000_000_000,
-          participants: ['device-A', 'node-tee'],
-        }),
-        { status: 200, headers: { 'content-type': 'application/json' } },
-      ),
+    const { fetch, calls } = captureFetch(
+      () =>
+        new Response(
+          JSON.stringify({
+            session_id: 's-1',
+            expires_at: 1_700_000_000_000,
+            participants: ['device-A', 'node-tee'],
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
     );
     const adapter = new FrostHttpAdapter(cfg(fetch));
     const r = await adapter.start({
@@ -96,56 +91,58 @@ describe('FrostHttpAdapter.start', () => {
   });
 
   it('omits purpose when not provided (no undefined in body)', async () => {
-    const { fetch, calls } = captureFetch(() =>
-      new Response(
-        JSON.stringify({ session_id: 's', expires_at: 1, participants: [] }),
-        { status: 200 },
-      ),
+    const { fetch, calls } = captureFetch(
+      () =>
+        new Response(JSON.stringify({ session_id: 's', expires_at: 1, participants: [] }), {
+          status: 200,
+        }),
     );
     const adapter = new FrostHttpAdapter(cfg(fetch));
     await adapter.start({
-      did: 'd', surfaceKey: 'k', scheme: 'ed25519', preimage: PREIMAGE,
+      did: 'd',
+      surfaceKey: 'k',
+      scheme: 'ed25519',
+      preimage: PREIMAGE,
     });
     expect(JSON.parse(calls[0]!.body)).toEqual({
-      did: 'd', surface_key: 'k', scheme: 'ed25519', preimage_b64: PREIMAGE_B64,
+      did: 'd',
+      surface_key: 'k',
+      scheme: 'ed25519',
+      preimage_b64: PREIMAGE_B64,
     });
   });
 
   it('routes secp256k1 path when scheme is secp256k1', async () => {
-    const { fetch, calls } = captureFetch(() =>
-      new Response(
-        JSON.stringify({ session_id: 's', expires_at: 1, participants: [] }),
-      ),
+    const { fetch, calls } = captureFetch(
+      () => new Response(JSON.stringify({ session_id: 's', expires_at: 1, participants: [] })),
     );
     const adapter = new FrostHttpAdapter(cfg(fetch));
     await adapter.start({
-      did: 'd', surfaceKey: 'k', scheme: 'secp256k1', preimage: PREIMAGE,
+      did: 'd',
+      surfaceKey: 'k',
+      scheme: 'secp256k1',
+      preimage: PREIMAGE,
     });
-    expect(calls[0]?.url).toBe(
-      'https://rpc.tenzro.test/wallet/frost/secp256k1/start',
-    );
+    expect(calls[0]?.url).toBe('https://rpc.tenzro.test/wallet/frost/secp256k1/start');
   });
 
   it('normalises trailing slash on baseUrl', async () => {
-    const { fetch, calls } = captureFetch(() =>
-      new Response(
-        JSON.stringify({ session_id: 's', expires_at: 1, participants: [] }),
-      ),
+    const { fetch, calls } = captureFetch(
+      () => new Response(JSON.stringify({ session_id: 's', expires_at: 1, participants: [] })),
     );
-    const adapter = new FrostHttpAdapter(
-      cfg(fetch, { baseUrl: 'https://rpc.tenzro.test///' }),
-    );
+    const adapter = new FrostHttpAdapter(cfg(fetch, { baseUrl: 'https://rpc.tenzro.test///' }));
     await adapter.start({
-      did: 'd', surfaceKey: 'k', scheme: 'ed25519', preimage: PREIMAGE,
+      did: 'd',
+      surfaceKey: 'k',
+      scheme: 'ed25519',
+      preimage: PREIMAGE,
     });
     expect(calls[0]?.url).toBe('https://rpc.tenzro.test/wallet/frost/ed25519/start');
   });
 
   it('awaits headers() and merges into request', async () => {
-    const { fetch, calls } = captureFetch(() =>
-      new Response(
-        JSON.stringify({ session_id: 's', expires_at: 1, participants: [] }),
-      ),
+    const { fetch, calls } = captureFetch(
+      () => new Response(JSON.stringify({ session_id: 's', expires_at: 1, participants: [] })),
     );
     const adapter = new FrostHttpAdapter(
       cfg(fetch, {
@@ -153,7 +150,10 @@ describe('FrostHttpAdapter.start', () => {
       }),
     );
     await adapter.start({
-      did: 'd', surfaceKey: 'k', scheme: 'ed25519', preimage: PREIMAGE,
+      did: 'd',
+      surfaceKey: 'k',
+      scheme: 'ed25519',
+      preimage: PREIMAGE,
     });
     expect(calls[0]?.headers).toEqual({
       'content-type': 'application/json',
@@ -169,19 +169,16 @@ describe('FrostHttpAdapter.commit / awaitChallenge / respond', () => {
     const fetchImpl: typeof fetch = async (url, init) => {
       const u = url as string;
       calls.push({
-        url: u, method: 'POST',
+        url: u,
+        method: 'POST',
         headers: (init?.headers as Record<string, string>) ?? {},
         body: (init?.body as string) ?? '',
       });
       if (u.endsWith('/start')) {
-        return new Response(
-          JSON.stringify({ session_id: 's-2', expires_at: 1, participants: [] }),
-        );
+        return new Response(JSON.stringify({ session_id: 's-2', expires_at: 1, participants: [] }));
       }
       if (u.endsWith('/commit')) {
-        return new Response(
-          JSON.stringify({ session_id: 's-2', state: 'pending' }),
-        );
+        return new Response(JSON.stringify({ session_id: 's-2', state: 'pending' }));
       }
       if (u.endsWith('/await-challenge')) {
         // group_commitment = [9,9,9], lambda = [4,4]
@@ -196,16 +193,17 @@ describe('FrostHttpAdapter.commit / awaitChallenge / respond', () => {
         );
       }
       if (u.endsWith('/respond')) {
-        return new Response(
-          JSON.stringify({ session_id: 's-2', state: 'responded' }),
-        );
+        return new Response(JSON.stringify({ session_id: 's-2', state: 'responded' }));
       }
       throw new Error(`unexpected url: ${u}`);
     };
 
     const adapter = new FrostHttpAdapter(cfg(fetchImpl));
     await adapter.start({
-      did: 'd', surfaceKey: 'k', scheme: 'ed25519', preimage: PREIMAGE,
+      did: 'd',
+      surfaceKey: 'k',
+      scheme: 'ed25519',
+      preimage: PREIMAGE,
     });
 
     const c = await adapter.commit({
@@ -243,9 +241,7 @@ describe('FrostHttpAdapter.finalize', () => {
       const u = url as string;
       calls.push({ url: u, method: 'POST', headers: {}, body: '' });
       if (u.endsWith('/start')) {
-        return new Response(
-          JSON.stringify({ session_id: 's', expires_at: 1, participants: [] }),
-        );
+        return new Response(JSON.stringify({ session_id: 's', expires_at: 1, participants: [] }));
       }
       // 64-byte signature: filled with 0xAB, 0xCD repeating — simple b64 fixture
       const sigBytes = new Uint8Array(4).fill(0xab);
@@ -261,7 +257,10 @@ describe('FrostHttpAdapter.finalize', () => {
 
     const adapter = new FrostHttpAdapter(cfg(fetchImpl));
     await adapter.start({
-      did: 'd', surfaceKey: 'k', scheme: 'ed25519', preimage: PREIMAGE,
+      did: 'd',
+      surfaceKey: 'k',
+      scheme: 'ed25519',
+      preimage: PREIMAGE,
     });
     const f = await adapter.finalize('s');
     expect(f.state).toBe('finalized');
@@ -273,17 +272,16 @@ describe('FrostHttpAdapter.finalize', () => {
     const fetchImpl: typeof fetch = async (url) => {
       const u = url as string;
       if (u.endsWith('/start')) {
-        return new Response(
-          JSON.stringify({ session_id: 's', expires_at: 1, participants: [] }),
-        );
+        return new Response(JSON.stringify({ session_id: 's', expires_at: 1, participants: [] }));
       }
-      return new Response(
-        JSON.stringify({ session_id: 's', state: 'pending' }),
-      );
+      return new Response(JSON.stringify({ session_id: 's', state: 'pending' }));
     };
     const adapter = new FrostHttpAdapter(cfg(fetchImpl));
     await adapter.start({
-      did: 'd', surfaceKey: 'k', scheme: 'ed25519', preimage: PREIMAGE,
+      did: 'd',
+      surfaceKey: 'k',
+      scheme: 'ed25519',
+      preimage: PREIMAGE,
     });
     const f = await adapter.finalize('s');
     expect(f.state).toBe('pending');
@@ -297,19 +295,23 @@ describe('FrostHttpAdapter.abort', () => {
     const fetchImpl: typeof fetch = async (url, init) => {
       const u = url as string;
       calls.push({
-        url: u, method: 'POST', headers: {}, body: (init?.body as string) ?? '',
+        url: u,
+        method: 'POST',
+        headers: {},
+        body: (init?.body as string) ?? '',
       });
       if (u.endsWith('/start')) {
-        return new Response(
-          JSON.stringify({ session_id: 's', expires_at: 1, participants: [] }),
-        );
+        return new Response(JSON.stringify({ session_id: 's', expires_at: 1, participants: [] }));
       }
       // 204 No Content
       return new Response(null, { status: 204 });
     };
     const adapter = new FrostHttpAdapter(cfg(fetchImpl));
     await adapter.start({
-      did: 'd', surfaceKey: 'k', scheme: 'ed25519', preimage: PREIMAGE,
+      did: 'd',
+      surfaceKey: 'k',
+      scheme: 'ed25519',
+      preimage: PREIMAGE,
     });
     await adapter.abort('s');
     expect(JSON.parse(calls[1]!.body)).toEqual({ session_id: 's' });
@@ -320,18 +322,22 @@ describe('FrostHttpAdapter.abort', () => {
     const fetchImpl: typeof fetch = async (url, init) => {
       const u = url as string;
       calls.push({
-        url: u, method: 'POST', headers: {}, body: (init?.body as string) ?? '',
+        url: u,
+        method: 'POST',
+        headers: {},
+        body: (init?.body as string) ?? '',
       });
       if (u.endsWith('/start')) {
-        return new Response(
-          JSON.stringify({ session_id: 's', expires_at: 1, participants: [] }),
-        );
+        return new Response(JSON.stringify({ session_id: 's', expires_at: 1, participants: [] }));
       }
       return new Response(null, { status: 204 });
     };
     const adapter = new FrostHttpAdapter(cfg(fetchImpl));
     await adapter.start({
-      did: 'd', surfaceKey: 'k', scheme: 'ed25519', preimage: PREIMAGE,
+      did: 'd',
+      surfaceKey: 'k',
+      scheme: 'ed25519',
+      preimage: PREIMAGE,
     });
     await adapter.abort('s', 'user-cancelled');
     expect(JSON.parse(calls[1]!.body)).toEqual({
@@ -344,19 +350,23 @@ describe('FrostHttpAdapter.abort', () => {
 describe('FrostHttpAdapter error handling', () => {
   it('throws if any method called before start()', async () => {
     const adapter = new FrostHttpAdapter(cfg(async () => new Response('no')));
-    await expect(adapter.commit({ sessionId: 's', deviceCommitment: new Uint8Array(0) }))
-      .rejects.toThrow(/cannot call commit before start/);
-    await expect(adapter.awaitChallenge('s'))
-      .rejects.toThrow(/cannot call await-challenge before start/);
+    await expect(
+      adapter.commit({ sessionId: 's', deviceCommitment: new Uint8Array(0) }),
+    ).rejects.toThrow(/cannot call commit before start/);
+    await expect(adapter.awaitChallenge('s')).rejects.toThrow(
+      /cannot call await-challenge before start/,
+    );
   });
 
   it('throws FrostHttpError on non-2xx', async () => {
-    const fetchImpl: typeof fetch = async () =>
-      new Response('quorum unavailable', { status: 503 });
+    const fetchImpl: typeof fetch = async () => new Response('quorum unavailable', { status: 503 });
     const adapter = new FrostHttpAdapter(cfg(fetchImpl));
     await expect(
       adapter.start({
-        did: 'd', surfaceKey: 'k', scheme: 'ed25519', preimage: PREIMAGE,
+        did: 'd',
+        surfaceKey: 'k',
+        scheme: 'ed25519',
+        preimage: PREIMAGE,
       }),
     ).rejects.toBeInstanceOf(FrostHttpError);
   });

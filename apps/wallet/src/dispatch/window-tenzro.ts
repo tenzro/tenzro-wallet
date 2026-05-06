@@ -26,14 +26,14 @@
  */
 
 import {
-  buildEip6963Announcement,
-  EIP6963_ANNOUNCE_EVENT,
-  EIP6963_REQUEST_EVENT,
-  TENZRO_PROVIDER_RDNS,
   type EIP1193Provider,
   type EIP6963ProviderDetail,
+  EIP6963_ANNOUNCE_EVENT,
+  EIP6963_REQUEST_EVENT,
   type Eip6963ProviderInfo,
-  WalletKernel,
+  TENZRO_PROVIDER_RDNS,
+  type WalletKernel,
+  buildEip6963Announcement,
 } from '@tenzro/wallet-kernel';
 
 /**
@@ -207,6 +207,7 @@ export function installTenzroProvider(args: {
     dispose: () => {
       window.removeEventListener(EIP6963_REQUEST_EVENT, onRequest);
       const w = window as unknown as { tenzro?: EIP1193Provider };
+      // biome-ignore lint/performance/noDelete: removing the property cleanly is intentional; assignment to `undefined` violates exactOptionalPropertyTypes.
       if (w.tenzro === args.provider) delete w.tenzro;
     },
   };

@@ -4,11 +4,12 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { EscrowSdkAdapter, type EscrowClientLike } from './escrow-adapter.ts';
+import { type EscrowClientLike, EscrowSdkAdapter } from './escrow-adapter.ts';
 
-function fakeClient(
-  overrides: Partial<EscrowClientLike> = {},
-): { client: EscrowClientLike; calls: { method: string; args: unknown[] }[] } {
+function fakeClient(overrides: Partial<EscrowClientLike> = {}): {
+  client: EscrowClientLike;
+  calls: { method: string; args: unknown[] }[];
+} {
   const calls: { method: string; args: unknown[] }[] = [];
   const client: EscrowClientLike = {
     createEscrow: async (payer, payee, amount, asset, expiresAt, mode) => {
@@ -29,6 +30,14 @@ function fakeClient(
     getEscrow: async (escrowId) => {
       calls.push({ method: 'getEscrow', args: [escrowId] });
       return null;
+    },
+    listEscrowsByPayer: async (payer) => {
+      calls.push({ method: 'listEscrowsByPayer', args: [payer] });
+      return [];
+    },
+    listEscrowsByPayee: async (payee) => {
+      calls.push({ method: 'listEscrowsByPayee', args: [payee] });
+      return [];
     },
     ...overrides,
   };

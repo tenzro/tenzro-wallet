@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
+  type Eip1559Signature,
+  type Eip1559Tx,
   encodeForSigning,
   serializeSigned,
   signingHash,
   splitSignature,
-  type Eip1559Signature,
-  type Eip1559Tx,
 } from './eip1559.ts';
-import { bytesToHex, hexToBytes, rlpDecode, type RLPItem } from './rlp.ts';
+import { type RLPItem, bytesToHex, hexToBytes, rlpDecode } from './rlp.ts';
 
 const TX: Eip1559Tx = {
   chainId: 1337,
@@ -43,9 +43,7 @@ describe('eip1559', () => {
     // gasLimit = 21000 = 0x5208
     expect(bytesToHex(decoded[4] as Uint8Array)).toBe('0x5208');
     // to address (lowercase, no 0x prefix in bytes)
-    expect(bytesToHex(decoded[5] as Uint8Array)).toBe(
-      '0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef',
-    );
+    expect(bytesToHex(decoded[5] as Uint8Array)).toBe('0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef');
     // accessList is the empty list
     expect(decoded[8]).toEqual([]);
   });

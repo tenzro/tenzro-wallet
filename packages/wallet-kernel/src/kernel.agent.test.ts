@@ -52,7 +52,7 @@ function stubAp2(): Ap2Port {
 function stubErc8004(): Erc8004Port {
   return {
     deriveAgentId: async (owner, salt) => ({
-      agentId: '0x' + 'aa'.repeat(32) as `0x${string}`,
+      agentId: ('0x' + 'aa'.repeat(32)) as `0x${string}`,
       owner,
       salt,
     }),
@@ -63,7 +63,7 @@ function stubErc8004(): Erc8004Port {
     encodeGetAgent: async () => ({ selector: '0x', calldata: '0x' }),
     decodeGetAgent: async () => ({
       registrationDataUri: 'ipfs://Qm',
-      owner: '0x' + '11'.repeat(20) as `0x${string}`,
+      owner: ('0x' + '11'.repeat(20)) as `0x${string}`,
     }),
     encodeFeedback: async () => ({ selector: '0x', calldata: '0x' }),
     encodeRequestValidation: async () => ({ selector: '0x', calldata: '0x' }),
@@ -153,7 +153,10 @@ describe('WalletKernel agent-ports bundle', () => {
 
     const derived = await kernel.agent
       .erc8004()
-      .deriveAgentId('0x' + '11'.repeat(20) as `0x${string}`, '0x' + '22'.repeat(32) as `0x${string}`);
+      .deriveAgentId(
+        ('0x' + '11'.repeat(20)) as `0x${string}`,
+        ('0x' + '22'.repeat(32)) as `0x${string}`,
+      );
     expect(derived.agentId.startsWith('0x')).toBe(true);
 
     const receipt = await kernel.agent.agentPayment().payForService({
@@ -181,15 +184,9 @@ describe('WalletKernel agent-ports bundle', () => {
       agentPorts: { ap2: stubAp2() },
     });
 
-    expect(() => kernel.agent.erc8004()).toThrow(
-      /agent port "erc8004" not configured/,
-    );
-    expect(() => kernel.agent.agentPayment()).toThrow(
-      /agent port "agentPayment" not configured/,
-    );
-    expect(() => kernel.agent.nanopayment()).toThrow(
-      /agent port "nanopayment" not configured/,
-    );
+    expect(() => kernel.agent.erc8004()).toThrow(/agent port "erc8004" not configured/);
+    expect(() => kernel.agent.agentPayment()).toThrow(/agent port "agentPayment" not configured/);
+    expect(() => kernel.agent.nanopayment()).toThrow(/agent port "nanopayment" not configured/);
     // ap2 still works.
     expect(kernel.agent.ap2()).toBeTruthy();
   });
@@ -216,9 +213,7 @@ describe('WalletKernel agent-ports bundle', () => {
     expect(wired.agent.htlcEscrow()).toBe(stubHtlc);
 
     const unwired = new WalletKernel({ identity, surfaces: noSurfaces });
-    expect(() => unwired.agent.htlcEscrow()).toThrow(
-      /agent port "htlcEscrow" not configured/,
-    );
+    expect(() => unwired.agent.htlcEscrow()).toThrow(/agent port "htlcEscrow" not configured/);
   });
 
   it('erc7802 accessor mirrors the agent-port pattern', async () => {
@@ -254,9 +249,7 @@ describe('WalletKernel agent-ports bundle', () => {
     expect(wired.agent.erc7802()).toBe(stubErc7802);
 
     const unwired = new WalletKernel({ identity, surfaces: noSurfaces });
-    expect(() => unwired.agent.erc7802()).toThrow(
-      /agent port "erc7802" not configured/,
-    );
+    expect(() => unwired.agent.erc7802()).toThrow(/agent port "erc7802" not configured/);
   });
 
   it('bridge.adapters() returns registered adapters; bridge.get() looks up by id', async () => {

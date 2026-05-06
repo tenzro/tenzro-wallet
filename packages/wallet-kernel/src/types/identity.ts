@@ -25,6 +25,16 @@ export interface TdipDidParts {
   /** Controller DID, only present when kind === 'controlled-machine'. */
   readonly controller?: TdipDid;
   readonly uuid: string;
+  /**
+   * Set when the identity was registered as a SeedAgent — protocol-owned
+   * bootstrap counterparty funded from the genesis treasury earmark. Drives
+   * counterparty filters (`deny_other_seed_agents`) and lets activity
+   * metrics exclude protocol-bootstrap traffic.
+   *
+   * Source of truth is `IdentityData::Machine.is_seed_agent` on the ledger;
+   * surfaced here for client-side gating without an extra RPC.
+   */
+  readonly isSeedAgent?: boolean;
 }
 
 /**
@@ -87,7 +97,11 @@ export type SurfaceKey =
       /** Base58-encoded Tenzro address (per `Address` in tenzro-sdk types). */
       readonly address: string;
     }
-  | { readonly surface: 'evm-on-tenzro'; readonly scheme: 'secp256k1'; readonly address: `0x${string}` }
+  | {
+      readonly surface: 'evm-on-tenzro';
+      readonly scheme: 'secp256k1';
+      readonly address: `0x${string}`;
+    }
   | {
       readonly surface: 'svm-on-tenzro';
       readonly scheme: 'ed25519';

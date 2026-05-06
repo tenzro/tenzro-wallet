@@ -27,32 +27,24 @@
  * signature.
  */
 
-import type {
-  SigningDriver,
-  SigningRequest,
-  SigningResult,
-} from '../../types/signing-driver.ts';
+import type { SigningDriver, SigningRequest, SigningResult } from '../../types/signing-driver.ts';
 import type { MlDsaCoordinator } from '../mldsa/coordinator.ts';
 import { surfaceKeyId } from '../surface-key-id.ts';
-import { frostEd25519Driver, type FrostEd25519Options } from './ed25519-driver.ts';
+import { type FrostEd25519Options, frostEd25519Driver } from './ed25519-driver.ts';
 
 export interface HybridDriverOptions extends FrostEd25519Options {
   /** ML-DSA-65 coordinator. Today: TEE-only. Future: threshold. */
   readonly mlDsaCoordinator: MlDsaCoordinator;
 }
 
-export function hybridEd25519MlDsaDriver(
-  opts: HybridDriverOptions,
-): SigningDriver {
+export function hybridEd25519MlDsaDriver(opts: HybridDriverOptions): SigningDriver {
   const ed25519 = frostEd25519Driver(opts);
 
   return {
     id: 'hybrid-ed25519-mldsa',
     async sign(req: SigningRequest): Promise<SigningResult> {
       if (req.scheme !== 'ed25519+ml-dsa-65') {
-        throw new Error(
-          `hybrid driver cannot sign scheme '${req.scheme}'`,
-        );
+        throw new Error(`hybrid driver cannot sign scheme '${req.scheme}'`);
       }
 
       // Run both legs in parallel — neither depends on the other.

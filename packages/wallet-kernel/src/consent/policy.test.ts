@@ -3,7 +3,7 @@ import { provisionIdentity } from '../identity/provision.ts';
 import type { AssetId } from '../types/asset.ts';
 import type { Consent } from '../types/consent.ts';
 import type { Intent } from '../types/intent.ts';
-import { enforcePolicy, PolicyViolationError } from './policy.ts';
+import { PolicyViolationError, enforcePolicy } from './policy.ts';
 
 const TNZO: AssetId = { scope: 'tenzro-native', symbol: 'TNZO', decimals: 18 };
 const USDC: AssetId = { scope: 'tenzro-asset', symbol: 'USDC', decimals: 6 };
@@ -77,5 +77,53 @@ describe('policy enforcement', () => {
 
   it('is a no-op when no policy is set', () => {
     expect(() => enforcePolicy(intent(10n ** 24n), consent, {})).not.toThrow();
+  });
+
+  describe('KYC tier', () => {
+    it('passes when signer tier meets requirement', () => {
+      expect(() =>
+        enforcePolicy(intent(10n), consent, {
+          sessionPolicy: { minKycTier: 'Basic' },
+          signerKycTier: 'Basic',
+        }),
+      ).not.toThrow();
+    });
+
+    it('passes when signer tier exceeds requirement', () => {
+      expect(() =>
+        enforcePolicy(intent(10n), consent, {
+          sessionPolicy: { minKycTier: 'Basic' },
+          signerKycTier: 'Full',
+        }),
+      ).not.toThrow();
+    });
+
+    it('blocks when signer tier is below requirement', () => {
+      expect(() =>
+        enforcePolicy(intent(10n), consent, {
+          sessionPolicy: { minKycTier: 'Enhanced' },
+          signerKycTier: 'Basic',
+        }),
+      ).toThrow(/KYC tier/);
+    });
+
+    it('treats omitted signerKycTier as Unverified', () => {
+      expect(() =>
+        enforcePolicy(intent(10n), consent, {
+          sessionPolicy: { minKycTier: 'Basic' },
+        }),
+      ).toThrow(/Unverified/);
+    });
+
+    it('intersects to the higher (more restrictive) tier', () => {
+      // session says Basic, delegation says Full → Full wins.
+      expect(() =>
+        enforcePolicy(intent(10n), consent, {
+          sessionPolicy: { minKycTier: 'Basic' },
+          delegationScope: { minKycTier: 'Full' },
+          signerKycTier: 'Enhanced',
+        }),
+      ).toThrow(/Full/);
+    });
   });
 });

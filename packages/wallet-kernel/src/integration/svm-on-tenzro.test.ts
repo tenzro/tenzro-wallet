@@ -39,8 +39,7 @@
 import { describe, expect, it } from 'vitest';
 
 const env =
-  (globalThis as { process?: { env?: Record<string, string | undefined> } })
-    .process?.env ?? {};
+  (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env ?? {};
 
 const RPC_URL = env.TENZRO_RPC_URL ?? '';
 const TEST_ADDRESS = env.TENZRO_TEST_ADDRESS ?? '';
@@ -89,9 +88,7 @@ describe.skipIf(!HAS_AUTH)('integration: svm-on-tenzro smoke', () => {
       // 2. tenzro_listTokens vm_type:"svm" — proves the filter is honoured.
       //    An empty list is fine (no SVM-registered tokens yet); the wrong
       //    shape or unfiltered result is the regression.
-      const svmOnly = await rpc<TokenList>('tenzro_listTokens', [
-        { vm_type: 'svm' },
-      ]);
+      const svmOnly = await rpc<TokenList>('tenzro_listTokens', [{ vm_type: 'svm' }]);
       expect(typeof svmOnly.count).toBe('number');
       expect(Array.isArray(svmOnly.tokens)).toBe(true);
 

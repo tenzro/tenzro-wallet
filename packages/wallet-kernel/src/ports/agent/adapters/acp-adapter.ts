@@ -89,9 +89,7 @@ function mapSession(raw: RawCheckoutSession): AcpCheckoutSession {
   };
 }
 
-function mapAuthorizationResult(
-  raw: RawAuthorizationResult,
-): AcpAuthorizationResult {
+function mapAuthorizationResult(raw: RawAuthorizationResult): AcpAuthorizationResult {
   return {
     sessionId: raw.session_id,
     authorizationId: raw.authorization_id,

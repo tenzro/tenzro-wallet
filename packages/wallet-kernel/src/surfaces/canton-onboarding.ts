@@ -30,12 +30,12 @@
  *     PartyToParticipant)
  */
 
+import type { CantonValidatorPort } from '../ports/canton/canton-validator.ts';
 import {
   bytesEqualConstantTime,
   preparedTransactionHash,
   topologyBundleHash,
 } from '../ports/canton/hash.ts';
-import type { CantonValidatorPort } from '../ports/canton/canton-validator.ts';
 import type { CantonPartyKey, SurfaceKey, TdipDid } from '../types/identity.ts';
 import type { SigningDriver } from '../types/signing-driver.ts';
 

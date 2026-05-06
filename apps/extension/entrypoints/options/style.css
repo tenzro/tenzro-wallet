@@ -1,0 +1,12 @@
+@import "@tenzro/ui/styles.css";
+
+@layer base {
+  html,
+  body,
+  #root {
+    min-height: 100dvh;
+  }
+  body {
+    padding: 2rem 1rem;
+  }
+}

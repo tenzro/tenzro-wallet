@@ -7,10 +7,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import {
-  HtlcEscrowSdkAdapter,
-  type HtlcSdkClientLike,
-} from './htlc-escrow-adapter.ts';
+import { HtlcEscrowSdkAdapter, type HtlcSdkClientLike } from './htlc-escrow-adapter.ts';
 
 const SECRET = new Uint8Array([1, 2, 3, 4]);
 // SHA256 placeholder; the adapter doesn't compute, just transports.
@@ -34,16 +31,14 @@ describe('HtlcEscrowSdkAdapter — SDK-pending paths', () => {
 
   it('redeem throws when client.redeemHtlc absent', async () => {
     const adapter = new HtlcEscrowSdkAdapter({});
-    await expect(
-      adapter.redeem({ htlcId: 'h1', secret: SECRET, proof: {} }),
-    ).rejects.toThrow(/SDK pending.*redeemHtlc/);
+    await expect(adapter.redeem({ htlcId: 'h1', secret: SECRET, proof: {} })).rejects.toThrow(
+      /SDK pending.*redeemHtlc/,
+    );
   });
 
   it('refund throws when client.refundHtlc absent', async () => {
     const adapter = new HtlcEscrowSdkAdapter({});
-    await expect(adapter.refund({ htlcId: 'h1' })).rejects.toThrow(
-      /SDK pending.*refundHtlc/,
-    );
+    await expect(adapter.refund({ htlcId: 'h1' })).rejects.toThrow(/SDK pending.*refundHtlc/);
   });
 
   it('get throws when client.getHtlc absent', async () => {
@@ -77,12 +72,10 @@ describe('HtlcEscrowSdkAdapter — present paths', () => {
     });
     expect(r).toEqual({ htlcId: 'h-1', txHash: '0xtx', status: 'locked' });
     expect(captured).not.toBeNull();
-    expect(
-      (captured as unknown as { secretHashB64: string }).secretHashB64,
-    ).toMatch(/^[A-Za-z0-9+/=]+$/);
-    expect(
-      (captured as unknown as { expiresAtUnixMs: number }).expiresAtUnixMs,
-    ).toBe(12345);
+    expect((captured as unknown as { secretHashB64: string }).secretHashB64).toMatch(
+      /^[A-Za-z0-9+/=]+$/,
+    );
+    expect((captured as unknown as { expiresAtUnixMs: number }).expiresAtUnixMs).toBe(12345);
   });
 
   it('redeem forwards proof opaquely', async () => {
@@ -100,9 +93,9 @@ describe('HtlcEscrowSdkAdapter — present paths', () => {
       proof: { kind: 'canton-completion', updateId: 'u-1' },
     });
     expect(r.txHash).toBe('0xredeemed');
-    expect(
-      (captured as unknown as { proof: { kind: string } }).proof.kind,
-    ).toBe('canton-completion');
+    expect((captured as unknown as { proof: { kind: string } }).proof.kind).toBe(
+      'canton-completion',
+    );
   });
 
   it('get decodes snake_case wire record', async () => {

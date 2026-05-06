@@ -12,12 +12,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { TdipIdentity } from '../types/identity.ts';
 import {
-  walletNew,
   type DeviceShareStore,
   type PasskeyEnroller,
   type PasskeyEnrolment,
   type ProvisioningPort,
   type WrappedDeviceShare,
+  walletNew,
 } from './wallet-new.ts';
 
 const FAKE_IDENTITY: TdipIdentity = {
@@ -38,9 +38,10 @@ function fakeEnrolment(credentialId = 'cred-1'): PasskeyEnrolment {
   return { credentialId, attestationObject: 'att', clientDataJson: 'cdj' };
 }
 
-function makeProvisioning(
-  overrides: Partial<ProvisioningPort> = {},
-): { port: ProvisioningPort; calls: { name: string; args: unknown }[] } {
+function makeProvisioning(overrides: Partial<ProvisioningPort> = {}): {
+  port: ProvisioningPort;
+  calls: { name: string; args: unknown }[];
+} {
   const calls: { name: string; args: unknown }[] = [];
   const start = vi.fn(async (args: { kind: 'human' }) => {
     calls.push({ name: 'start', args });
@@ -145,9 +146,9 @@ describe('walletNew — failure paths cancel cleanly', () => {
         throw new Error('quorum unreachable');
       }),
     });
-    await expect(
-      walletNew({ enroller: makeEnroller(), provisioning: port }),
-    ).rejects.toThrow(/quorum unreachable/);
+    await expect(walletNew({ enroller: makeEnroller(), provisioning: port })).rejects.toThrow(
+      /quorum unreachable/,
+    );
     expect(calls.map((c) => c.name)).toContain('cancel');
   });
 
@@ -174,9 +175,9 @@ describe('walletNew — failure paths cancel cleanly', () => {
         throw new Error('topology write failed');
       }),
     });
-    await expect(
-      walletNew({ enroller: makeEnroller(), provisioning: port }),
-    ).rejects.toThrow(/topology write failed/);
+    await expect(walletNew({ enroller: makeEnroller(), provisioning: port })).rejects.toThrow(
+      /topology write failed/,
+    );
     // confirm override doesn't write to `calls`; we only see the
     // default-tracked calls (start, finalize, cancel).
     expect(calls.map((c) => c.name)).toEqual(['start', 'finalize', 'cancel']);
@@ -191,8 +192,8 @@ describe('walletNew — failure paths cancel cleanly', () => {
         throw new Error('cancel also failed');
       }),
     });
-    await expect(
-      walletNew({ enroller: makeEnroller(), provisioning: port }),
-    ).rejects.toThrow(/finalize failed/);
+    await expect(walletNew({ enroller: makeEnroller(), provisioning: port })).rejects.toThrow(
+      /finalize failed/,
+    );
   });
 });

@@ -63,12 +63,7 @@ export class Erc7802SdkAdapter implements Erc7802Port {
         'Erc7802SdkAdapter.crosschainBurn: SDK pending — tenzro-sdk Erc7802Client.crosschainBurn not yet shipped',
       );
     }
-    const raw = await this.client.crosschainBurn(
-      req.token,
-      req.from,
-      req.amount,
-      req.targetChain,
-    );
+    const raw = await this.client.crosschainBurn(req.token, req.from, req.amount, req.targetChain);
     return {
       txHash: raw.tx_hash,
       token: raw.token,

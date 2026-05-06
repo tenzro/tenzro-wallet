@@ -54,10 +54,7 @@ export class TeeAttestationSdkAdapter implements TeeAttestationPort {
     };
   }
 
-  async verify(
-    attestationHex: string,
-    teeType: string,
-  ): Promise<AttestationVerifyResult> {
+  async verify(attestationHex: string, teeType: string): Promise<AttestationVerifyResult> {
     const raw = await this.client.verifyAttestation(attestationHex, teeType);
     return {
       valid: raw.valid,

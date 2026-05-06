@@ -6,16 +6,17 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { AcpSdkAdapter, type AcpClientLike } from './acp-adapter.ts';
+import { type AcpClientLike, AcpSdkAdapter } from './acp-adapter.ts';
 
 interface Call {
   readonly method: string;
   readonly args: readonly unknown[];
 }
 
-function fakeClient(
-  overrides: Partial<AcpClientLike> = {},
-): { client: AcpClientLike; calls: Call[] } {
+function fakeClient(overrides: Partial<AcpClientLike> = {}): {
+  client: AcpClientLike;
+  calls: Call[];
+} {
   const calls: Call[] = [];
   const client: AcpClientLike = {
     getSession: async (sessionId) => {

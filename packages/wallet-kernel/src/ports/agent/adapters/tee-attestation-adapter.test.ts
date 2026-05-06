@@ -5,10 +5,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import {
-  TeeAttestationSdkAdapter,
-  type TeeClientLike,
-} from './tee-attestation-adapter.ts';
+import { TeeAttestationSdkAdapter, type TeeClientLike } from './tee-attestation-adapter.ts';
 
 function fakeClient(overrides: Partial<TeeClientLike> = {}): TeeClientLike {
   return {

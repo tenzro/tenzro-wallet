@@ -1,0 +1,17 @@
+@import "@tenzro/ui/styles.css";
+
+@layer base {
+  html,
+  body,
+  #root {
+    width: 380px;
+    min-height: 580px;
+    max-height: 600px;
+    overflow: hidden;
+  }
+
+  #root {
+    display: flex;
+    flex-direction: column;
+  }
+}

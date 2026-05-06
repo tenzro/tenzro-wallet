@@ -8,16 +8,16 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { NanopaymentSession } from './nanopayment-flow.ts';
 import type {
+  BatchSettlement,
+  CloseChannelResult,
   NanoChannel,
   NanopaymentPort,
   NanopaymentReceipt,
-  BatchSettlement,
-  CloseChannelResult,
   OpenChannelRequest,
   SendNanopaymentRequest,
 } from '../ports/agent/nanopayment.ts';
+import { NanopaymentSession } from './nanopayment-flow.ts';
 
 interface Call {
   readonly method: string;

@@ -5,16 +5,17 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { Ap2SdkAdapter, type Ap2ClientLike } from './ap2-adapter.ts';
+import { type Ap2ClientLike, Ap2SdkAdapter } from './ap2-adapter.ts';
 
 interface Call {
   readonly method: string;
   readonly args: readonly unknown[];
 }
 
-function fakeClient(
-  overrides: Partial<Ap2ClientLike> = {},
-): { client: Ap2ClientLike; calls: Call[] } {
+function fakeClient(overrides: Partial<Ap2ClientLike> = {}): {
+  client: Ap2ClientLike;
+  calls: Call[];
+} {
   const calls: Call[] = [];
   const session = {
     session_id: 's-1',

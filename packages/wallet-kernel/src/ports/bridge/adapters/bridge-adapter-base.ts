@@ -54,10 +54,7 @@ import type {
  * real adapter accepts the SDK class instance as-is.
  */
 export type BridgeClientLike = Partial<
-  Pick<
-    BridgeClient,
-    'getRoutes' | 'bridgeTokens' | 'getTransferStatus' | 'listAdapters'
-  >
+  Pick<BridgeClient, 'getRoutes' | 'bridgeTokens' | 'getTransferStatus' | 'listAdapters'>
 >;
 
 /** Fields the adapter stashes in `BridgeQuote.opaque` so `build()` can
@@ -90,15 +87,9 @@ export function bridgeAdapterFromClient(
 
     async quote(req: BridgeQuoteRequest): Promise<BridgeQuote> {
       if (!client?.getRoutes) throw pending('getRoutes');
-      const routes = await client.getRoutes(
-        req.fromChain.chain,
-        req.toChain.chain,
-        req.fromAsset,
-      );
+      const routes = await client.getRoutes(req.fromChain.chain, req.toChain.chain, req.fromAsset);
       // SDK returns BridgeRoute[]; we filter to our vendor.
-      const ours = routes.find(
-        (r) => normaliseAdapterName(r.adapter) === vendor,
-      );
+      const ours = routes.find((r) => normaliseAdapterName(r.adapter) === vendor);
       if (!ours) {
         throw new Error(
           `${vendor}BridgeAdapter.quote: vendor not in SDK route list for ` +
@@ -137,9 +128,7 @@ export function bridgeAdapterFromClient(
         transactions: [
           {
             chain: o.fromChain,
-            body: { txHash: transfer.txHash } as Readonly<
-              Record<string, unknown>
-            >,
+            body: { txHash: transfer.txHash } as Readonly<Record<string, unknown>>,
             label: `Bridge ${o.token} via ${vendor}`,
           },
         ],
@@ -159,9 +148,7 @@ export function bridgeAdapterFromClient(
           yield {
             trackerId: raw.transfer_id ?? trackerId,
             phase,
-            ...(raw.source_tx_hash !== undefined
-              ? { sourceTx: raw.source_tx_hash }
-              : {}),
+            ...(raw.source_tx_hash !== undefined ? { sourceTx: raw.source_tx_hash } : {}),
             ...(raw.destination_tx_hash !== undefined
               ? { destinationTx: raw.destination_tx_hash }
               : {}),

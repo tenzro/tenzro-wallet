@@ -50,9 +50,7 @@ export class TenzroIdentityAdapter implements TenzroIdentityPort {
     // (or the older `Ed25519VerificationKey2018`); accept both since the
     // node-side serialization isn't pinned in the SDK.
     const vm = doc.verificationMethod.find(
-      (m) =>
-        m.type === 'Ed25519VerificationKey2020' ||
-        m.type === 'Ed25519VerificationKey2018',
+      (m) => m.type === 'Ed25519VerificationKey2020' || m.type === 'Ed25519VerificationKey2018',
     );
     if (!vm || !vm.publicKeyMultibase) return undefined;
     const pubkey = decodeMultibase(vm.publicKeyMultibase);

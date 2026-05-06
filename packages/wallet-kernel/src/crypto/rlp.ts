@@ -85,7 +85,7 @@ export function hexToBytes(hex: string): Uint8Array {
   const norm = h.length % 2 === 0 ? h : '0' + h;
   const out = new Uint8Array(norm.length / 2);
   for (let i = 0; i < out.length; i++) {
-    out[i] = parseInt(norm.slice(i * 2, i * 2 + 2), 16);
+    out[i] = Number.parseInt(norm.slice(i * 2, i * 2 + 2), 16);
   }
   return out;
 }
@@ -135,7 +135,10 @@ function decodeOne(buf: Uint8Array, off: number): { item: RLPItem; consumed: num
   if (first < 0xc0) {
     const lenLen = first - 0xb7;
     const len = readLen(buf, off + 1, lenLen);
-    return { item: buf.subarray(off + 1 + lenLen, off + 1 + lenLen + len), consumed: 1 + lenLen + len };
+    return {
+      item: buf.subarray(off + 1 + lenLen, off + 1 + lenLen + len),
+      consumed: 1 + lenLen + len,
+    };
   }
   if (first < 0xf8) {
     const len = first - 0xc0;

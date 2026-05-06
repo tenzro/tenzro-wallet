@@ -47,19 +47,14 @@ export async function preparedTransactionHash(
  * Recompute the topology bundle hash from the three onboarding txs the
  * validator returned. The user signs *this* hash with the namespace key.
  */
-export async function topologyBundleHash(
-  bundle: ReadonlyArray<Uint8Array>,
-): Promise<Uint8Array> {
+export async function topologyBundleHash(bundle: ReadonlyArray<Uint8Array>): Promise<Uint8Array> {
   // The bundle hash inputs are concatenated in their wire order. Canton
   // doesn't length-prefix them at the hash layer — the proto's outer
   // structure already disambiguates.
   return cantonHash(HASH_PURPOSE_TOPOLOGY_TRANSACTION_BUNDLE, concatBytes(...bundle));
 }
 
-async function cantonHash(
-  purpose: number,
-  payload: Uint8Array,
-): Promise<Uint8Array> {
+async function cantonHash(purpose: number, payload: Uint8Array): Promise<Uint8Array> {
   const purposeBytes = new Uint8Array(4);
   // Big-endian u32.
   purposeBytes[0] = (purpose >>> 24) & 0xff;
@@ -75,6 +70,6 @@ async function cantonHash(
 export function bytesEqualConstantTime(a: Uint8Array, b: Uint8Array): boolean {
   if (a.length !== b.length) return false;
   let diff = 0;
-  for (let i = 0; i < a.length; i++) diff |= (a[i]! ^ b[i]!);
+  for (let i = 0; i < a.length; i++) diff |= a[i]! ^ b[i]!;
   return diff === 0;
 }

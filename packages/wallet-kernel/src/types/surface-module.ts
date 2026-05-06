@@ -18,14 +18,7 @@
 
 import type { CrossVmPointerOp } from '../ports/cross-vm.ts';
 import type { Consent } from './consent.ts';
-import type {
-  Intent,
-  MemoSpec,
-  PreparedTx,
-  SignedTx,
-  TxHandle,
-  TxStatus,
-} from './intent.ts';
+import type { Intent, MemoSpec, PreparedTx, SignedTx, TxHandle, TxStatus } from './intent.ts';
 import type { SurfaceName } from './surface.ts';
 
 export interface SurfaceModule {

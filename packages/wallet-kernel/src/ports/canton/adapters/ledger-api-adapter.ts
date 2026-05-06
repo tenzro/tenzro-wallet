@@ -44,9 +44,9 @@ import type {
   TransferPreapproval,
 } from '../canton-validator.ts';
 import {
+  type CantonHttpConfig,
   base64Decode,
   base64Encode,
-  type CantonHttpConfig,
   getJson,
   postJson,
   streamNdjson,
@@ -181,9 +181,7 @@ export class LedgerApiAdapter implements CantonValidatorPort {
     this.#cfg = cfg;
   }
 
-  async prepareSubmission(
-    req: PrepareSubmissionRequest,
-  ): Promise<PrepareSubmissionResponse> {
+  async prepareSubmission(req: PrepareSubmissionRequest): Promise<PrepareSubmissionResponse> {
     const wire: PrepareSubmissionWire = {
       user_id: this.#cfg.userId,
       command_id: req.commandId,
@@ -231,9 +229,7 @@ export class LedgerApiAdapter implements CantonValidatorPort {
     const wire: CompletionsWire = {
       user_id: filter.userId,
       parties: [...filter.actAs],
-      ...(filter.beginExclusive !== undefined
-        ? { begin_exclusive: filter.beginExclusive }
-        : {}),
+      ...(filter.beginExclusive !== undefined ? { begin_exclusive: filter.beginExclusive } : {}),
     };
     for await (const el of streamNdjson<CompletionStreamElementWire>(
       this.#cfg,
@@ -251,17 +247,13 @@ export class LedgerApiAdapter implements CantonValidatorPort {
         updateId: c.update_id,
         completionOffset: c.offset,
         status: failed ? 'failed' : 'executed',
-        ...(failed && c.status?.message !== undefined
-          ? { errorMessage: c.status.message }
-          : {}),
+        ...(failed && c.status?.message !== undefined ? { errorMessage: c.status.message } : {}),
       };
       yield completion;
     }
   }
 
-  async *getActiveContracts(
-    filter: ActiveContractsFilter,
-  ): AsyncIterable<CantonActiveContract> {
+  async *getActiveContracts(filter: ActiveContractsFilter): AsyncIterable<CantonActiveContract> {
     // Active set on the JSON Ledger API needs an offset to read at. We pull
     // the current ledger end first, then read the active set at that point.
     // This matches Splice Wallet Kernel's `getActiveContracts` flow.
@@ -342,9 +334,7 @@ export class LedgerApiAdapter implements CantonValidatorPort {
     }
   }
 
-  async generateTopology(
-    req: GenerateTopologyRequest,
-  ): Promise<GenerateTopologyResponse> {
+  async generateTopology(req: GenerateTopologyRequest): Promise<GenerateTopologyResponse> {
     const wire = {
       party_hint: req.partyHint,
       public_key: base64Encode(req.namespacePublicKey),
@@ -396,9 +386,7 @@ export class LedgerApiAdapter implements CantonValidatorPort {
     );
   }
 
-  async prepareAcceptSetup(
-    req: PrepareAcceptSetupRequest,
-  ): Promise<PrepareAcceptSetupResponse> {
+  async prepareAcceptSetup(req: PrepareAcceptSetupRequest): Promise<PrepareAcceptSetupResponse> {
     const res = await postJson<
       { user_party_id: string },
       {

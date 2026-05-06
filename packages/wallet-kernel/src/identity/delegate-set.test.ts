@@ -5,6 +5,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
+import type { TdipDid } from '../types/identity.ts';
 import {
   DELEGATE_SET_DEFAULT_K,
   DELEGATE_SET_DEFAULT_N,
@@ -13,7 +14,6 @@ import {
   defaultDelegateSet,
   validateDelegateSet,
 } from './delegate-set.ts';
-import type { TdipDid } from '../types/identity.ts';
 
 const did = (x: string): TdipDid => x as TdipDid;
 const FIVE = [
@@ -32,15 +32,15 @@ describe('validateDelegateSet', () => {
   });
 
   it('rejects k > n', () => {
-    expect(() =>
-      validateDelegateSet({ k: 4, n: 3, delegates: FIVE.slice(0, 3) }),
-    ).toThrow(/k.*exceed/);
+    expect(() => validateDelegateSet({ k: 4, n: 3, delegates: FIVE.slice(0, 3) })).toThrow(
+      /k.*exceed/,
+    );
   });
 
   it('rejects k < 1', () => {
-    expect(() =>
-      validateDelegateSet({ k: 0, n: 3, delegates: FIVE.slice(0, 3) }),
-    ).toThrow(/k must be/);
+    expect(() => validateDelegateSet({ k: 0, n: 3, delegates: FIVE.slice(0, 3) })).toThrow(
+      /k must be/,
+    );
   });
 
   it('rejects n above DELEGATE_SET_MAX_N', () => {
@@ -60,9 +60,9 @@ describe('validateDelegateSet', () => {
   });
 
   it('rejects when delegates length does not match n', () => {
-    expect(() =>
-      validateDelegateSet({ k: 3, n: 5, delegates: FIVE.slice(0, 4) }),
-    ).toThrow(/expected exactly 5/);
+    expect(() => validateDelegateSet({ k: 3, n: 5, delegates: FIVE.slice(0, 4) })).toThrow(
+      /expected exactly 5/,
+    );
   });
 
   it('rejects duplicate delegate DIDs', () => {
@@ -76,12 +76,9 @@ describe('validateDelegateSet', () => {
   });
 
   it('rejects when wallet DID appears in its own delegate set', () => {
-    expect(() =>
-      validateDelegateSet(
-        { k: 3, n: 5, delegates: FIVE },
-        FIVE[2]!,
-      ),
-    ).toThrow(/cannot appear in its own delegate list/);
+    expect(() => validateDelegateSet({ k: 3, n: 5, delegates: FIVE }, FIVE[2]!)).toThrow(
+      /cannot appear in its own delegate list/,
+    );
   });
 });
 

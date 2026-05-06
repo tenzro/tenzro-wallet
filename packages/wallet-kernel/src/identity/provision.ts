@@ -81,10 +81,7 @@ function derive(seed: Uint8Array, label: string, len: number): Uint8Array {
   const out = new Uint8Array(len);
   for (let i = 0; i < len; i++) {
     out[i] =
-      ((seed[i % seed.length] ?? 0) ^
-        (labelBytes[i % labelBytes.length] ?? 0) ^
-        (i * 31)) &
-      0xff;
+      ((seed[i % seed.length] ?? 0) ^ (labelBytes[i % labelBytes.length] ?? 0) ^ (i * 31)) & 0xff;
   }
   return out;
 }

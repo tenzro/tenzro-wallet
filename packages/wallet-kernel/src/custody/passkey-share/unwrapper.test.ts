@@ -7,11 +7,11 @@
 
 import { describe, expect, it, vi } from 'vitest';
 import {
-  PasskeyShareUnwrapper,
+  type FrostBackend,
   type PasskeyAuthenticatorAdapter,
   type PasskeyCapabilities,
+  PasskeyShareUnwrapper,
   type ShareEnvelopePort,
-  type FrostBackend,
 } from './unwrapper.ts';
 
 function caps(p: { prf?: boolean; largeBlob?: boolean }): PasskeyCapabilities {
