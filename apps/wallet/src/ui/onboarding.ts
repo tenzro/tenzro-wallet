@@ -35,7 +35,7 @@ import {
   asTdipDid,
   walletNew,
   walletRecover,
-} from '@tenzro/wallet-kernel';
+} from 'tenzro-wallet';
 
 /**
  * Full set of dependencies the onboarding flow needs. Embedders construct

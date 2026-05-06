@@ -1,11 +1,9 @@
-# @tenzro/wallet-kernel
+# tenzro-wallet
 
-[![npm](https://img.shields.io/npm/v/@tenzro/wallet-kernel)](https://www.npmjs.com/package/@tenzro/wallet-kernel)
+[![npm](https://img.shields.io/npm/v/tenzro-wallet)](https://www.npmjs.com/package/tenzro-wallet)
 [![License](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE)
 
-The kernel of [Tenzro Wallet](https://github.com/tenzro/tenzro-wallet) — a browser-clean, ESM-only TypeScript engine that powers the official wallet for [Tenzro Network](https://tenzro.com). Use it directly to embed wallet behaviour in your own host (extension, web app, mobile WebView, agent service worker).
-
-**One identity, four VM surfaces, post-quantum signed, agent-aware.**
+The official wallet for [Tenzro Network](https://tenzro.com) — a browser-clean, ESM-only TypeScript engine you embed in your own host (extension, web app, mobile WebView, agent service worker). One identity, four VM surfaces, post-quantum signed, agent-aware.
 
 - **TDIP `did:tenzro:`** — one identity controls native TNZO, EVM contracts, Solana programs, and Canton/DAML assets at the same time.
 - **Passkey-quorum custody** — no seed phrases. Device share + node-TEE co-signer, FROST-signed Ed25519 + ML-DSA-65 (FIPS 204) post-quantum leg.
@@ -16,10 +14,10 @@ The kernel of [Tenzro Wallet](https://github.com/tenzro/tenzro-wallet) — a bro
 ## Install
 
 ```bash
-npm install @tenzro/wallet-kernel tenzro-sdk
+npm install tenzro-wallet tenzro-sdk
 ```
 
-Peer-style dependency: the kernel imports `tenzro-sdk` for RPC + types. Pin both together.
+Peer-style dependency: `tenzro-wallet` imports `tenzro-sdk` for RPC + types. Pin both together.
 
 ## Quick start
 
@@ -29,7 +27,7 @@ import {
   TenzroSdkAdapter,
   walletNew,
   buildEip6963Announcement,
-} from '@tenzro/wallet-kernel';
+} from 'tenzro-wallet';
 import { TenzroClient, TESTNET_CONFIG } from 'tenzro-sdk';
 
 // 1. Build the SDK adapter (the only file allowed to import tenzro-sdk).
@@ -65,9 +63,9 @@ window.dispatchEvent(new CustomEvent('eip6963:announceProvider', {
                  18-dec)      9-dec)       external)
 ```
 
-The kernel is built on a strict **ports + adapters** pattern:
+Built on a strict **ports + adapters** pattern:
 
-- The kernel and surfaces only depend on port interfaces.
+- Wallet core and surfaces only depend on port interfaces.
 - The only files allowed to import `tenzro-sdk` live under `src/ports/*/adapters/`.
 - SDK shape changes break exactly one file.
 
@@ -79,7 +77,7 @@ Six independent surfaces (Tenzro native, EVM-on-Tenzro, SVM-on-Tenzro, Canton in
 |--------|---------|
 | `WalletKernel` | Top-level facade — wires surfaces, custody, ports, agent stack. |
 | `walletNew()` / `walletRecover()` | Identity orchestrators — provision a new wallet or recover an existing one through the configured custody quorum. |
-| `TenzroSdkAdapter` | The one allowed `tenzro-sdk` import. Construct from a `TenzroClient` to feed the kernel. |
+| `TenzroSdkAdapter` | The one allowed `tenzro-sdk` import. Construct from a `TenzroClient` to feed `WalletKernel`. |
 | `buildEip6963Announcement()` | Generate the EIP-6963 announcement payload for `window.tenzro` discovery. |
 | `KernelEip1193Provider` | EIP-1193 `request(method, params)` provider built on top of a `WalletKernel`. |
 | Custody drivers | `frostEd25519Driver`, `frostSecp256k1Driver`, `hybridEd25519MlDsaDriver`, `mlDsaCoordinator`, passkey-share unwrappers (PRF/largeBlob/escrow). |
@@ -92,7 +90,7 @@ Six independent surfaces (Tenzro native, EVM-on-Tenzro, SVM-on-Tenzro, Canton in
 
 ## Architectural rules
 
-These are load-bearing and apply to every consumer that extends the kernel:
+These are load-bearing and apply to every consumer that extends `tenzro-wallet`:
 
 1. **Ports + adapters.** Surfaces and the kernel only depend on port interfaces. Only `src/ports/*/adapters/` may import `tenzro-sdk`.
 2. **Four surfaces, one identity.** TDIP `did:tenzro:` is the root; each surface has a derived `SurfaceKey` (Ed25519 native, secp256k1 EVM, Ed25519 SVM, Canton external party).
@@ -103,7 +101,7 @@ These are load-bearing and apply to every consumer that extends the kernel:
 
 ## Status
 
-The kernel is testnet-functional today against the live Tenzro testnet at `rpc.tenzro.network`.
+Testnet-functional today against the live Tenzro testnet at `rpc.tenzro.network`.
 
 | Milestone | What | State |
 |---|---|---|
@@ -119,7 +117,7 @@ The kernel is testnet-functional today against the live Tenzro testnet at `rpc.t
 | M8 | Bridge router (six vendors) | Ports + six adapters shipped, SDK-pending |
 | M9 | TDIP integration (delegate sets, recovery flows) | Kernel orchestrators shipped |
 
-**395 unit tests** pass against the kernel; 4 env-gated integration smokes exercise the live testnet end-to-end.
+**395 unit tests** pass; 4 env-gated integration smokes exercise the live testnet end-to-end.
 
 ## Repository
 

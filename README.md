@@ -77,7 +77,7 @@ docs/DESIGN.md                     # architecture + milestones (authoritative)
 .env.example                       # integration-test env template
 
 packages/
-  wallet-kernel/                   # @tenzro/wallet-kernel — the kernel
+  wallet-kernel/                   # tenzro-wallet — the kernel
     src/
       kernel.ts                    # assembles surfaces, custody, ports, agent stack
       identity/                    # TDIP did:tenzro:, surface-key derivation,
@@ -121,10 +121,10 @@ Toolchain: pnpm 10.33.2, Node ≥ 22, TypeScript 5.7.3, Vitest 2.1.9, Turborepo 
 
 ### Use it as a library
 
-The kernel ships on npm as [`@tenzro/wallet-kernel`](https://www.npmjs.com/package/@tenzro/wallet-kernel) — browser-clean, ESM-only:
+The wallet ships on npm as [`tenzro-wallet`](https://www.npmjs.com/package/tenzro-wallet) — browser-clean, ESM-only:
 
 ```bash
-npm install @tenzro/wallet-kernel tenzro-sdk
+npm install tenzro-wallet tenzro-sdk
 ```
 
 ```typescript
@@ -133,16 +133,16 @@ import {
   TenzroSdkAdapter,
   walletNew,
   buildEip6963Announcement,
-} from '@tenzro/wallet-kernel';
+} from 'tenzro-wallet';
 import { TenzroClient, TESTNET_CONFIG } from 'tenzro-sdk';
 
-// Build a kernel against the live testnet via the SDK adapter:
+// Build a wallet against the live testnet via the SDK adapter:
 const sdkClient = new TenzroClient(TESTNET_CONFIG);
 const tenzroPort = TenzroSdkAdapter.fromClient(sdkClient);
 // … assemble surfaces + identity + agentPorts, then construct WalletKernel.
 ```
 
-dApps that just want to *consume* an injected provider don't need the kernel — install `tenzro-sdk` and call `TenzroClient.fromInjected()`.
+dApps that just want to *consume* an injected provider don't need `tenzro-wallet` — install `tenzro-sdk` and call `TenzroClient.fromInjected()`.
 
 ### Run the integration smokes
 

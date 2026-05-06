@@ -24,7 +24,7 @@ import {
   FrostHttpAdapter,
   MlDsaHttpAdapter,
   ShareEnvelopeHttpAdapter,
-} from '@tenzro/wallet-kernel';
+} from 'tenzro-wallet';
 
 const baseUrl = 'https://rpc.tenzro.network';
 

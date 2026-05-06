@@ -1,5 +1,5 @@
 {
-  "name": "@tenzro/wallet-kernel",
+  "name": "tenzro-wallet",
   "version": "0.1.0",
   "description": "Tenzro Wallet kernel — one identity, four VM surfaces (Tenzro native, EVM, SVM, Canton). Passkey-quorum custody, post-quantum signing, agent-payment ports, six-vendor bridge router.",
   "type": "module",

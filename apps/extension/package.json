@@ -17,7 +17,7 @@
   "dependencies": {
     "@tanstack/react-query": "5.100.8",
     "@tenzro/ui": "workspace:*",
-    "@tenzro/wallet-kernel": "workspace:*",
+    "tenzro-wallet": "workspace:*",
     "lucide-react": "1.14.0",
     "motion": "12.38.0",
     "qrcode.react": "4.2.0",

@@ -34,7 +34,7 @@ import {
   TENZRO_PROVIDER_RDNS,
   type WalletKernel,
   buildEip6963Announcement,
-} from '@tenzro/wallet-kernel';
+} from 'tenzro-wallet';
 
 /**
  * Minimal RPC method registry. The dApp side calls

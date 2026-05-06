@@ -11,7 +11,7 @@ import type { NextConfig } from 'next';
  */
 const nextConfig: NextConfig = {
   reactStrictMode: true,
-  transpilePackages: ['@tenzro/ui', '@tenzro/wallet-kernel'],
+  transpilePackages: ['@tenzro/ui', 'tenzro-wallet'],
   experimental: {
     optimizePackageImports: ['lucide-react', 'motion', '@tenzro/ui'],
   },

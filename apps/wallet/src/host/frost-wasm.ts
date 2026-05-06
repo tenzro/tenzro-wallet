@@ -31,7 +31,7 @@
  * variant produced it.
  */
 
-import { type FrostBackend, composeFrostBackend } from '@tenzro/wallet-kernel';
+import { type FrostBackend, composeFrostBackend } from 'tenzro-wallet';
 
 /**
  * What we need out of each per-curve WASM bundle. Pinned here so the

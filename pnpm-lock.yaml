@@ -29,9 +29,6 @@ importers:
       '@tenzro/ui':
         specifier: workspace:*
         version: link:../../packages/ui
-      '@tenzro/wallet-kernel':
-        specifier: workspace:*
-        version: link:../../packages/wallet-kernel
       lucide-react:
         specifier: 1.14.0
         version: 1.14.0(react@19.2.5)
@@ -50,6 +47,9 @@ importers:
       sonner:
         specifier: 2.0.7
         version: 2.0.7(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
+      tenzro-wallet:
+        specifier: workspace:*
+        version: link:../../packages/wallet-kernel
       viem:
         specifier: 2.48.8
         version: 2.48.8(typescript@5.7.3)(zod@4.4.2)
@@ -87,12 +87,12 @@ importers:
 
   apps/wallet:
     dependencies:
-      '@tenzro/wallet-kernel':
-        specifier: workspace:*
-        version: link:../../packages/wallet-kernel
       tenzro-sdk:
         specifier: ^0.2.0
         version: 0.2.0
+      tenzro-wallet:
+        specifier: workspace:*
+        version: link:../../packages/wallet-kernel
     devDependencies:
       typescript:
         specifier: 5.7.3
@@ -106,9 +106,6 @@ importers:
       '@tenzro/ui':
         specifier: workspace:*
         version: link:../../packages/ui
-      '@tenzro/wallet-kernel':
-        specifier: workspace:*
-        version: link:../../packages/wallet-kernel
       lucide-react:
         specifier: 1.14.0
         version: 1.14.0(react@19.2.5)
@@ -136,6 +133,9 @@ importers:
       sonner:
         specifier: 2.0.7
         version: 2.0.7(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
+      tenzro-wallet:
+        specifier: workspace:*
+        version: link:../../packages/wallet-kernel
       vaul:
         specifier: 1.1.2
         version: 1.1.2(@types/react-dom@19.2.3(@types/react@19.2.7))(@types/react@19.2.7)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)

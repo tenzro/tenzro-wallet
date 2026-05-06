@@ -19,8 +19,8 @@
  * without the extension installed (e.g. a hosted web wallet).
  */
 
-import type { ProvisioningPort, RecoveryPort, WalletKernel } from '@tenzro/wallet-kernel';
-import { type PasskeyEnroller, WebAuthnAuthenticatorAdapter } from '@tenzro/wallet-kernel';
+import type { ProvisioningPort, RecoveryPort, WalletKernel } from 'tenzro-wallet';
+import { type PasskeyEnroller, WebAuthnAuthenticatorAdapter } from 'tenzro-wallet';
 
 import { KernelEip1193Provider, installTenzroProvider } from './dispatch/window-tenzro.ts';
 import { loadStubFrostWasm } from './host/frost-wasm.ts';
