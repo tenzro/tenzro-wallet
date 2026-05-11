@@ -1,9 +1,15 @@
 /**
- * In-memory 2-of-3 MPC stub. Stand-in for the real Shamir/threshold
- * implementation that lands in M2 alongside the Tenzro Cortex TEE driver.
+ * In-memory test stub for `SigningDriver`. Used by unit tests that need a
+ * driver-shaped object without touching real crypto.
  *
- * Returns deterministic mock signatures so tests can assert behavior without
- * pulling in real crypto in M1.
+ * Production code goes through `custody/frost/*` (FROST-Ed25519 +
+ * FROST-secp256k1 device drivers shipped in M5) and the hybrid
+ * `custody/mldsa/*` ML-DSA-65 coordinator. This stub is not on any
+ * production path and exists solely to keep tests fast and deterministic.
+ *
+ * Returns deterministic mock signatures sized to match real wire formats
+ * (Ed25519 64 B, secp256k1 65 B, ML-DSA-65 3293 B) so surface-level
+ * serialization tests round-trip correctly.
  */
 
 import type { SigningDriver, SigningRequest, SigningResult } from '../types/signing-driver.ts';

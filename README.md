@@ -27,7 +27,7 @@ Tenzro Wallet collapses that into:
 
 The wallet is built in layers so the same code runs in a browser extension, a hosted web wallet, a mobile app, and a service worker for agents. This repo ships:
 
-- **`packages/wallet-kernel/`** — the engine. Pure TypeScript, no Node dependencies, runs anywhere a browser does. Handles identity, custody, signing across all four VMs, balance aggregation, route selection, agent payment policies, and the bridge router. **395 unit tests, live on testnet today.**
+- **`packages/wallet-kernel/`** — the engine. Pure TypeScript, no Node dependencies, runs anywhere a browser does. Handles identity, custody, signing across all four VMs, balance aggregation, route selection, agent payment policies, and the bridge router. **379 unit tests, live on testnet today.**
 - **`apps/wallet/`** — the host scaffold. Wires the kernel into a real page: EIP-1193 provider on `window.tenzro`, EIP-6963 announcement so dApps discover it, device-provisioning UI for new wallets and recovery, and the seam where the WebAssembly FROST library plugs in.
 
 The full architecture and design rationale lives in [`docs/DESIGN.md`](./docs/DESIGN.md).
@@ -64,11 +64,11 @@ The kernel is testnet-functional today against the live Tenzro testnet at `rpc.t
 | M5 | Passkey-quorum custody (kernel pieces) | Done — FROST/ML-DSA/share-envelope HTTP adapters, WebAuthn PRF/largeBlob/escrow unwrapper, `walletNew()` / `walletRecover()` orchestrators |
 | M5.5 | 2-of-3 pre-launch upgrade | Designed |
 | M6 | `window.tenzro` injection (extension + web embed) | Kernel ready; `apps/wallet/` scaffolds the host-side wiring |
-| M7 | Settlement (Visa TAP, Mastercard Agent Pay, x402) | Ports declared, SDK-pending |
-| M8 | Bridge router (LI.FI, CCIP, LayerZero, Wormhole, deBridge, Canton) | Ports + six adapters shipped, SDK-pending |
+| M7 | Settlement (Visa TAP, Mastercard Agent Pay, x402, AP2) | x402 + AP2 + `payVisaTap` + `payMastercard` live on SDK; `signVisaTap` / `issueMastercardToken` issuance hooks SDK-pending |
+| M8 | Bridge router (LI.FI, CCIP, LayerZero, Wormhole, deBridge, Canton) | Live on testnet — all six adapters wired against `client.bridge.{getRoutes,bridgeTokens}` |
 | M9 | TDIP integration (delegate sets, recovery flows) | Kernel orchestrators shipped |
 
-`pnpm test` runs **395 unit tests** across the kernel; four env-gated integration smokes exercise the live testnet end-to-end (1-wei native self-transfer, EVM `eth_*` reads, SVM views via the unified `tenzro_*` namespace, Canton validator reachability).
+`pnpm test` runs **379 unit tests** across the kernel; four env-gated integration smokes exercise the live testnet end-to-end (1-wei native self-transfer, EVM `eth_*` reads, SVM views via the unified `tenzro_*` namespace, Canton validator reachability).
 
 ## Layout
 
@@ -94,7 +94,11 @@ packages/
       dapp/                        # EIP-6963 announcement + SDK browser-support re-exports
       ports/                       # external-system seams + adapters
         adapters/                  # tenzro-sdk-adapter, tenzro-identity-adapter
-        agent/                     # AP2, ACP, ERC-8004, ERC-7802, HTLC, nanopayment, …
+        agent/                     # 16 ports: ap2, acp, erc8004, erc7802, htlc-escrow,
+                                   #   nanopayment, lifecycle, principal-chain,
+                                   #   fee-estimator, payment-rails, auth-approval,
+                                   #   tee-attestation, escrow, insurance, agent-bond,
+                                   #   session-key
         bridge/                    # six vendor adapters → one shared client.bridge
         canton/                    # ledger-api-adapter, http port, hash, fingerprint
       integration/                 # env-gated smoke tests (skip without env)
