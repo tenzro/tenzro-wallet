@@ -14,7 +14,10 @@ Tenzro Wallet collapses that into:
 - **No seed phrase to lose.** Custody is split between a passkey on your device (Touch ID, Face ID, Windows Hello, a hardware security key) and a co-signer running in a trusted execution environment on the Tenzro network. Lose your phone? Recover with email, social delegates, or KYC re-attestation. No twelve-word backup card.
 - **Post-quantum from day one.** Every transaction is signed twice — classical Ed25519 *and* ML-DSA-65, the post-quantum standard NIST finalised in [FIPS 204](https://csrc.nist.gov/pubs/fips/204/final). Your signatures stay valid the day a quantum computer breaks the old ones.
 - **Built for agents, not just humans.** First-class support for [AP2](https://github.com/google/agent-payments-protocol) (Google), x402 (Coinbase), Visa TAP, Mastercard Agent Pay, OpenAI ACP, and ERC-8004 trustless agent identity. Set spending limits per agent. Stream micropayments per inference call. Revoke a compromised agent without rotating your main keys.
-- **Bridge to anywhere outside Tenzro.** Six bridge vendors plug into one router — LI.FI, Chainlink CCIP, LayerZero, Wormhole, deBridge, plus Canton's HTLC escrow for regulated assets. The router shows you all six quotes; you pick.
+- **Capital markets and multi-party workflows.** Sign Capital Intents (the capital-markets analog of an AP2 mandate) for regulated tokenized assets. Drive saga workflows — Execute → Verify → Compensate → Settle — with optional per-step escrow, Canton DAML mirroring, and AP2 / x402 / MPP / Stripe SPT / Visa TAP / Mastercard Agent Pay mandate binding so every receipt threads back to the off-chain intent that authorized it.
+- **EVM primitives, first-class.** EIP-7702 (Pectra Type-4) delegation lets an EOA temporarily delegate its code to a smart-contract address — the wallet derives the signing hash, signs it through the custody quorum, and decodes incoming delegation designators. Permit2 SignatureTransfer (with optional ERC-7683 witness binding) gives one-signature gasless flows. The Secure-Mint registry enforces a per-token 1:1 reserve-attestation invariant for tokenized real-world assets. ERC-7683 cross-chain intents surface origin orders and destination fill records.
+- **Bridge to anywhere outside Tenzro.** Eight bridge vendors plug into one router — LI.FI, Chainlink CCIP, LayerZero, Wormhole, deBridge, Canton's HTLC escrow for regulated assets, Hyperlane V3 with Tenzro's sovereign validator-set ISM, and Axelar GMP for reach into Cosmos / Move / Stellar / XRPL chains. The router shows you all eight quotes; you pick.
+- **Chain-agnostic discovery.** Every dApp connect and agent handshake returns CAIP-2 / CAIP-10 / CAIP-19 identifiers per the submitted `tenzro` CASA namespace, so consuming UIs never have to guess which chain or asset a balance belongs to.
 
 ## Who this is for
 
@@ -27,7 +30,7 @@ Tenzro Wallet collapses that into:
 
 The wallet is built in layers so the same code runs in a browser extension, a hosted web wallet, a mobile app, and a service worker for agents. This repo ships:
 
-- **`packages/wallet-kernel/`** — the engine. Pure TypeScript, no Node dependencies, runs anywhere a browser does. Handles identity, custody, signing across all four VMs, balance aggregation, route selection, agent payment policies, and the bridge router. **379 unit tests, live on testnet today.**
+- **`packages/wallet-kernel/`** — the engine. Pure TypeScript, no Node dependencies, runs anywhere a browser does. Handles identity, custody, signing across all four VMs, balance aggregation, route selection, agent payment policies, and the bridge router. **404 unit tests, live on testnet today.**
 - **`apps/wallet/`** — the host scaffold. Wires the kernel into a real page: EIP-1193 provider on `window.tenzro`, EIP-6963 announcement so dApps discover it, device-provisioning UI for new wallets and recovery, and the seam where the WebAssembly FROST library plugs in.
 
 The full architecture and design rationale lives in [`docs/DESIGN.md`](./docs/DESIGN.md).
@@ -68,7 +71,7 @@ The kernel is testnet-functional today against the live Tenzro testnet at `rpc.t
 | M8 | Bridge router (LI.FI, CCIP, LayerZero, Wormhole, deBridge, Canton) | Live on testnet — all six adapters wired against `client.bridge.{getRoutes,bridgeTokens}` |
 | M9 | TDIP integration (delegate sets, recovery flows) | Kernel orchestrators shipped |
 
-`pnpm test` runs **379 unit tests** across the kernel; four env-gated integration smokes exercise the live testnet end-to-end (1-wei native self-transfer, EVM `eth_*` reads, SVM views via the unified `tenzro_*` namespace, Canton validator reachability).
+`pnpm test` runs **404 unit tests** across the kernel; four env-gated integration smokes exercise the live testnet end-to-end (1-wei native self-transfer, EVM `eth_*` reads, SVM views via the unified `tenzro_*` namespace, Canton validator reachability).
 
 ## Layout
 
@@ -94,13 +97,24 @@ packages/
       dapp/                        # EIP-6963 announcement + SDK browser-support re-exports
       ports/                       # external-system seams + adapters
         adapters/                  # tenzro-sdk-adapter, tenzro-identity-adapter
-        agent/                     # 16 ports: ap2, acp, erc8004, erc7802, htlc-escrow,
+        agent/                     # agent ports: ap2, acp, erc8004, erc7802, htlc-escrow,
                                    #   nanopayment, lifecycle, principal-chain,
                                    #   fee-estimator, payment-rails, auth-approval,
                                    #   tee-attestation, escrow, insurance, agent-bond,
                                    #   session-key
-        bridge/                    # six vendor adapters → one shared client.bridge
+        bridge/                    # eight vendor adapters (LI.FI / CCIP / LayerZero /
+                                   #   Wormhole / deBridge / Canton / Hyperlane / Axelar)
+                                   #   → one shared client.bridge
         canton/                    # ledger-api-adapter, http port, hash, fingerprint
+        capital/                   # Capital Intents + reserve attestations + attested mints
+        workflow/                  # multi-party saga workflows w/ Canton DAML mirroring
+        eip7702/                   # Pectra Type-4 EOA delegation helpers
+        permit2/                   # EIP-712 SignatureTransfer (with optional ERC-7683 witness)
+        secure-mint/               # per-token 1:1 reserve-attestation invariant for RWAs
+        hyperlane/                 # Hyperlane V3 with sovereign Tenzro-validator-set ISM
+        axelar/                    # Axelar GMP (Cosmos / Move / Stellar / XRPL reach)
+        erc7683/                   # cross-chain intents origin-side reads + fill records
+        caip/                      # CAIP-2 / CAIP-10 / CAIP-19 chain-agnostic discovery
       integration/                 # env-gated smoke tests (skip without env)
 
 apps/

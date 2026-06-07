@@ -1,7 +1,7 @@
 {
   "name": "tenzro-wallet",
-  "version": "0.1.0",
-  "description": "Tenzro Wallet kernel — one identity, four VM surfaces (Tenzro native, EVM, SVM, Canton). Passkey-quorum custody, post-quantum signing, agent-payment ports, six-vendor bridge router.",
+  "version": "0.2.0",
+  "description": "Tenzro Wallet kernel — one identity, four VM surfaces (Tenzro native, EVM, SVM, Canton). Passkey-quorum custody, post-quantum signing, agent-payment ports, capital intents + multi-party workflows, EVM primitives (EIP-7702 / Permit2 / Secure-Mint / ERC-7683), eight-vendor bridge router, CAIP discovery.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -31,9 +31,10 @@
     "prepublishOnly": "pnpm build"
   },
   "dependencies": {
-    "tenzro-sdk": "^0.2.0"
+    "tenzro-sdk": "^0.4.0"
   },
   "devDependencies": {
+    "@types/node": "22.10.5",
     "typescript": "5.7.3",
     "vitest": "4.1.5"
   },
@@ -58,14 +59,27 @@
     "ai-agents",
     "ap2",
     "x402",
+    "mpp",
+    "stripe-spt",
+    "visa-tap",
+    "mastercard-agent-pay",
     "erc-8004",
     "erc-7802",
+    "erc-7683",
+    "eip-7702",
+    "permit2",
+    "secure-mint",
+    "capital-intent",
+    "saga-workflow",
+    "caip",
     "bridge",
     "layerzero",
     "ccip",
     "wormhole",
     "debridge",
-    "lifi"
+    "lifi",
+    "hyperlane",
+    "axelar"
   ],
   "author": "Tenzro <eng@tenzro.com>",
   "license": "Apache-2.0",

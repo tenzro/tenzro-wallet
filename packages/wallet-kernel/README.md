@@ -9,7 +9,10 @@ The official wallet for [Tenzro Network](https://tenzro.com) — a browser-clean
 - **Passkey-quorum custody** — no seed phrases. Device share + node-TEE co-signer, FROST-signed Ed25519 + ML-DSA-65 (FIPS 204) post-quantum leg.
 - **Cross-VM moves on Tenzro are pointer ops, not bridges.** Native ↔ EVM ↔ SVM go through precompile `0x1003` / the `tenzro_cross_vm` SVM program — instant, no bridge risk.
 - **Agent payments built-in** — AP2 (Google), x402 (Coinbase), Visa TAP, Mastercard Agent Pay, OpenAI ACP, ERC-8004 trustless agent identity, ERC-7802 cross-chain mint/burn.
-- **Six-vendor bridge router** — LI.FI, Chainlink CCIP, LayerZero V2, Wormhole, deBridge, Canton HTLC. The kernel never picks a vendor for you; it surfaces all available quotes.
+- **Capital markets + multi-party workflows** — Capital Intents (open / quote / assign / execute / verify / compensate / settle), reserve attestations + attested mints, saga workflows with AP2 / x402 / MPP / Stripe SPT / Visa TAP / Mastercard Agent Pay mandate binding.
+- **EVM primitives, first-class** — EIP-7702 (Pectra Type-4) delegation, Permit2 SignatureTransfer with optional ERC-7683-witness binding, Secure-Mint registry (1:1 reserve invariant for tokenized RWAs), ERC-7683 cross-chain intents.
+- **Eight-vendor bridge router** — LI.FI, Chainlink CCIP, LayerZero V2, Wormhole, deBridge, Canton HTLC, Hyperlane V3 (sovereign Tenzro-ISM), Axelar GMP (Cosmos / Move / Stellar / XRPL). The kernel never picks a vendor for you; it surfaces all available quotes.
+- **Chain-agnostic discovery (CAIP)** — CAIP-2 / CAIP-10 / CAIP-19 per the submitted `tenzro` CASA namespace (`ChainAgnostic/namespaces#184`), so every dApp connect + agent handshake returns unambiguous chain + account + asset labels.
 
 ## Install
 
@@ -82,7 +85,10 @@ Six independent surfaces (Tenzro native, EVM-on-Tenzro, SVM-on-Tenzro, Canton in
 | `KernelEip1193Provider` | EIP-1193 `request(method, params)` provider built on top of a `WalletKernel`. |
 | Custody drivers | `frostEd25519Driver`, `frostSecp256k1Driver`, `hybridEd25519MlDsaDriver`, `mlDsaCoordinator`, passkey-share unwrappers (PRF/largeBlob/escrow). |
 | Agent ports | AP2, ACP, ERC-8004, ERC-7802, HTLC escrow, nanopayment channels, agent-bond, insurance, lifecycle, principal-chain, fee estimator, session-key, payment-rails (Visa/Mastercard/x402), TEE attestation. |
-| Bridge adapters | `LiFiBridgeAdapter`, `CcipBridgeAdapter`, `LayerZeroBridgeAdapter`, `WormholeBridgeAdapter`, `DebridgeAdapter`, `CantonBridgeAdapter`. |
+| Bridge adapters | `LiFiBridgeAdapter`, `CcipBridgeAdapter`, `LayerZeroBridgeAdapter`, `WormholeBridgeAdapter`, `DebridgeAdapter`, `CantonBridgeAdapter`, `HyperlaneAdapter`, `AxelarAdapter`. |
+| Capital + workflow ports | `CapitalIntentAdapter` (`open` / `quote` / `assign` / `execute` / `verify` / `compensate` / `settle` / `getIntent` + `submitReserveAttestation` / `getReserve` / `attestedMint`), `WorkflowAdapter` (`open` / `stepExecute` / `stepVerify` / `stepCompensate` / `finalize` / `getWorkflow` / `getSaga` / `getLifecycle` / `getReceipt` / `getOperationalMetrics` / `mirrorToCanton` / `verifyDidEnvelope` + listers). |
+| EVM-primitive ports | `Eip7702Adapter` (signing hash + designator helpers), `Permit2Adapter` (`domainSeparator` / `digest` / `verifyAndConsume` / `nonceUsed` with optional ERC-7683-witness binding), `SecureMintAdapter` (per-token 1:1 reserve invariant for tokenized RWAs), `Erc7683Adapter` (origin-side reads + destination-side fill commits). |
+| Discovery port | `CaipAdapter` — `caip2()` / `caip10(address)` / `caip19({ kind, token_id?, collection_id?, nft_token_id? })` per the submitted `tenzro` CASA namespace. |
 | Surfaces | `tenzroNativeSurface`, `evmOnTenzroSurface`, `svmOnTenzroSurface`, `cantonInternalSurface`, `cantonExternalSurface`, `cantonOnboardingSurface`. |
 | Router | `routeIntent()` — chooses the right surface (or bridge) for an intent and returns a typed plan. |
 | Balance aggregator | `BalanceAggregator` — single-pass cross-surface balance read. |
@@ -116,8 +122,9 @@ Testnet-functional today against the live Tenzro testnet at `rpc.tenzro.network`
 | M7 | Settlement (Visa TAP, Mastercard Agent Pay, x402) | Ports declared, SDK-pending |
 | M8 | Bridge router (six vendors) | Ports + six adapters shipped, SDK-pending |
 | M9 | TDIP integration (delegate sets, recovery flows) | Kernel orchestrators shipped |
+| M10 | Capital markets + workflows + EVM primitives + extended cross-chain reach + CAIP discovery | Ports + nine adapters shipped against `tenzro-sdk@^0.4.0` |
 
-**395 unit tests** pass; 4 env-gated integration smokes exercise the live testnet end-to-end.
+**404 unit tests** pass; 5 env-gated integration smokes exercise the live testnet end-to-end.
 
 ## Repository
 

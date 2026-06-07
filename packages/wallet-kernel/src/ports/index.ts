@@ -56,3 +56,32 @@ export * from './agent/index.ts';
 
 // ── Bridge router ports + adapter stubs (M8 — see DESIGN.md §10) ──
 export * from './bridge/index.ts';
+
+// ── Capital-markets ports + adapters ──
+// Regulated capital allocation over tokenized assets (Capital Intents,
+// reserve attestations, attested mints).
+export * from './capital/index.ts';
+
+// ── Multi-party workflow ports + adapters ──
+// Saga workflows with AP2 / x402 / MPP / Stripe SPT / Visa TAP /
+// Mastercard Agent Pay mandate binding.
+export * from './workflow/index.ts';
+
+// ── EVM primitive ports + adapters ──
+// Pectra Type-4 delegation (EIP-7702), Permit2 SignatureTransfer,
+// Secure-Mint registry (1:1 reserve invariant for tokenized RWAs).
+export * from './eip7702/index.ts';
+export * from './permit2/index.ts';
+export * from './secure-mint/index.ts';
+
+// ── Extended cross-chain reach ports + adapters ──
+// Hyperlane V3 (sovereign Tenzro-ISM), Axelar GMP (Cosmos / Move /
+// Stellar / XRPL reach), ERC-7683 intent-based cross-chain orders.
+export * from './hyperlane/index.ts';
+export * from './axelar/index.ts';
+export * from './erc7683/index.ts';
+
+// ── Chain-agnostic discovery ports + adapter ──
+// CAIP-2 / CAIP-10 / CAIP-19 per the submitted `tenzro` CASA namespace
+// (ChainAgnostic/namespaces#184).
+export * from './caip/index.ts';

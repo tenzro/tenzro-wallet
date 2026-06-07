@@ -1,0 +1,13 @@
+{
+  "/_global-error/page": "app/_global-error/page.js",
+  "/_not-found/page": "app/_not-found/page.js",
+  "/activity/page": "app/activity/page.js",
+  "/agents/page": "app/agents/page.js",
+  "/canton/page": "app/canton/page.js",
+  "/connect/page": "app/connect/page.js",
+  "/dashboard/page": "app/dashboard/page.js",
+  "/onboarding/page": "app/onboarding/page.js",
+  "/page": "app/page.js",
+  "/send/page": "app/send/page.js",
+  "/settings/page": "app/settings/page.js"
+}
