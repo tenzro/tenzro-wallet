@@ -8,6 +8,7 @@ The official wallet for [Tenzro Network](https://tenzro.com) — a browser-clean
 - **TDIP `did:tenzro:`** — one identity controls native TNZO, EVM contracts, Solana programs, and Canton/DAML assets at the same time.
 - **Passkey-quorum custody** — no seed phrases. Device share + node-TEE co-signer, FROST-signed Ed25519 + ML-DSA-65 (FIPS 204) post-quantum leg.
 - **Cross-VM moves on Tenzro are pointer ops, not bridges.** Native ↔ EVM ↔ SVM go through precompile `0x1003` / the `tenzro_cross_vm` SVM program — instant, no bridge risk.
+- **First-class Canton / DAML support.** Three surfaces for regulated-finance flows (`cantonInternalSurface` for single-party flows, `cantonExternalSurface` for multi-party flows across synchronizers, `cantonOnboardingSurface` for external-party onboarding) backed by `CantonValidatorPort` + `CantonIdentityPort` + `LedgerApiAdapter` (Canton JSON Ledger API v2). The kernel signs Canton `prepare` / `execute` submissions through its passkey-quorum custody, computes the prepared-transaction hash and topology-bundle hash itself, and surfaces every Canton flow alongside EVM / SVM / native flows in the same router.
 - **Agent payments built-in** — AP2 (Google), x402 (Coinbase), Visa TAP, Mastercard Agent Pay, OpenAI ACP, ERC-8004 trustless agent identity, ERC-7802 cross-chain mint/burn.
 - **Capital markets + multi-party workflows** — Capital Intents (open / quote / assign / execute / verify / compensate / settle), reserve attestations + attested mints, saga workflows with AP2 / x402 / MPP / Stripe SPT / Visa TAP / Mastercard Agent Pay mandate binding.
 - **EVM primitives, first-class** — EIP-7702 (Pectra Type-4) delegation, Permit2 SignatureTransfer with optional ERC-7683-witness binding, Secure-Mint registry (1:1 reserve invariant for tokenized RWAs), ERC-7683 cross-chain intents.
@@ -74,7 +75,7 @@ Built on a strict **ports + adapters** pattern:
 - The only files allowed to import `tenzro-sdk` live under `src/ports/*/adapters/`.
 - SDK shape changes break exactly one file.
 
-Six independent surfaces (Tenzro native, EVM-on-Tenzro, SVM-on-Tenzro, Canton internal, Canton external, Canton onboarding) share one identity through TDIP-derived `SurfaceKey`s.
+Six independent VM surfaces — Tenzro native, EVM-on-Tenzro, SVM-on-Tenzro, Canton internal, Canton external, Canton onboarding — share one identity through TDIP-derived `SurfaceKey`s. The bridge router is a separate, parallel concern in `src/ports/bridge/` and currently covers eight external-chain vendors.
 
 ## Modules
 
@@ -88,6 +89,7 @@ Six independent surfaces (Tenzro native, EVM-on-Tenzro, SVM-on-Tenzro, Canton in
 | Custody drivers | `frostEd25519Driver`, `frostSecp256k1Driver`, `hybridEd25519MlDsaDriver`, `mlDsaCoordinator`, passkey-share unwrappers (PRF/largeBlob/escrow). |
 | Agent ports | AP2, ACP, ERC-8004, ERC-7802, HTLC escrow, nanopayment channels, agent-bond, insurance, lifecycle, principal-chain, fee estimator, session-key, payment-rails (Visa/Mastercard/x402), TEE attestation. |
 | Bridge adapters | `LiFiBridgeAdapter`, `CcipBridgeAdapter`, `LayerZeroBridgeAdapter`, `WormholeBridgeAdapter`, `DebridgeAdapter`, `CantonBridgeAdapter`, `HyperlaneAdapter`, `AxelarAdapter`. |
+| Canton / DAML ports | `CantonValidatorPort` (Canton JSON Ledger API v2 — `prepareSubmission` / `executeSubmission` / completion stream / active-contracts queries), `CantonIdentityPort` (`TenzroSurfaceCantonParty`, hashing scheme version, signing scheme), `LedgerApiAdapter` (one adapter wrapping the Canton JSON Ledger API for both prepare + execute flows), plus `preparedTransactionHash` / `topologyBundleHash` / `bytesEqualConstantTime` hash helpers in `ports/canton/hash.ts`. Used by all three Canton surfaces and by the `cantonBridgeAdapter` for Canton-HTLC cross-chain routes. |
 | Capital + workflow ports | `CapitalIntentAdapter` (`open` / `quote` / `assign` / `execute` / `verify` / `compensate` / `settle` / `getIntent` + `submitReserveAttestation` / `getReserve` / `attestedMint`), `WorkflowAdapter` (`open` / `stepExecute` / `stepVerify` / `stepCompensate` / `finalize` / `getWorkflow` / `getSaga` / `getLifecycle` / `getReceipt` / `getOperationalMetrics` / `mirrorToCanton` / `verifyDidEnvelope` + listers). |
 | EVM-primitive ports | `Eip7702Adapter` (signing hash + designator helpers), `Permit2Adapter` (`domainSeparator` / `digest` / `verifyAndConsume` / `nonceUsed` with optional ERC-7683-witness binding), `SecureMintAdapter` (per-token 1:1 reserve invariant for tokenized RWAs), `Erc7683Adapter` (origin-side reads + destination-side fill commits). |
 | Discovery port | `CaipAdapter` — `caip2()` / `caip10(address)` / `caip19({ kind, token_id?, collection_id?, nft_token_id? })` per the submitted `tenzro` CASA namespace. |
@@ -118,15 +120,15 @@ Testnet-functional today against the live Tenzro testnet at `rpc.tenzro.network`
 | M1 | Kernel skeleton, ports + adapters | Done |
 | M2 | Tenzro native surface | Done — live on testnet |
 | M3 | EVM + SVM on-Tenzro surfaces, cross-VM pointer ops | Done — live on testnet |
-| M4a | Canton ports + adapters (design + interfaces) | Done |
+| M4a | Canton ports + adapters (`CantonValidatorPort`, `CantonIdentityPort`, `LedgerApiAdapter`, hash helpers, three surfaces) | Done — shipped in dist; surfaces typecheck + unit-tested |
 | M4b | Canton MainNet surface | Gated on Splice 0.5.x baseline (post-2026-05-05) |
 | M5 | Passkey-quorum custody (kernel pieces) | Done |
 | M5.5 | 2-of-3 pre-launch upgrade | Designed |
 | M6 | `window.tenzro` injection (extension + web embed) | Kernel ready; host scaffolds in repo |
-| M7 | Settlement (Visa TAP, Mastercard Agent Pay, x402) | Ports declared, SDK-pending |
-| M8 | Bridge router (six vendors) | Ports + six adapters shipped, SDK-pending |
+| M7 | Settlement (Visa TAP, Mastercard Agent Pay, x402) | Settle-side shipped (`payVisaTap`, `payMastercard`, `payX402`); issuance-side hooks declared, SDK-pending |
+| M8 | Bridge router | Eight per-vendor adapters live (`lifi`, `ccip`, `layerzero`, `wormhole`, `debridge`, `canton`, `hyperlane`, `axelar`); SDK-shipped — all forward to the same `client.bridge` with `vendor:BridgeAdapterId` multiplexing |
 | M9 | TDIP integration (delegate sets, recovery flows) | Kernel orchestrators shipped |
-| M10 | Capital markets + workflows + EVM primitives + extended cross-chain reach + CAIP discovery | Ports + nine adapters shipped against `tenzro-sdk@^0.4.0` |
+| M10 | Capital markets + workflows + EVM primitives + extended cross-chain reach + CAIP discovery | Ports + nine adapters shipped against `tenzro-sdk@^0.4.1` |
 | M11 | Babylon Bitcoin staking + Tenzro Train protocol port (Phase 4 Confidential-tier) | Babylon port (read + validator-write surface) + Training port (`TrainingAdapter(read)` for monitoring, `TrainingAdapter(read, write)` for full custodial enrollment + sealed-shard manifest install) against `tenzro-sdk@^0.4.1` |
 
 **407 unit tests** pass; 5 env-gated integration smokes exercise the live testnet end-to-end.

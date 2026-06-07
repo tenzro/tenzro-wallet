@@ -1,6 +1,6 @@
 {
   "name": "tenzro-wallet",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Tenzro Wallet kernel — one identity, four VM surfaces (Tenzro native, EVM, SVM, Canton). Passkey-quorum custody, post-quantum signing, agent-payment ports, capital intents + multi-party workflows, EVM primitives (EIP-7702 / Permit2 / Secure-Mint / ERC-7683), eight-vendor bridge router, CAIP discovery, Babylon Bitcoin staking, Tenzro Train protocol port (Phase 4 Confidential-tier).",
   "type": "module",
   "main": "./dist/index.js",
