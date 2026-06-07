@@ -13,6 +13,8 @@ The official wallet for [Tenzro Network](https://tenzro.com) — a browser-clean
 - **EVM primitives, first-class** — EIP-7702 (Pectra Type-4) delegation, Permit2 SignatureTransfer with optional ERC-7683-witness binding, Secure-Mint registry (1:1 reserve invariant for tokenized RWAs), ERC-7683 cross-chain intents.
 - **Eight-vendor bridge router** — LI.FI, Chainlink CCIP, LayerZero V2, Wormhole, deBridge, Canton HTLC, Hyperlane V3 (sovereign Tenzro-ISM), Axelar GMP (Cosmos / Move / Stellar / XRPL). The kernel never picks a vendor for you; it surfaces all available quotes.
 - **Chain-agnostic discovery (CAIP)** — CAIP-2 / CAIP-10 / CAIP-19 per the submitted `tenzro` CASA namespace (`ChainAgnostic/namespaces#184`), so every dApp connect + agent handshake returns unambiguous chain + account + asset labels.
+- **Babylon BTC-secured staking, surfaced.** Read-side surface for staking dashboards (list finality providers, sum BTC delegations, list delegations) plus validator-operator write paths so a validator host can use the wallet kernel as the EOTS signing surface.
+- **Tenzro Train protocol port (Phase 4 Confidential-tier).** Read + write surface for the distributed-training protocol layer — inspect runs and sealed receipts, sign training task posts, enroll the wallet's identity as a trainer DID (with `ConfidentialEnrollment` carrying the TEE attestation that binds to the sealed-shard manifest), submit outer gradients, install sealed-shard manifests. Read-only mode is available for monitoring agents that should never mutate state.
 
 ## Install
 
@@ -89,6 +91,8 @@ Six independent surfaces (Tenzro native, EVM-on-Tenzro, SVM-on-Tenzro, Canton in
 | Capital + workflow ports | `CapitalIntentAdapter` (`open` / `quote` / `assign` / `execute` / `verify` / `compensate` / `settle` / `getIntent` + `submitReserveAttestation` / `getReserve` / `attestedMint`), `WorkflowAdapter` (`open` / `stepExecute` / `stepVerify` / `stepCompensate` / `finalize` / `getWorkflow` / `getSaga` / `getLifecycle` / `getReceipt` / `getOperationalMetrics` / `mirrorToCanton` / `verifyDidEnvelope` + listers). |
 | EVM-primitive ports | `Eip7702Adapter` (signing hash + designator helpers), `Permit2Adapter` (`domainSeparator` / `digest` / `verifyAndConsume` / `nonceUsed` with optional ERC-7683-witness binding), `SecureMintAdapter` (per-token 1:1 reserve invariant for tokenized RWAs), `Erc7683Adapter` (origin-side reads + destination-side fill commits). |
 | Discovery port | `CaipAdapter` — `caip2()` / `caip10(address)` / `caip19({ kind, token_id?, collection_id?, nft_token_id? })` per the submitted `tenzro` CASA namespace. |
+| Shared-security port | `BabylonAdapter` — read surface for staking dashboards (`listFinalityProviders` / `totalStakeForProvider` / `listDelegations`) + validator-operator write paths (`registerFinalityProvider` / `submitFinalitySignature`) so a validator host can use the wallet kernel as the signing surface. |
+| Distributed-training port | `TrainingAdapter(read[, write])` — read + write surface for the Tenzro Train protocol layer. Read methods inspect active runs, sealed receipts, and Confidential-tier sealed-shard manifests. Write methods (gated on a `TrainingClient`) post tasks, enroll trainers (with `ConfidentialEnrollment` for Phase 4 TEE-attested enrollment), submit outer gradients, finalize rounds, install sealed-shard manifests. |
 | Surfaces | `tenzroNativeSurface`, `evmOnTenzroSurface`, `svmOnTenzroSurface`, `cantonInternalSurface`, `cantonExternalSurface`, `cantonOnboardingSurface`. |
 | Router | `routeIntent()` — chooses the right surface (or bridge) for an intent and returns a typed plan. |
 | Balance aggregator | `BalanceAggregator` — single-pass cross-surface balance read. |
@@ -123,8 +127,9 @@ Testnet-functional today against the live Tenzro testnet at `rpc.tenzro.network`
 | M8 | Bridge router (six vendors) | Ports + six adapters shipped, SDK-pending |
 | M9 | TDIP integration (delegate sets, recovery flows) | Kernel orchestrators shipped |
 | M10 | Capital markets + workflows + EVM primitives + extended cross-chain reach + CAIP discovery | Ports + nine adapters shipped against `tenzro-sdk@^0.4.0` |
+| M11 | Babylon Bitcoin staking + Tenzro Train protocol port (Phase 4 Confidential-tier) | Babylon port (read + validator-write surface) + Training port (`TrainingAdapter(read)` for monitoring, `TrainingAdapter(read, write)` for full custodial enrollment + sealed-shard manifest install) against `tenzro-sdk@^0.4.1` |
 
-**404 unit tests** pass; 5 env-gated integration smokes exercise the live testnet end-to-end.
+**407 unit tests** pass; 5 env-gated integration smokes exercise the live testnet end-to-end.
 
 ## Repository
 

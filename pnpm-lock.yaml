@@ -91,8 +91,8 @@ importers:
   apps/wallet:
     dependencies:
       tenzro-sdk:
-        specifier: ^0.4.0
-        version: 0.4.0
+        specifier: ^0.4.1
+        version: 0.4.1
       tenzro-wallet:
         specifier: workspace:*
         version: link:../../packages/wallet-kernel
@@ -256,8 +256,8 @@ importers:
   packages/wallet-kernel:
     dependencies:
       tenzro-sdk:
-        specifier: ^0.4.0
-        version: 0.4.0
+        specifier: ^0.4.1
+        version: 0.4.1
     devDependencies:
       '@types/node':
         specifier: 22.10.5
@@ -3126,8 +3126,8 @@ packages:
     resolution: {integrity: sha512-uxc/zpqFg6x7C8vOE7lh6Lbda8eEL9zmVm/PLeTPBRhh1xCgdWaQ+J1CUieGpIfm2HdtsUpRv+HshiasBMcc6A==}
     engines: {node: '>=6'}
 
-  tenzro-sdk@0.4.0:
-    resolution: {integrity: sha512-V8QyEH9Tqq4U/inlsC6PtwPHMwt8o2ZLjryWfffHefv1tGmbAClB0MItspDU8WwTb0m7hpqYHKdWzmC4oURzzQ==}
+  tenzro-sdk@0.4.1:
+    resolution: {integrity: sha512-2S0i7OkpPmR8fjUjRObjXMaP8RwB48saaghyEA+AB9UODlP4ExLg3jwwOQqrqaHLM9gBRiuT/qxdKwhQFP8HrA==}
     engines: {node: '>=18'}
 
   thread-stream@3.1.0:
@@ -6090,7 +6090,7 @@ snapshots:
 
   tapable@2.3.3: {}
 
-  tenzro-sdk@0.4.0: {}
+  tenzro-sdk@0.4.1: {}
 
   thread-stream@3.1.0:
     dependencies:

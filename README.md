@@ -30,7 +30,7 @@ Tenzro Wallet collapses that into:
 
 The wallet is built in layers so the same code runs in a browser extension, a hosted web wallet, a mobile app, and a service worker for agents. This repo ships:
 
-- **`packages/wallet-kernel/`** — the engine. Pure TypeScript, no Node dependencies, runs anywhere a browser does. Handles identity, custody, signing across all four VMs, balance aggregation, route selection, agent payment policies, and the bridge router. **404 unit tests, live on testnet today.**
+- **`packages/wallet-kernel/`** — the engine. Pure TypeScript, no Node dependencies, runs anywhere a browser does. Handles identity, custody, signing across all four VMs, balance aggregation, route selection, agent payment policies, and the bridge router. **407 unit tests, live on testnet today.**
 - **`apps/wallet/`** — the host scaffold. Wires the kernel into a real page: EIP-1193 provider on `window.tenzro`, EIP-6963 announcement so dApps discover it, device-provisioning UI for new wallets and recovery, and the seam where the WebAssembly FROST library plugs in.
 
 The full architecture and design rationale lives in [`docs/DESIGN.md`](./docs/DESIGN.md).
@@ -71,7 +71,7 @@ The kernel is testnet-functional today against the live Tenzro testnet at `rpc.t
 | M8 | Bridge router (LI.FI, CCIP, LayerZero, Wormhole, deBridge, Canton) | Live on testnet — all six adapters wired against `client.bridge.{getRoutes,bridgeTokens}` |
 | M9 | TDIP integration (delegate sets, recovery flows) | Kernel orchestrators shipped |
 
-`pnpm test` runs **404 unit tests** across the kernel; four env-gated integration smokes exercise the live testnet end-to-end (1-wei native self-transfer, EVM `eth_*` reads, SVM views via the unified `tenzro_*` namespace, Canton validator reachability).
+`pnpm test` runs **407 unit tests** across the kernel; four env-gated integration smokes exercise the live testnet end-to-end (1-wei native self-transfer, EVM `eth_*` reads, SVM views via the unified `tenzro_*` namespace, Canton validator reachability).
 
 ## Layout
 
@@ -115,6 +115,12 @@ packages/
         axelar/                    # Axelar GMP (Cosmos / Move / Stellar / XRPL reach)
         erc7683/                   # cross-chain intents origin-side reads + fill records
         caip/                      # CAIP-2 / CAIP-10 / CAIP-19 chain-agnostic discovery
+        babylon/                   # Babylon BTC-secured staking surface (finality providers,
+                                   #   delegations, EOTS submission)
+        training/                  # Tenzro Train protocol port — read-side run/receipt/manifest
+                                   #   inspection + write-side post-task / enroll-trainer
+                                   #   (Confidential-tier TEE-attested) / submit-gradient /
+                                   #   finalize-round / install-sealed-manifest
       integration/                 # env-gated smoke tests (skip without env)
 
 apps/

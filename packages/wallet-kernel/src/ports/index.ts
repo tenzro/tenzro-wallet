@@ -85,3 +85,16 @@ export * from './erc7683/index.ts';
 // CAIP-2 / CAIP-10 / CAIP-19 per the submitted `tenzro` CASA namespace
 // (ChainAgnostic/namespaces#184).
 export * from './caip/index.ts';
+
+// ── Babylon Bitcoin staking ports + adapter ──
+// Read-side surface for staking dashboards; write paths exposed for
+// validator-operator hosts that use the wallet kernel as the signing
+// surface.
+export * from './babylon/index.ts';
+
+// ── Tenzro Train protocol ports + adapter ──
+// Read + write surface for Tenzro Train Phase 4 (Confidential-tier
+// sealed-shard pipelines). Constructed with `(read)` for monitoring
+// agents, or `(read, write)` for full custodial enrollment +
+// gradient submission flows.
+export * from './training/index.ts';
