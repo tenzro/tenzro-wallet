@@ -8,7 +8,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "tenzro-sdk": "^0.4.1",
+    "tenzro-sdk": "^0.4.8",
     "tenzro-wallet": "workspace:*"
   },
   "devDependencies": {

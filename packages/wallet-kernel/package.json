@@ -31,7 +31,7 @@
     "prepublishOnly": "pnpm build"
   },
   "dependencies": {
-    "tenzro-sdk": "^0.4.7"
+    "tenzro-sdk": "^0.4.8"
   },
   "devDependencies": {
     "@types/node": "22.10.5",
