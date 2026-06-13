@@ -1,7 +1,7 @@
 /**
  * AssetRow — chain-aware balance line.
  *
- * Visual hierarchy follows Coinbase / Phantom:
+ * Visual hierarchy:
  *   token-icon (with chain-dot overlay) · ticker / chain-name · amount / usd
  *
  * Decimals come from the chain (chainDecimals), so the row stays
@@ -60,7 +60,7 @@ export function AssetRow({
         </span>
       </div>
 
-      {/* Symbol + chain name (chain in muted small text, Coinbase pattern) */}
+      {/* Symbol + chain name (chain in muted small text) */}
       <div className="flex flex-1 flex-col min-w-0">
         <span className="font-semibold text-foreground tracking-tight">{symbol}</span>
         <span className="text-xs text-foreground-muted truncate">{name ?? chainMeta.name}</span>

@@ -2,9 +2,8 @@
  * ChainBadge + ChainLogo — the restrained chain-identity primitives.
  *
  * Replaces the colored SurfaceBadge that splashed accent fills across
- * the chrome. Following Coinbase / Revolut / Phantom 2026 conventions:
- * chain identity comes from a small chain-colored *logo dot* sitting
- * in a neutral pill. The surrounding card stays mono.
+ * the chrome. Chain identity comes from a small chain-colored *logo
+ * dot* sitting in a neutral pill. The surrounding card stays mono.
  *
  *   <ChainBadge chain="ethereum" />        → ⬡ Ethereum (mono pill)
  *   <ChainLogo chain="ethereum" size={20}/> → just the logo

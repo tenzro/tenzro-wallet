@@ -1,9 +1,9 @@
 /**
  * BalanceHero — the giant top-of-dashboard total.
  *
- * Restrained per Coinbase / Revolut: no glass or gradient orbs. Big
- * number, small change pill, action cluster. The chain breakdown
- * below uses ChainBadge instead of colored chips.
+ * Restrained by design: no glass or gradient orbs. Big number, small
+ * change pill, action cluster. The chain breakdown below uses
+ * ChainBadge instead of colored chips.
  */
 
 'use client';

@@ -1,7 +1,7 @@
 /**
  * Card — the elevated surface used for every grouping in the wallet.
  *
- * Two variants only — restraint per Coinbase / Revolut convention:
+ * Two variants only, by design:
  *   - flat   (default): for grouped lists, dense panels
  *   - raised: for primary panels (portfolio summary, send composer,
  *     agent mandate review). One small visual lift via subtle elevation.

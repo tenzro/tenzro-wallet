@@ -133,7 +133,7 @@ export const CHAINS: Record<ChainId, ChainMeta> = {
     isInternal: false,
     color: 'oklch(0.62 0.2 295)',
     logo: `<rect x="2" y="2" width="20" height="20" rx="5" fill="currentColor"/><path d="M6 9c2 3 4 3 6 0s4-3 6 0v6c-2-3-4-3-6 0s-4 3-6 0V9z" fill="oklch(0.99 0 0)"/>`,
-    subtitle: 'Stripe · payments',
+    subtitle: 'Stablecoin payments',
   },
   optimism: {
     id: 'optimism',
