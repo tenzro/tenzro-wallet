@@ -40,7 +40,7 @@ function fakeClient(overrides: Partial<BondClientLike> = {}): {
         method: 'listAgentBondsByController',
         args: [controllerDid],
       });
-      return [];
+      return { controller_did: controllerDid, count: 0, aggregate_bond: '0', bonds: [] };
     },
     ...overrides,
   };
@@ -169,7 +169,7 @@ describe('AgentBondSdkAdapter.get', () => {
 describe('AgentBondSdkAdapter.listByController', () => {
   it('returns [] for null/undefined response', async () => {
     const { client } = fakeClient({
-      listAgentBondsByController: async () => null as unknown as never[],
+      listAgentBondsByController: async () => null as never,
     });
     const adapter = new AgentBondSdkAdapter(client);
     expect(await adapter.listByController('did:tenzro:human:xyz')).toEqual([]);
@@ -177,25 +177,30 @@ describe('AgentBondSdkAdapter.listByController', () => {
 
   it('decodes a list of bonds, dropping rows missing bond_id', async () => {
     const { client } = fakeClient({
-      listAgentBondsByController: async () => [
-        {
-          bond_id: '0xa',
-          agent_did: 'did:tenzro:machine:0xctl:a',
-          controller: '0xctl',
-          amount: '1',
-          status: 'active',
-          posted_at: 1,
-        },
-        { agent_did: 'no-bond-id' }, // dropped
-        {
-          bond_id: '0xb',
-          agent_did: 'did:tenzro:machine:0xctl:b',
-          controller: '0xctl',
-          amount: '2',
-          status: 'slashed',
-          posted_at: 2,
-        },
-      ],
+      listAgentBondsByController: async () => ({
+        controller_did: 'did:tenzro:human:xyz',
+        count: 3,
+        aggregate_bond: '3',
+        bonds: [
+          {
+            bond_id: '0xa',
+            agent_did: 'did:tenzro:machine:0xctl:a',
+            controller: '0xctl',
+            amount: '1',
+            status: 'active',
+            posted_at: 1,
+          },
+          { agent_did: 'no-bond-id' }, // dropped
+          {
+            bond_id: '0xb',
+            agent_did: 'did:tenzro:machine:0xctl:b',
+            controller: '0xctl',
+            amount: '2',
+            status: 'slashed',
+            posted_at: 2,
+          },
+        ],
+      }),
     });
     const adapter = new AgentBondSdkAdapter(client);
     const list = await adapter.listByController('did:tenzro:human:xyz');

@@ -15,7 +15,7 @@
  * the snake_case keys the RPC expects.
  */
 
-import type { InsuranceClient } from 'tenzro-sdk';
+import type { FileClaimParams, InsuranceClient } from 'tenzro-sdk';
 import type {
   ClaimStatus,
   FileInsuranceClaimRequest,
@@ -59,16 +59,15 @@ export class InsuranceSdkAdapter implements InsurancePort {
   constructor(private readonly client: InsuranceClientLike) {}
 
   async fileClaim(req: FileInsuranceClaimRequest): Promise<InsuranceClaimRecord> {
-    const params: Record<string, unknown> = {
+    const params: FileClaimParams = {
       claimant_did: req.claimantDid,
       claimant_address: req.claimantAddress,
       against_agent_did: req.againstAgentDid,
       amount_requested: req.amountRequested.toString(),
+      nonce: req.nonce,
       receipt_refs: [...req.receiptRefs],
+      ...(req.narrative !== undefined ? { narrative: req.narrative } : {}),
     };
-    if (req.narrative !== undefined) {
-      params.narrative = req.narrative;
-    }
     const raw = (await this.client.fileInsuranceClaim(params)) as RawClaim;
     const decoded = decodeClaim(raw);
     if (decoded === null) {
@@ -83,7 +82,8 @@ export class InsuranceSdkAdapter implements InsurancePort {
   }
 
   async list(): Promise<InsuranceClaimRecord[]> {
-    const raws = (await this.client.listInsuranceClaims()) as RawClaim[] | null | undefined;
+    const wrapped = await this.client.listInsuranceClaims();
+    const raws = (wrapped?.claims ?? []) as RawClaim[];
     if (!Array.isArray(raws)) return [];
     const out: InsuranceClaimRecord[] = [];
     for (const raw of raws) {
@@ -94,8 +94,9 @@ export class InsuranceSdkAdapter implements InsurancePort {
   }
 
   async poolBalance(): Promise<bigint> {
-    const raw = await this.client.getInsurancePoolBalance();
-    return raw === undefined || raw === null ? 0n : BigInt(raw);
+    const pool = await this.client.getInsurancePoolBalance();
+    const bal = pool?.balance_wei;
+    return bal === undefined || bal === null ? 0n : BigInt(bal);
   }
 }
 

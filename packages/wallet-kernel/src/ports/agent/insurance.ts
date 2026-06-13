@@ -49,6 +49,8 @@ export interface FileInsuranceClaimRequest {
   readonly claimantAddress: string;
   readonly againstAgentDid: string;
   readonly amountRequested: bigint;
+  /** Per-claimant nonce — folded into the deterministic claim id. */
+  readonly nonce: number;
   readonly receiptRefs: readonly string[];
   readonly narrative?: string;
 }

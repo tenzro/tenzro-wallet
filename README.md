@@ -23,14 +23,14 @@ Tenzro Wallet collapses that into:
 
 - **Builders** shipping multi-chain apps who don't want to ask users "which wallet?" every time.
 - **Agent developers** who need scoped spending, revocable session keys, and a payment rail that works for both human-instructed and autonomous flows.
-- **Institutions** moving regulated assets — Canton/DAML support means you can hold tokenised securities and stablecoin payments in the same wallet without moving custody between vendors.
+- **Institutions** moving regulated assets — Canton/DAML support means you can hold tokenised securities and stablecoin payments in the same wallet without moving custody between vendors. The wallet **always signs Canton submissions locally** through its passkey-quorum custody — it never delegates signing to a node — and **content-verifies** every prepared transaction against your intent (`actAs` authorization, transfer amount, recipient) before signing, failing closed on any mismatch. Connect to Canton two ways: bring your own Canton node, or point at a Tenzro-network-provided Canton surface with a single API key.
 - **End users** who want a wallet that doesn't feel like 1990s software — biometric auth, no seed phrases, recovery that actually works.
 
 ## What's in this repo
 
 The wallet is built in layers so the same code runs in a browser extension, a hosted web wallet, a mobile app, and a service worker for agents. This repo ships:
 
-- **`packages/wallet-kernel/`** — the engine. Pure TypeScript, no Node dependencies, runs anywhere a browser does. Handles identity, custody, signing across all four VMs, balance aggregation, route selection, agent payment policies, and the bridge router. **407 unit tests, live on testnet today.**
+- **`packages/wallet-kernel/`** — the engine. Pure TypeScript, no Node dependencies, runs anywhere a browser does. Handles identity, custody, signing across all four VMs, balance aggregation, route selection, agent payment policies, and the bridge router. **426 unit tests, live on testnet today.**
 - **`apps/wallet/`** — the host scaffold. Wires the kernel into a real page: EIP-1193 provider on `window.tenzro`, EIP-6963 announcement so dApps discover it, device-provisioning UI for new wallets and recovery, and the seam where the WebAssembly FROST library plugs in.
 
 The full architecture and design rationale lives in [`docs/DESIGN.md`](./docs/DESIGN.md).
@@ -62,7 +62,7 @@ The kernel is testnet-functional today against the live Tenzro testnet at `rpc.t
 | M1 | Kernel skeleton, ports + adapters | Done |
 | M2 | Tenzro native surface | Done — live on testnet |
 | M3 | EVM + SVM on-Tenzro surfaces, cross-VM pointer ops | Done — live on testnet |
-| M4a | Canton ports + adapters (design + interfaces) | Done |
+| M4a | Canton ports + adapters (design + interfaces) + sign-time content verification (`verifyPreparedContent`) + dual-mode provider (`resolveCantonAdapterConfig`: BYO-node / Tenzro-network-provided) | Done |
 | M4b | Canton MainNet surface | Gated on Splice 0.5.x baseline (post-2026-05-05) |
 | M5 | Passkey-quorum custody (kernel pieces) | Done — FROST/ML-DSA/share-envelope HTTP adapters, WebAuthn PRF/largeBlob/escrow unwrapper, `walletNew()` / `walletRecover()` orchestrators |
 | M5.5 | 2-of-3 pre-launch upgrade | Designed |
@@ -71,7 +71,7 @@ The kernel is testnet-functional today against the live Tenzro testnet at `rpc.t
 | M8 | Bridge router (LI.FI, CCIP, LayerZero, Wormhole, deBridge, Canton) | Live on testnet — all six adapters wired against `client.bridge.{getRoutes,bridgeTokens}` |
 | M9 | TDIP integration (delegate sets, recovery flows) | Kernel orchestrators shipped |
 
-`pnpm test` runs **407 unit tests** across the kernel; four env-gated integration smokes exercise the live testnet end-to-end (1-wei native self-transfer, EVM `eth_*` reads, SVM views via the unified `tenzro_*` namespace, Canton validator reachability).
+`pnpm test` runs **426 unit tests** across the kernel; four env-gated integration smokes exercise the live testnet end-to-end (1-wei native self-transfer, EVM `eth_*` reads, SVM views via the unified `tenzro_*` namespace, Canton validator reachability).
 
 ## Layout
 
@@ -141,7 +141,7 @@ pnpm test         # whole repo (unit only — integration smokes skip without en
 pnpm lint         # biome
 ```
 
-Toolchain: pnpm 10.33.2, Node ≥ 22, TypeScript 5.7.3, Vitest 2.1.9, Turborepo 2.3.3, Biome 1.9.4.
+Toolchain: pnpm 10.33.2, Node ≥ 22, TypeScript 5.7.3, Vitest 4.1.5, Turborepo 2.3.3, Biome 1.9.4.
 
 ### Use it as a library
 
@@ -192,12 +192,12 @@ TENZRO_RPC_URL=https://rpc.tenzro.network
 # Optional smoke-test timeout, ms.
 # TENZRO_TEST_TIMEOUT_MS=60000
 
-# ─── Canton MainNet validator ────────────────────────────────────────────────
-# A Canton participant exposes two HTTP roots that share an Auth0 JWT
-# (audience must equal `https://canton.network.global`). Operators of the
-# Tenzro-run validator (or their own) supply the URLs through host config;
-# they're intentionally omitted from this template to keep deployment-specific
-# endpoints out of the repo.
+# ─── Canton: BYO node ────────────────────────────────────────────────────────
+# Bring your own Canton participant. It exposes two HTTP roots that share an
+# Auth0 JWT (audience must equal `https://canton.network.global`). Operators
+# supply the URLs through host config; they're intentionally omitted from this
+# template to keep deployment-specific endpoints out of the repo. The wallet
+# holds the party key and signs locally; auth is the operator's own Canton JWT.
 
 # CANTON_LEDGER_BASE_URL=...        # JSON Ledger API root
 # CANTON_VALIDATOR_BASE_URL=...     # Splice validator-app root
@@ -205,6 +205,16 @@ TENZRO_RPC_URL=https://rpc.tenzro.network
 # CANTON_USER_ID=replace-with-user-id
 # CANTON_TEST_PARTY=replace-with-party-id
 # CANTON_TEST_TIMEOUT_MS=30000
+
+# ─── Canton: Tenzro-network-provided ─────────────────────────────────────────
+# Alternatively, point at a Tenzro node's Canton surface. One base URL fronts
+# both the ledger and validator seams; auth is a single `tnz_…` API key. The
+# node resolves the key to a tenant and server-mints that tenant's Canton JWT —
+# the wallet never holds the Canton JWT. The wallet still signs locally.
+
+# CANTON_BASE_URL=...               # Tenzro node Canton surface (single origin)
+# CANTON_API_KEY=tnz_replace-with-api-key
+# CANTON_USER_ID=replace-with-user-id
 ```
 
 Nothing in `src/` reads these directly at runtime — host apps and tests pass values through the kernel's dep-injected ports. Keep secrets out of git.

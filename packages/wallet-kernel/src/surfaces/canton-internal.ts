@@ -27,6 +27,7 @@ import type {
   PrepareSubmissionResponse,
 } from '../ports/canton/canton-validator.ts';
 import { bytesEqualConstantTime, preparedTransactionHash } from '../ports/canton/hash.ts';
+import { verifyPreparedContent } from '../ports/canton/verify-content.ts';
 import type { Consent } from '../types/consent.ts';
 import type { CantonPartyKey, SurfaceKey, TdipDid } from '../types/identity.ts';
 import type { Intent, PreparedTx, SignedTx, TxHandle, TxStatus } from '../types/intent.ts';
@@ -131,6 +132,12 @@ export function cantonInternalSurface(deps: CantonInternalDeps): SurfaceModule {
       if (!bytesEqualConstantTime(recomputed, body.preparedTransactionHash)) {
         throw new Error('canton-internal: preparedTransactionHash mismatch — refusing to sign.');
       }
+      verifyPreparedContent(body.preparedTransaction, {
+        fromParty: body.fromParty,
+        toParty: body.toParty,
+        amount: body.amount,
+        assetSymbol: body.assetSymbol,
+      });
       const result = await deps.signingDriver.sign({
         did,
         surfaceKey: key,

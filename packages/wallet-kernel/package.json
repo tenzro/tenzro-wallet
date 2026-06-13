@@ -31,7 +31,9 @@
     "prepublishOnly": "pnpm build"
   },
   "dependencies": {
-    "tenzro-sdk": "^0.4.8"
+    "@canton-network/core-ledger-proto": "^1.5.0",
+    "@canton-network/core-tx-visualizer": "^1.5.0",
+    "tenzro-sdk": "^0.4.10"
   },
   "devDependencies": {
     "@types/node": "22.10.5",

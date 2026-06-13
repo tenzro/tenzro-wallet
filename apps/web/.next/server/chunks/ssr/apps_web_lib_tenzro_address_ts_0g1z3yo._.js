@@ -1,3 +1,0 @@
-module.exports=[97426,a=>{"use strict";let b=/^0x[0-9a-fA-F]+$/,c=/^[1-9A-HJ-NP-Za-km-z]+$/;a.s(["detectAddress",0,function(a){let d=a.trim();if(!d)return{kind:"unknown",reason:"Empty input"};if(b.test(d)){let a=d.length-2;return 64===a?{kind:"tenzro",address:d.toLowerCase()}:40===a?{kind:"evm",address:d.toLowerCase()}:{kind:"unknown",reason:`Hex address must be 40 chars (EVM) or 64 chars (Tenzro), got ${a}`}}return c.test(d)&&d.length>=32&&d.length<=44?{kind:"svm",address:d}:{kind:"unknown",reason:"Not a recognized address format"}}])}];
-
-//# sourceMappingURL=apps_web_lib_tenzro_address_ts_0g1z3yo._.js.map

@@ -23,11 +23,17 @@ function fakeClient(overrides: Partial<InsuranceClientLike> = {}): {
     },
     listInsuranceClaims: async () => {
       calls.push({ method: 'listInsuranceClaims', args: [] });
-      return [];
+      return { count: 0, claims: [] };
     },
     getInsurancePoolBalance: async () => {
       calls.push({ method: 'getInsurancePoolBalance', args: [] });
-      return '0';
+      return {
+        vault: '0xvault',
+        balance_wei: '0',
+        paid_claims: 0,
+        total_paid_wei: '0',
+        open_claim_count: 0,
+      };
     },
     ...overrides,
   };
@@ -60,6 +66,7 @@ describe('InsuranceSdkAdapter.fileClaim', () => {
       claimantAddress: '0xclaimant',
       againstAgentDid: 'did:tenzro:machine:0xctl:abc',
       amountRequested: 1_000_000_000_000_000_000n,
+      nonce: 7,
       receiptRefs: ['receipt://0x1', 'receipt://0x2'],
       narrative: 'agent failed to settle',
     });
@@ -71,6 +78,7 @@ describe('InsuranceSdkAdapter.fileClaim', () => {
       claimant_address: '0xclaimant',
       against_agent_did: 'did:tenzro:machine:0xctl:abc',
       amount_requested: '1000000000000000000',
+      nonce: 7,
       receipt_refs: ['receipt://0x1', 'receipt://0x2'],
       narrative: 'agent failed to settle',
     });
@@ -99,6 +107,7 @@ describe('InsuranceSdkAdapter.fileClaim', () => {
       claimantAddress: '0xc',
       againstAgentDid: 'did:tenzro:machine:0xc:a',
       amountRequested: 1n,
+      nonce: 0,
       receiptRefs: [],
     });
     const params = calls[0]?.args[0] as Record<string, unknown>;
@@ -116,6 +125,7 @@ describe('InsuranceSdkAdapter.fileClaim', () => {
         claimantAddress: '0xc',
         againstAgentDid: 'did:tenzro:machine:0xc:a',
         amountRequested: 1n,
+        nonce: 0,
         receiptRefs: [],
       }),
     ).rejects.toThrow(/claim_id/);
@@ -157,7 +167,7 @@ describe('InsuranceSdkAdapter.get', () => {
 describe('InsuranceSdkAdapter.list', () => {
   it('returns [] for null/undefined response', async () => {
     const { client } = fakeClient({
-      listInsuranceClaims: async () => null as unknown as never[],
+      listInsuranceClaims: async () => null as never,
     });
     const adapter = new InsuranceSdkAdapter(client);
     expect(await adapter.list()).toEqual([]);
@@ -165,19 +175,22 @@ describe('InsuranceSdkAdapter.list', () => {
 
   it('drops rows missing claim_id', async () => {
     const { client } = fakeClient({
-      listInsuranceClaims: async () => [
-        {
-          claim_id: '0xa',
-          claimant_did: 'did:tenzro:human:x',
-          claimant_address: '0xc',
-          against_agent_did: 'did:tenzro:machine:0xc:a',
-          amount_requested: '1',
-          receipt_refs: [],
-          status: 'Open',
-          filed_at: 1,
-        },
-        { against_agent_did: 'no-claim-id' },
-      ],
+      listInsuranceClaims: async () => ({
+        count: 2,
+        claims: [
+          {
+            claim_id: '0xa',
+            claimant_did: 'did:tenzro:human:x',
+            claimant_address: '0xc',
+            against_agent_did: 'did:tenzro:machine:0xc:a',
+            amount_requested: '1',
+            receipt_refs: [],
+            status: 'Open',
+            filed_at: 1,
+          },
+          { against_agent_did: 'no-claim-id' },
+        ],
+      }),
     });
     const adapter = new InsuranceSdkAdapter(client);
     const list = await adapter.list();
@@ -187,9 +200,15 @@ describe('InsuranceSdkAdapter.list', () => {
 });
 
 describe('InsuranceSdkAdapter.poolBalance', () => {
-  it('widens string to bigint', async () => {
+  it('widens balance_wei string to bigint', async () => {
     const { client } = fakeClient({
-      getInsurancePoolBalance: async () => '12345678901234567890',
+      getInsurancePoolBalance: async () => ({
+        vault: '0xvault',
+        balance_wei: '12345678901234567890',
+        paid_claims: 3,
+        total_paid_wei: '999',
+        open_claim_count: 1,
+      }),
     });
     const adapter = new InsuranceSdkAdapter(client);
     expect(await adapter.poolBalance()).toBe(12345678901234567890n);

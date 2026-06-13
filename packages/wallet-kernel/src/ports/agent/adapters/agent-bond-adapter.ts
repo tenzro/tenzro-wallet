@@ -77,10 +77,8 @@ export class AgentBondSdkAdapter implements AgentBondPort {
   }
 
   async listByController(controllerDid: string): Promise<AgentBondRecord[]> {
-    const raws = (await this.client.listAgentBondsByController(controllerDid)) as
-      | RawAgentBond[]
-      | null
-      | undefined;
+    const wrapped = await this.client.listAgentBondsByController(controllerDid);
+    const raws = (wrapped?.bonds ?? []) as RawAgentBond[];
     if (!Array.isArray(raws)) return [];
     const out: AgentBondRecord[] = [];
     for (const raw of raws) {

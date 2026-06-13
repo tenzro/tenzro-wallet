@@ -50,6 +50,14 @@ export {
   topologyBundleHash,
   bytesEqualConstantTime,
 } from './canton/hash.ts';
+export { verifyPreparedContent, CantonContentMismatchError } from './canton/verify-content.ts';
+export type { CantonTransferIntent } from './canton/verify-content.ts';
+export { resolveCantonAdapterConfig } from './canton/canton-provider.ts';
+export type {
+  CantonProviderConfig,
+  ByoCantonProviderConfig,
+  TenzroCantonProviderConfig,
+} from './canton/canton-provider.ts';
 
 // ── Agent-payments ports + adapters (AP2, ERC-8004, agent-payments, nano) ──
 export * from './agent/index.ts';

@@ -24,13 +24,37 @@ export interface CantonHttpConfig {
   /**
    * Async token getter. Called per-request — the implementation can cache
    * and refresh as it likes. Throwing here surfaces as a request failure.
+   *
+   * In the default (BYO Canton node) auth model this is the Canton JWT,
+   * sent as `Authorization: Bearer <token>`. When `authHeaders` is set it
+   * takes precedence and `token` is ignored — that's the Tenzro-provided
+   * model, where the auth is a `tnz_...` API key in `X-Tenzro-Api-Key` and
+   * the node server-mints the Canton JWT.
    */
   readonly token: () => Promise<string>;
+  /**
+   * Optional per-request auth header builder. When present it FULLY replaces
+   * the default `Authorization: Bearer` behaviour — the returned record is
+   * spread into the request headers verbatim. Use this for the Tenzro-
+   * provided model (`X-Tenzro-Api-Key`) or the BYO-issuer escape hatch
+   * (`X-Canton-Auth`). Called per-request; may cache/refresh internally.
+   */
+  readonly authHeaders?: () => Promise<Record<string, string>>;
   /**
    * Optional `fetch` override. Defaults to `globalThis.fetch`. Tests inject
    * a mock; real builds typically leave it unset.
    */
   readonly fetch?: typeof fetch;
+}
+
+/**
+ * Resolve the auth headers for a request. `authHeaders` wins when set
+ * (Tenzro-provided / BYO-issuer escape hatch); otherwise fall back to the
+ * default `Authorization: Bearer <token>` (BYO Canton node, self-minted JWT).
+ */
+async function resolveAuthHeaders(cfg: CantonHttpConfig): Promise<Record<string, string>> {
+  if (cfg.authHeaders) return cfg.authHeaders();
+  return { authorization: `Bearer ${await cfg.token()}` };
 }
 
 export class CantonHttpError extends Error {
@@ -59,14 +83,14 @@ export async function postJson<TReq, TRes>(
 ): Promise<TRes> {
   const baseUrl = base === 'ledger' ? cfg.ledgerBaseUrl : cfg.validatorBaseUrl;
   const url = `${stripTrailingSlash(baseUrl)}${path}`;
-  const token = await cfg.token();
+  const auth = await resolveAuthHeaders(cfg);
   const f = cfg.fetch ?? globalThis.fetch;
   if (!f) throw new Error('canton http: no fetch implementation available');
   const res = await f(url, {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
-      authorization: `Bearer ${token}`,
+      ...auth,
     },
     body: JSON.stringify(body, replacer),
   });
@@ -85,12 +109,12 @@ export async function getJson<TRes>(
 ): Promise<TRes> {
   const baseUrl = base === 'ledger' ? cfg.ledgerBaseUrl : cfg.validatorBaseUrl;
   const url = `${stripTrailingSlash(baseUrl)}${path}`;
-  const token = await cfg.token();
+  const auth = await resolveAuthHeaders(cfg);
   const f = cfg.fetch ?? globalThis.fetch;
   if (!f) throw new Error('canton http: no fetch implementation available');
   const res = await f(url, {
     method: 'GET',
-    headers: { authorization: `Bearer ${token}` },
+    headers: { ...auth },
   });
   if (!res.ok) {
     const text = await safeText(res);
@@ -117,7 +141,7 @@ export async function* streamNdjson<T>(
 ): AsyncIterable<T> {
   const baseUrl = base === 'ledger' ? cfg.ledgerBaseUrl : cfg.validatorBaseUrl;
   const url = `${stripTrailingSlash(baseUrl)}${path}`;
-  const token = await cfg.token();
+  const auth = await resolveAuthHeaders(cfg);
   const f = cfg.fetch ?? globalThis.fetch;
   if (!f) throw new Error('canton http: no fetch implementation available');
   const init: RequestInit = {
@@ -125,7 +149,7 @@ export async function* streamNdjson<T>(
     headers: {
       'content-type': 'application/json',
       accept: 'application/x-ndjson, application/json',
-      authorization: `Bearer ${token}`,
+      ...auth,
     },
     body: JSON.stringify(body, replacer),
     ...(signal !== undefined ? { signal } : {}),

@@ -1,6 +1,0 @@
-1:"$Sreact.fragment"
-2:I[72301,["/_next/static/chunks/0-baoq.gr.e2_.js","/_next/static/chunks/0dn0zj-1~94y~.js","/_next/static/chunks/0~j-tgot1-y6w.js","/_next/static/chunks/0-lowec~tui4w.js"],"Sidebar"]
-3:I[68379,["/_next/static/chunks/0-baoq.gr.e2_.js","/_next/static/chunks/0dn0zj-1~94y~.js","/_next/static/chunks/0~j-tgot1-y6w.js","/_next/static/chunks/0-lowec~tui4w.js"],"Topbar"]
-4:I[2063,["/_next/static/chunks/0-baoq.gr.e2_.js","/_next/static/chunks/0dn0zj-1~94y~.js","/_next/static/chunks/0~j-tgot1-y6w.js"],"default"]
-5:I[59666,["/_next/static/chunks/0-baoq.gr.e2_.js","/_next/static/chunks/0dn0zj-1~94y~.js","/_next/static/chunks/0~j-tgot1-y6w.js"],"default"]
-0:{"rsc":["$","$1","c",{"children":[[["$","script","script-0",{"src":"/_next/static/chunks/0-lowec~tui4w.js","async":true}]],["$","div",null,{"className":"flex min-h-dvh","children":[["$","$L2",null,{}],["$","div",null,{"className":"flex-1 min-w-0 flex flex-col","children":[["$","$L3",null,{}],["$","main",null,{"className":"flex-1 px-6 lg:px-8 py-8 max-w-[1400px] w-full mx-auto","children":["$","$L4",null,{"parallelRouterKey":"children","template":["$","$L5",null,{}]}]}]]}]]}]]}],"isPartial":false,"staleTime":300,"varyParams":null,"buildId":"FysFbPxjIKPQ8cfeJChGJ"}

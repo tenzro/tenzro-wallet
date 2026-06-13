@@ -8,20 +8,20 @@
  *     `PreparedTransaction` proto + canonical hash.
  *   - sign → recompute the hash locally (SHA-256 with Canton hash purpose 11
  *     prefix, `HASHING_SCHEME_VERSION_V2`), constant-time-compare with the
- *     validator's hash, then sign that hash via the SigningDriver. The
- *     equality assertion is the wallet's only defence against a malicious
- *     validator — without it, signing the validator-supplied hash trusts
- *     the validator on what's being authorised.
+ *     validator's hash, decode the proto and verify its content matches the
+ *     prepared intent, then sign that hash via the SigningDriver. The
+ *     equality assertion binds the signature to the exact bytes; the content
+ *     check binds those bytes to the user's intent. Both are required —
+ *     without them, signing the validator-supplied hash trusts the validator
+ *     on what's being authorised.
  *   - submit → `executeSubmission` with the signed hash; the validator
  *     dispatches to the synchronizer.
  *   - watch → tail `tailCompletions` filtered to this command id.
  *
- * The PreparedTransaction proto's content-level decode (re-deriving the
- * user-visible fields from the proto and comparing them to `intent`) is
- * deferred — see DESIGN.md §11 open question #5. Hash equality alone is
- * sufficient to bind signature → exact bytes; content decode is a defence
- * against a validator that returns *valid* bytes for the *wrong* transaction.
- * We accept that gap until the proto schema lands in the kernel.
+ * The PreparedTransaction proto is content-verified before signing
+ * (`verifyPreparedContent`): the decoded actAs/amount/recipient are checked
+ * against the prepared intent. This defends against a validator that returns
+ * *valid* bytes (correct hash) for the *wrong* transaction.
  */
 
 import type {
@@ -31,6 +31,7 @@ import type {
   PrepareSubmissionResponse,
 } from '../ports/canton/canton-validator.ts';
 import { bytesEqualConstantTime, preparedTransactionHash } from '../ports/canton/hash.ts';
+import { verifyPreparedContent } from '../ports/canton/verify-content.ts';
 import type { Consent } from '../types/consent.ts';
 import type { CantonPartyKey, SurfaceKey, TdipDid } from '../types/identity.ts';
 import type { Intent, PreparedTx, SignedTx, TxHandle, TxStatus } from '../types/intent.ts';
@@ -177,6 +178,16 @@ export function cantonExternalSurface(deps: CantonExternalDeps): SurfaceModule {
             'Either the validator is malicious or the proto bytes were corrupted in transit.',
         );
       }
+      // Content check: hash equality binds the signature to these exact bytes,
+      // but not to the user's intent. Decode the proto and verify the
+      // actAs/amount/recipient match what was prepared, so a validator can't
+      // return correctly-hashed bytes for a different transfer.
+      verifyPreparedContent(body.preparedTransaction, {
+        fromParty: body.fromParty,
+        toParty: body.toParty,
+        amount: body.amount,
+        assetSymbol: body.assetSymbol,
+      });
       const result = await deps.signingDriver.sign({
         did,
         surfaceKey: key,
