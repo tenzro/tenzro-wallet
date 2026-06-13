@@ -1,6 +1,6 @@
 {
   "name": "tenzro-wallet",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "description": "Tenzro Wallet kernel — one identity, four VM surfaces (Tenzro native, EVM, SVM, Canton). Passkey-quorum custody, post-quantum signing, agent-payment ports, capital intents + multi-party workflows, EVM primitives (EIP-7702 / Permit2 / Secure-Mint / ERC-7683 + BridgeFeeHint), eight-vendor bridge router, cross-chain bridge fee in TNZO + Chainlink-backed oracle + per-tenant analytics, CAIP discovery, Babylon Bitcoin staking, Tenzro Train protocol port (Phase 4 Confidential-tier), ERC-7943 uRWA compliance, FATF Travel Rule (IVMS101), TEE-attested clock, A2A v1.0 SignedAgentCard, Wormhole NTT.",
   "type": "module",
   "main": "./dist/index.js",
