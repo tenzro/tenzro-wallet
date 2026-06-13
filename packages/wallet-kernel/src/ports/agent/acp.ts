@@ -1,17 +1,16 @@
 /**
- * AcpPort — buyer-side OpenAI Agentic Commerce Protocol (ACP).
+ * AcpPort — buyer-side Agentic Commerce Protocol (ACP).
  *
- * ACP went live with ChatGPT Instant Checkout on 2026-02-16 (Etsy /
- * Shopify / PayPal). Per `reference_agentic_payments_2026.md`, Tenzro's
- * adopt-don't-rebuild stance is: implement the *buyer* side so a Tenzro
- * agent can complete a ChatGPT-initiated purchase.
+ * Tenzro's adopt-don't-rebuild stance is: implement the *buyer* side so a
+ * Tenzro agent can complete an agent-initiated purchase against any
+ * ACP-compliant merchant.
  *
  * The wallet is the buyer agent. It receives an ACP `CheckoutSession`
- * from the merchant (typically through ChatGPT), confirms with the user
- * via the standard consent flow, and submits a `CheckoutAuthorization`
- * back. Settlement happens on the merchant side; the wallet does not
- * transfer funds directly through ACP — it provides authorisation that
- * the merchant redeems via their PSP (Stripe is the typical processor).
+ * from the merchant, confirms with the user via the standard consent
+ * flow, and submits a `CheckoutAuthorization` back. Settlement happens on
+ * the merchant side; the wallet does not transfer funds directly through
+ * ACP — it provides authorisation that the merchant redeems via their
+ * payment service provider.
  *
  * SDK status (2026-05): `tenzro-sdk` does NOT yet expose an ACP client.
  * This port is declared so the kernel surface is stable; `AcpSdkAdapter`
