@@ -1,7 +1,6 @@
 'use client';
 
 import * as DropdownMenuPrimitive from '@radix-ui/react-dropdown-menu';
-import { Check, ChevronRight } from 'lucide-react';
 import * as React from 'react';
 import { cn } from '../utils/cn';
 
@@ -73,5 +72,3 @@ export const DropdownMenuSeparator = React.forwardRef<
   />
 ));
 DropdownMenuSeparator.displayName = 'DropdownMenuSeparator';
-
-export { Check, ChevronRight };

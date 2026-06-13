@@ -1,80 +1,86 @@
 /**
  * Tenzro Wallet — design tokens.
  *
- * Restrained dark palette modelled on Coinbase / Revolut / Phantom 2026:
- * mono UI chrome (deep black + neutral greys + hairline borders), one
- * brand accent for primary actions and selected state, status colors
- * only on explicit states. Chain identity is conveyed by the chain's
- * own logo color in `chain-badge.tsx` — never splashed across cards.
+ * One design language with tenzro.com: monochrome chrome (near-black
+ * base + neutral greys + hairline borders) and a single low-chroma
+ * slate-blue accent (the site's #8a9bc7) for primary actions and
+ * selected state. Status colors appear only on explicit states, with
+ * restrained chroma. Chain identity is conveyed by the chain's own logo
+ * color in `chain-badge.tsx` — never splashed across the UI chrome.
  *
- * The four "surface-*" colors stay as kernel-internal accents (used by
- * the cross-VM route preview to differentiate pointer-op from bridge),
- * but we no longer paint Card top-lines with them — that produced
- * visual noise the asset list didn't need.
+ * The four "surface-*" colors are mono tonal greys used by the cross-VM
+ * route preview to differentiate pointer-op from bridge; they carry no
+ * hue, so the chrome reads as monochrome.
  */
 
 @import "tailwindcss";
 
 @theme {
-  /* ── Base palette (deep mono) ────────────────────────────────────── */
-  --color-background: oklch(0.115 0.003 280);
-  --color-background-elevated: oklch(0.14 0.003 280);
-  --color-surface-1: oklch(0.155 0.003 280);
-  --color-surface-2: oklch(0.185 0.004 280);
-  --color-surface-3: oklch(0.22 0.005 280);
-  --color-overlay: oklch(0.06 0.002 280 / 0.7);
+  /* ── Base palette (near-black mono, matched to the site's #000 dark) ─ */
+  --color-background: oklch(0.04 0.002 268);
+  --color-background-elevated: oklch(0.1 0.002 268);
+  --color-surface-1: oklch(0.135 0.002 268);
+  --color-surface-2: oklch(0.17 0.003 268);
+  --color-surface-3: oklch(0.21 0.003 268);
+  --color-overlay: oklch(0.02 0.001 268 / 0.7);
 
-  /* Hairline borders — Coinbase-style, low opacity neutrals */
+  /* Hairline borders — low-opacity neutrals */
   --color-border-subtle: oklch(1 0 0 / 0.06);
   --color-border-default: oklch(1 0 0 / 0.1);
   --color-border-strong: oklch(1 0 0 / 0.16);
 
-  --color-foreground: oklch(0.98 0.002 280);
-  --color-foreground-muted: oklch(0.68 0.005 280);
-  --color-foreground-subtle: oklch(0.5 0.005 280);
-  --color-foreground-disabled: oklch(0.36 0.005 280);
+  --color-foreground: oklch(1 0 0);
+  --color-foreground-muted: oklch(0.712 0.013 268);
+  --color-foreground-subtle: oklch(0.552 0.014 268);
+  --color-foreground-disabled: oklch(0.4 0.01 268);
 
   /* ── Brand — single accent, used sparingly ───────────────────────── */
-  --color-brand: oklch(0.7 0.18 285);
-  --color-brand-hover: oklch(0.74 0.19 285);
-  --color-brand-press: oklch(0.66 0.17 285);
-  --color-brand-soft: oklch(0.7 0.18 285 / 0.12);
-  --color-brand-glow: oklch(0.7 0.18 285 / 0.32);
-  --color-brand-foreground: oklch(0.99 0 0);
+  /* Slate-blue, matched to the tenzro.com site accent (#8a9bc7 dark) so
+     the wallet shares one design language with the network site. Low
+     chroma by design — the chrome stays monochrome, accent is a hint. */
+  --color-brand: oklch(0.692 0.068 268);
+  --color-brand-hover: oklch(0.776 0.048 267);
+  --color-brand-press: oklch(0.62 0.07 268);
+  --color-brand-soft: oklch(0.692 0.068 268 / 0.12);
+  --color-brand-glow: oklch(0.692 0.068 268 / 0.32);
+  --color-brand-foreground: oklch(0.13 0.005 268);
 
   /* ── Surface accents (kernel-internal, used by router preview) ──── */
-  /* These are NOT used on cards/badges anymore — they live only in the
-     CrossVmRoute glyph color and the chain-logo dot for Tenzro chains. */
-  --color-surface-native: oklch(0.78 0.14 195);
-  --color-surface-native-soft: oklch(0.78 0.14 195 / 0.1);
-  --color-surface-native-glow: oklch(0.78 0.14 195 / 0.28);
+  /* Monochrome to match tenzro.com — chains differentiate by tonal
+     lightness only, no hue. The chain's own logo color (in
+     chain-badge.tsx) carries brand identity; the UI chrome stays mono. */
+  --color-surface-native: oklch(0.82 0.005 268);
+  --color-surface-native-soft: oklch(0.82 0.005 268 / 0.1);
+  --color-surface-native-glow: oklch(0.82 0.005 268 / 0.2);
 
-  --color-surface-evm: oklch(0.66 0.16 265);
-  --color-surface-evm-soft: oklch(0.66 0.16 265 / 0.1);
-  --color-surface-evm-glow: oklch(0.66 0.16 265 / 0.28);
+  --color-surface-evm: oklch(0.7 0.005 268);
+  --color-surface-evm-soft: oklch(0.7 0.005 268 / 0.1);
+  --color-surface-evm-glow: oklch(0.7 0.005 268 / 0.2);
 
-  --color-surface-svm: oklch(0.78 0.18 165);
-  --color-surface-svm-soft: oklch(0.78 0.18 165 / 0.1);
-  --color-surface-svm-glow: oklch(0.78 0.18 165 / 0.28);
+  --color-surface-svm: oklch(0.76 0.005 268);
+  --color-surface-svm-soft: oklch(0.76 0.005 268 / 0.1);
+  --color-surface-svm-glow: oklch(0.76 0.005 268 / 0.2);
 
-  --color-surface-canton: oklch(0.74 0.16 50);
-  --color-surface-canton-soft: oklch(0.74 0.16 50 / 0.1);
-  --color-surface-canton-glow: oklch(0.74 0.16 50 / 0.28);
+  --color-surface-canton: oklch(0.64 0.005 268);
+  --color-surface-canton-soft: oklch(0.64 0.005 268 / 0.1);
+  --color-surface-canton-glow: oklch(0.64 0.005 268 / 0.2);
 
-  /* ── Agent-stack accent — only used on the AGENT chip and avatar ring ── */
-  --color-agent: oklch(0.78 0.16 250);
-  --color-agent-soft: oklch(0.78 0.16 250 / 0.12);
-  --color-agent-glow: oklch(0.78 0.16 250 / 0.32);
+  /* ── Agent-stack accent — folds into the slate-blue brand ────────── */
+  --color-agent: oklch(0.692 0.068 268);
+  --color-agent-soft: oklch(0.692 0.068 268 / 0.12);
+  --color-agent-glow: oklch(0.692 0.068 268 / 0.28);
 
-  /* ── Status — only for explicit states ───────────────────────────── */
-  --color-success: oklch(0.74 0.16 145);
-  --color-success-soft: oklch(0.74 0.16 145 / 0.12);
-  --color-warning: oklch(0.78 0.16 75);
-  --color-warning-soft: oklch(0.78 0.16 75 / 0.12);
-  --color-danger: oklch(0.66 0.22 25);
-  --color-danger-soft: oklch(0.66 0.22 25 / 0.12);
-  --color-info: oklch(0.72 0.13 240);
-  --color-info-soft: oklch(0.72 0.13 240 / 0.12);
+  /* ── Status — only for explicit states, restrained chroma ────────── */
+  /* The site is monochrome; states stay legible but desaturated so they
+     read as quiet signals, not vivid splashes. */
+  --color-success: oklch(0.74 0.09 145);
+  --color-success-soft: oklch(0.74 0.09 145 / 0.12);
+  --color-warning: oklch(0.78 0.09 75);
+  --color-warning-soft: oklch(0.78 0.09 75 / 0.12);
+  --color-danger: oklch(0.66 0.13 25);
+  --color-danger-soft: oklch(0.66 0.13 25 / 0.12);
+  --color-info: oklch(0.692 0.068 268);
+  --color-info-soft: oklch(0.692 0.068 268 / 0.12);
 
   /* ── Typography ──────────────────────────────────────────────────── */
   --font-sans: "Geist", "Inter", ui-sans-serif, system-ui, sans-serif;

@@ -1,13 +1,14 @@
 import type { NextConfig } from 'next';
 
 /**
- * Next.js 16 config — App Router, transpiles the workspace UI package
- * so its TSX is compiled by SWC instead of being shipped pre-built.
+ * Next.js 16 config — App Router. `@tenzro/ui` resolves through its
+ * package `exports` to the built `dist/`; turbo's `^build` dependency
+ * guarantees the UI package is compiled before the app builds, so apps
+ * consume the same artifact external `npm install @tenzro/ui` consumers
+ * get. `transpilePackages` lets SWC re-process the shipped TSX +
+ * sourcemaps for a clean dev/debug experience.
  *
  * Headers tighten the wallet against clickjacking + MIME sniffing.
- * `dangerouslyAllowSVG: false` keeps SVG imports from arbitrary
- * sources from being rendered as raster — wallets are a phishing
- * target and a misrendered SVG can hide a domain swap.
  */
 const nextConfig: NextConfig = {
   reactStrictMode: true,

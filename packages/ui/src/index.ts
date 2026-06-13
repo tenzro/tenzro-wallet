@@ -1,5 +1,5 @@
 /**
- * @tenzro/ui — design system for Tenzro Wallet (web + extension).
+ * @tenzro/ui — design system for Tenzro wallet UIs.
  *
  * Three layers:
  *   1. tokens     → CSS variables + TS constants
@@ -8,6 +8,7 @@
  *                   chain registry that drives ChainBadge / ChainLogo
  *
  * Consumers import: `import { Button, AssetRow } from '@tenzro/ui';`
+ * and the stylesheet once: `@import "@tenzro/ui/styles.css";`
  */
 
 export { cn } from './utils/cn';
