@@ -4,7 +4,7 @@
  * The Tenzro RPC's DPoP V1 implementation requires `alg=EdDSA`
  * (Ed25519) — it rejects ES256 with "V1 only supports alg=EdDSA".
  * That's a narrower profile than RFC 9449 normally allows but it's
- * what the live testnet enforces, verified against rpc.tenzro.network.
+ * what the live testnet enforces, verified against rpc.tenzro.xyz.
  *
  *   1. Generate an Ed25519 keypair *before* onboarding.
  *   2. Send the public JWK in the onboarding *params* as `dpop_jwk` so

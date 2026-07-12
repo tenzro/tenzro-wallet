@@ -1,5 +1,5 @@
 /**
- * Testnet faucet — POST {address} to api.tenzro.network/faucet.
+ * Testnet faucet — POST {address} to api.tenzro.xyz/faucet.
  *
  * The endpoint always returns HTTP 200 with `{success, tx_hash, amount,
  * message}`. Rate-limit failures come back as `success:false` with a

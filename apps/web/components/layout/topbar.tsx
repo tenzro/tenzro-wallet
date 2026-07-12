@@ -29,7 +29,7 @@ export function Topbar() {
 
       {/* Network status */}
       <Badge variant="success" size="sm" dot className="hidden sm:inline-flex">
-        <Globe className="size-3" /> rpc.tenzro.network
+        <Globe className="size-3" /> rpc.tenzro.xyz
       </Badge>
 
       {/* Notifications */}

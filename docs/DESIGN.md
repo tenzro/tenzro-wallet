@@ -123,7 +123,7 @@ This is governed by the network: every Tenzro RPC node hosts the canonical onboa
 
 #### 4.3.1 Why this, not seed phrases or single-key MPC
 
-- **Phishing resistance.** Passkeys are bound to the relying-party origin (`tenzro.network` and any user-pinned RPC origin). A phishing site cannot trick the platform authenticator into producing the passkey assertion needed to unwrap the device share.
+- **Phishing resistance.** Passkeys are bound to the relying-party origin (`tenzro.xyz` and any user-pinned RPC origin). A phishing site cannot trick the platform authenticator into producing the passkey assertion needed to unwrap the device share.
 - **No key escape via screenshot/clipboard.** The share never decodes outside the platform authenticator's secure enclave (Secure Enclave on iOS/macOS, StrongBox on Android, TPM on Windows, dedicated chip on FIDO2 keys). It is also never visible in plaintext memory of the wallet's JS runtime.
 - **Network can't sign alone.** The TEE share is one of two; without the user's passkey-asserted device leg, no Tenzro signature is valid. The network is a co-signer, not a custodian.
 - **OS-native UX.** Onboarding and signing use a passkey ceremony users already understand: Face ID / Touch ID / Windows Hello / a Google prompt. No one writes down 12 words.
@@ -132,7 +132,7 @@ This is governed by the network: every Tenzro RPC node hosts the canonical onboa
 
 #### 4.3.2 Provisioning flow
 
-1. User visits a Tenzro RPC node's onboarding page (e.g. `https://rpc.tenzro.network/wallet/new`) on their phone or laptop.
+1. User visits a Tenzro RPC node's onboarding page (e.g. `https://rpc.tenzro.xyz/wallet/new`) on their phone or laptop.
 2. The page runs a passkey ceremony (`navigator.credentials.create`) bound to the Tenzro-network relying-party id. The platform authenticator generates a passkey credential and returns the `credentialId` + public key.
 3. Server-side, the node TEE generates a fresh Tenzro identity, splits the signing key into 2 shares (this device + node TEE), and returns the device's share **wrapped with a key derived from the passkey assertion** (HKDF over the authenticator's private-key-derived secret, exposed via `largeBlob` extension or PRF extension where available; falls back to wrapping with a server-held key escrowed under the same passkey if the platform doesn't support PRF yet).
 4. The wrapped share is stored in IndexedDB / OS keychain; the unwrap key never leaves the authenticator.

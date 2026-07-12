@@ -2,7 +2,7 @@
  * Full end-to-end testnet harness for the three TDIP identity classes.
  *
  * Exercises everything the wallet kernel will do in production against the
- * live `rpc.tenzro.network` / `api.tenzro.network` endpoints:
+ * live `rpc.tenzro.xyz` / `api.tenzro.xyz` endpoints:
  *
  *   1. HUMAN identity onboard (DPoP-bound JWT + auto-provisioned wallet)
  *   2. DELEGATED AGENT onboard under the human's controller DID
@@ -37,11 +37,11 @@ const env =
   (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env ?? {};
 const RUN_LIVE = env.TENZRO_RUN_LIVE_TESTNET === '1';
 
-const RPC_URL = env.TENZRO_RPC_URL ?? 'https://rpc.tenzro.network';
-const API_URL = env.TENZRO_API_URL ?? 'https://api.tenzro.network';
+const RPC_URL = env.TENZRO_RPC_URL ?? 'https://rpc.tenzro.xyz';
+const API_URL = env.TENZRO_API_URL ?? 'https://api.tenzro.xyz';
 // DPoP `htu` claim. The node currently reconstructs `expected_htu` from its
 // bind address (`http://<rpc_addr>/`), not from the public Caddy-fronted URL,
-// so a request hitting `https://rpc.tenzro.network` is validated against
+// so a request hitting `https://rpc.tenzro.xyz` is validated against
 // `http://0.0.0.0:8545/`. Override with TENZRO_DPOP_HTU when the node grows
 // X-Forwarded-* support.
 const DPOP_HTU = env.TENZRO_DPOP_HTU ?? 'http://0.0.0.0:8545/';
@@ -84,7 +84,7 @@ function b64url(buf: Buffer | Uint8Array): string {
 
 interface DpopProofParams {
   readonly htm: string; // HTTP method, e.g. POST
-  readonly htu: string; // HTTP target URI, e.g. https://rpc.tenzro.network
+  readonly htu: string; // HTTP target URI, e.g. https://rpc.tenzro.xyz
   readonly accessToken?: string; // for `ath` claim if present
 }
 

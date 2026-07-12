@@ -119,7 +119,7 @@ These are load-bearing and apply to every consumer that extends `tenzro-wallet`:
 
 ## Status
 
-Testnet-functional today against the live Tenzro testnet at `rpc.tenzro.network`.
+Testnet-functional today against the live Tenzro testnet at `rpc.tenzro.xyz`.
 
 | Milestone | What | State |
 |---|---|---|

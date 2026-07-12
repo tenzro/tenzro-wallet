@@ -174,9 +174,9 @@ export function App() {
 
       {/* Footer link to web */}
       <div className="border-t border-border-subtle px-4 py-2 flex items-center justify-between">
-        <span className="text-[10px] text-foreground-subtle">v0.1.0 · rpc.tenzro.network</span>
+        <span className="text-[10px] text-foreground-subtle">v0.1.0 · rpc.tenzro.xyz</span>
         <a
-          href="https://wallet.tenzro.network/dashboard"
+          href="https://wallet.tenzro.xyz/dashboard"
           target="_blank"
           rel="noreferrer"
           className="text-[11px] text-foreground-muted hover:text-foreground inline-flex items-center gap-1 transition-colors"

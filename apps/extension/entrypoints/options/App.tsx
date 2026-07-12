@@ -81,7 +81,7 @@ export function App() {
           <CardTitle>Network</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <Row icon={Globe} label="Tenzro RPC" value="rpc.tenzro.network" />
+          <Row icon={Globe} label="Tenzro RPC" value="rpc.tenzro.xyz" />
           <Row icon={Cpu} label="Splice baseline" value="0.5.x · gated" />
           <Row
             icon={Shield}

@@ -80,7 +80,7 @@ export default function LandingPage() {
           <a href="#custody" className="hover:text-foreground transition-colors">
             Custody
           </a>
-          <a href="https://docs.tenzro.network" className="hover:text-foreground transition-colors">
+          <a href="https://docs.tenzro.xyz" className="hover:text-foreground transition-colors">
             Docs
           </a>
         </nav>
@@ -264,7 +264,7 @@ export default function LandingPage() {
               <Link href="/onboarding">Set up custody</Link>
             </Button>
             <Button asChild variant="ghost" size="lg">
-              <Link href="https://docs.tenzro.network/custody">Read the design</Link>
+              <Link href="https://docs.tenzro.xyz/custody">Read the design</Link>
             </Button>
           </div>
         </Card>
@@ -291,7 +291,7 @@ export default function LandingPage() {
               type="button"
               className="hover:text-foreground transition-colors flex items-center gap-1.5"
             >
-              <Cpu className="size-3.5" /> rpc.tenzro.network
+              <Cpu className="size-3.5" /> rpc.tenzro.xyz
             </button>
           </div>
         </div>

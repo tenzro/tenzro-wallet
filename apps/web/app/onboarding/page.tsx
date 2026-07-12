@@ -269,7 +269,7 @@ function IdentityRecap({ onContinue }: { onContinue: () => void }) {
         <h2 className="text-2xl font-semibold tracking-tight mb-2">Provisioning your identity</h2>
         <p className="text-foreground-muted mb-6">
           Calling <code className="font-mono text-foreground">tenzro_onboardHuman</code> on{' '}
-          <code className="font-mono text-foreground">rpc.tenzro.network</code> — this mints your
+          <code className="font-mono text-foreground">rpc.tenzro.xyz</code> — this mints your
           DID, your wallet address, and the DPoP-bound access token in one round-trip.
         </p>
         <div className="rounded-2xl bg-surface-1 border border-border-default p-8 text-center">
@@ -357,7 +357,7 @@ function Done({ onContinue }: { onContinue: () => void }) {
       <h1 className="text-3xl font-semibold tracking-tight mb-3">You&apos;re live on testnet.</h1>
       <p className="text-foreground-muted mb-6 max-w-md mx-auto">
         Your wallet is provisioned on{' '}
-        <code className="font-mono text-foreground">rpc.tenzro.network</code>. Drip TNZO from the
+        <code className="font-mono text-foreground">rpc.tenzro.xyz</code>. Drip TNZO from the
         faucet to start moving — or hop straight to the dashboard.
       </p>
 

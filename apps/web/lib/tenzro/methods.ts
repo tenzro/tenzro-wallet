@@ -1,7 +1,7 @@
 /**
  * Typed wrappers around the Tenzro testnet RPC methods we actually use.
  *
- * Method shapes were probed against the live RPC at rpc.tenzro.network
+ * Method shapes were probed against the live RPC at rpc.tenzro.xyz
  * — names, param positions and result shapes are pinned to whatever
  * the network responds with today. If a method later gains options,
  * extend the wrapper rather than dropping into raw `rpcCall`.

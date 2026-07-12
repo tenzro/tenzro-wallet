@@ -12,13 +12,13 @@ describe('resolveCantonAdapterConfig — tenzro-network', () => {
   it('points both seams at the single base URL and authenticates with the API key', async () => {
     const cfg = resolveCantonAdapterConfig({
       mode: 'tenzro-network',
-      baseUrl: 'https://node.tenzro.network',
+      baseUrl: 'https://node.tenzro.xyz',
       userId: 'tenant@clients',
       apiKey: async () => 'tnz_secret',
     });
 
-    expect(cfg.ledgerBaseUrl).toBe('https://node.tenzro.network');
-    expect(cfg.validatorBaseUrl).toBe('https://node.tenzro.network');
+    expect(cfg.ledgerBaseUrl).toBe('https://node.tenzro.xyz');
+    expect(cfg.validatorBaseUrl).toBe('https://node.tenzro.xyz');
     expect(cfg.userId).toBe('tenant@clients');
 
     const headers = await cfg.authHeaders?.();
@@ -28,7 +28,7 @@ describe('resolveCantonAdapterConfig — tenzro-network', () => {
   it('fails closed if token() is ever consulted', async () => {
     const cfg = resolveCantonAdapterConfig({
       mode: 'tenzro-network',
-      baseUrl: 'https://node.tenzro.network',
+      baseUrl: 'https://node.tenzro.xyz',
       userId: 'tenant@clients',
       apiKey: async () => 'tnz_secret',
     });
@@ -40,7 +40,7 @@ describe('resolveCantonAdapterConfig — tenzro-network', () => {
     const f = (() => undefined) as unknown as typeof fetch;
     const cfg = resolveCantonAdapterConfig({
       mode: 'tenzro-network',
-      baseUrl: 'https://node.tenzro.network',
+      baseUrl: 'https://node.tenzro.xyz',
       userId: 'tenant@clients',
       apiKey: async () => 'tnz_secret',
       fetch: f,

@@ -31,7 +31,7 @@ export const metadata: Metadata = {
     'The official wallet for the Tenzro Ledger and Network. Native, EVM, SVM, and Canton — under one TDIP identity, with passkey-quorum custody and an agentic stack built in.',
   applicationName: 'Tenzro Wallet',
   authors: [{ name: 'Tenzro' }],
-  metadataBase: new URL('https://wallet.tenzro.network'),
+  metadataBase: new URL('https://wallet.tenzro.xyz'),
   openGraph: {
     title: 'Tenzro Wallet',
     description: 'One wallet. Four surfaces. No seed phrases. Built for the agentic web.',

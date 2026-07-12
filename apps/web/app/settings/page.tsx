@@ -81,7 +81,7 @@ export default function SettingsPage() {
           <CardTitle>Network</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <Row icon={Globe} label="Tenzro RPC" value="rpc.tenzro.network · testnet" />
+          <Row icon={Globe} label="Tenzro RPC" value="rpc.tenzro.xyz · testnet" />
           <Row icon={Cpu} label="Splice baseline" value="0.5.x (gated · post-2026-05-05)" />
           <Row
             icon={Shield}

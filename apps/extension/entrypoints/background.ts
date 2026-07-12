@@ -69,7 +69,7 @@ async function dispatch(method: string, params: unknown[] = []): Promise<unknown
       return {
         version: '0.0.0',
         surfaces: ['native', 'evm', 'svm', 'canton'],
-        rpc: 'https://rpc.tenzro.network',
+        rpc: 'https://rpc.tenzro.xyz',
       };
     case 'eth_chainId':
       return '0x7a69'; // Tenzro EVM testnet placeholder

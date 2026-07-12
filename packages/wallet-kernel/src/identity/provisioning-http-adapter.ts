@@ -43,7 +43,7 @@ import type {
 } from './wallet-new.ts';
 
 export interface ProvisioningHttpConfig {
-  /** Base URL of the Tenzro RPC node, e.g. `https://rpc.tenzro.network`. */
+  /** Base URL of the Tenzro RPC node, e.g. `https://rpc.tenzro.xyz`. */
   readonly baseUrl: string;
   /** Optional `fetch` override for tests. */
   readonly fetch?: typeof fetch;

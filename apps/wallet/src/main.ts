@@ -29,7 +29,7 @@ import { mountOnboarding } from './ui/onboarding.ts';
 /**
  * What the embedder must supply. The kernel orchestrators reach the
  * Tenzro RPC node through these ports — the embedder picks the transport
- * (e.g. `fetch` against `https://rpc.tenzro.network/wallet/*`).
+ * (e.g. `fetch` against `https://rpc.tenzro.xyz/wallet/*`).
  *
  * `enroller` wraps `navigator.credentials.create()` and is mode-agnostic.
  * The kernel ships `WebAuthnAuthenticatorAdapter` for the *get* (assertion)
@@ -128,7 +128,7 @@ export async function startWalletApp(opts: WalletAppOptions): Promise<{
  * / origin behaviour.
  *
  * `rpId` must match the WebAuthn RP id pinned at enrol time — usually the
- * wallet's apex domain (e.g. `'wallet.tenzro.network'`).
+ * wallet's apex domain (e.g. `'wallet.tenzro.xyz'`).
  */
 export function defaultPasskeyAuthenticator(args: {
   readonly rpId: string;

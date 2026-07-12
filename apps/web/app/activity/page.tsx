@@ -51,7 +51,7 @@ export default function ActivityPage() {
       <section className="space-y-2">
         <div className="flex items-center justify-between px-1">
           <h2 className="text-sm font-semibold tracking-tight">
-            Live testnet · rpc.tenzro.network
+            Live testnet · rpc.tenzro.xyz
           </h2>
           <Badge variant="success" size="xs" dot>
             Real-time

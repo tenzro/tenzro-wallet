@@ -26,7 +26,7 @@ import {
   ShareEnvelopeHttpAdapter,
 } from 'tenzro-wallet';
 
-const baseUrl = 'https://rpc.tenzro.network';
+const baseUrl = 'https://rpc.tenzro.xyz';
 
 // Embedder builds the HTTP adapters against the live /wallet/* endpoints.
 const provisioning = /* HTTP adapter targeting /wallet/new/* */;

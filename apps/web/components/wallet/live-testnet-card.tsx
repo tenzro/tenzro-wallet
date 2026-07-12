@@ -127,7 +127,7 @@ export function LiveTestnetCard() {
             Live testnet
           </Badge>
           <span className="text-xs text-foreground-subtle ml-auto font-mono">
-            rpc.tenzro.network
+            rpc.tenzro.xyz
           </span>
         </div>
 

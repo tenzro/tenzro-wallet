@@ -55,7 +55,7 @@ Cross-VM moves *on Tenzro* (the first three columns) are pointer ops through a p
 
 ## Status
 
-The kernel is testnet-functional today against the live Tenzro testnet at `rpc.tenzro.network`. Production readiness is **gated on M4b** (Canton MainNet surface, post-Splice 0.5.x baseline). See `docs/DESIGN.md §10` for the full milestone table.
+The kernel is testnet-functional today against the live Tenzro testnet at `rpc.tenzro.xyz`. Production readiness is **gated on M4b** (Canton MainNet surface, post-Splice 0.5.x baseline). See `docs/DESIGN.md §10` for the full milestone table.
 
 | Milestone | What | State |
 |---|---|---|
@@ -176,7 +176,7 @@ Smokes skip cleanly when their env vars are absent (so CI stays green). To run t
 # ─── Tenzro RPC ──────────────────────────────────────────────────────────────
 # Base URL for the Tenzro JSON-RPC node (multi-VM ledger: native / EVM / SVM).
 # Defaults to the public testnet; self-hosted nodes work too.
-TENZRO_RPC_URL=https://rpc.tenzro.network
+TENZRO_RPC_URL=https://rpc.tenzro.xyz
 
 # DPoP-bound bearer JWT issued by Tenzro auth. Required by the native-VM
 # `testnet.test.ts` smoke (the EVM/SVM smokes are read-only and don't need it).

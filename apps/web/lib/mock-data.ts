@@ -338,7 +338,7 @@ export const DAPPS: DAppConnection[] = [
   },
   {
     id: 'd3',
-    origin: 'https://dops.tenzro.network',
+    origin: 'https://dops.tenzro.xyz',
     name: 'Tenzro DOPS',
     caip25Scope: 'tenzro:native,eip155:tenzro,svm:tenzro',
     chains: ['tenzro', 'tenzro-evm', 'tenzro-svm'],
