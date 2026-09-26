@@ -296,6 +296,7 @@ function serializeForSubmit(body: EvmBody | EvmPointerBody, signature: Uint8Arra
   return serializeSigned(toEip1559(body), splitSignature(signature));
 }
 
+/** Unit-test default only; real builds inject an RPC port and read the chain id from the node. */
 function mockRpc(): NonNullable<EvmOnTenzroDeps['rpc']> {
   return {
     getNonce: async () => 0,

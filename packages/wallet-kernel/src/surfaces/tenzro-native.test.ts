@@ -1,226 +1,236 @@
 /**
- * The surface module's contract is "drive the port for prepare/submit, drive
- * the signing-driver for sign". This test pins both: a fake TenzroRpcPort
- * captures every call, the deterministic mock SigningDriver from M1 stays in
- * place. The kernel-level e2e in kernel.test.ts is the higher-level smoke
- * test; this is the seam-level one.
+ * The surface's contract: read nonce / chain id / EntryPoint / gas price from
+ * the port during prepare, hand the UserOperation hash to the signing driver,
+ * submit the signed operation, and watch its receipt. A fake port records
+ * every call; a recording driver stands in for the passkey.
  */
 
 import { describe, expect, it } from 'vitest';
-import { internalMpcDriver } from '../custody/internal-mpc.ts';
-import { provisionIdentity } from '../identity/provision.ts';
-import type { TenzroRpcPort, TenzroSendArgs } from '../ports/tenzro-rpc.ts';
-import type { Intent } from '../types/intent.ts';
+import { fromHex, toHex } from '../custody/passkey/bytes.ts';
+import { type UserOperation, userOperationHash } from '../custody/passkey/userop.ts';
+import { testSigningDriver } from '../custody/test-driver.ts';
+import { testIdentity } from '../identity/test-identity.ts';
+import type { TenzroRpcPort } from '../ports/tenzro-rpc.ts';
+import type { Intent, TxStatus } from '../types/intent.ts';
+import type { SigningDriver, SigningRequest } from '../types/signing-driver.ts';
 import { tenzroNativeSurface } from './tenzro-native.ts';
 
-interface FakePortLog {
-  readonly nonceLookups: string[];
-  readonly chainIdLookups: number;
-  readonly sends: TenzroSendArgs[];
+const ENTRY_POINT = '0x0000000000000000000000000000000000004337';
+const RECIPIENT = '0x1111111111111111111111111111111111111111';
+
+interface PortLog {
+  nonceLookups: string[];
+  chainIdLookups: number;
+  sent: Array<{ op: Readonly<Record<string, string>>; entryPoint: string }>;
 }
 
-function fakePort(): { port: TenzroRpcPort; log: FakePortLog } {
-  const log = {
-    nonceLookups: [] as string[],
-    chainIdLookups: 0,
-    sends: [] as TenzroSendArgs[],
-  };
+function fakePort(receiptSuccess = true): { port: TenzroRpcPort; log: PortLog } {
+  const log: PortLog = { nonceLookups: [], chainIdLookups: 0, sent: [] };
   const port: TenzroRpcPort = {
-    getNonce: async (address) => {
-      log.nonceLookups.push(address);
-      return 42;
+    getAccountNonce: async (account) => {
+      log.nonceLookups.push(account);
+      return 42n;
     },
     getChainId: async () => {
       log.chainIdLookups += 1;
-      return 1337;
+      return 20_260_901n;
     },
-    sendTransaction: async (args) => {
-      log.sends.push(args);
-      return '0xfeedface';
+    getEntryPoint: async () => ENTRY_POINT,
+    getGasPrice: async () => 1_000_000_000n,
+    sendUserOperation: async (op, entryPoint) => {
+      log.sent.push({ op, entryPoint });
+      return `0x${'ab'.repeat(32)}`;
     },
-    getTransaction: async () => null,
+    getUserOperationReceipt: async (hash) => ({ userOpHash: hash, success: receiptSuccess }),
   };
   return { port, log };
 }
 
-describe('tenzroNativeSurface', () => {
-  it('reads nonce and chainId via the port during prepare', async () => {
-    const identity = await provisionIdentity({ uuid: 'native-port-1' });
+function recordingDriver(): { driver: SigningDriver; requests: SigningRequest[] } {
+  const requests: SigningRequest[] = [];
+  return {
+    requests,
+    driver: {
+      id: 'test',
+      async sign(req) {
+        requests.push(req);
+        return { signatures: [new Uint8Array([1, 2, 3])] };
+      },
+    },
+  };
+}
+
+async function sendIntent(uuid: string, amount = 1n) {
+  const identity = await testIdentity({ uuid });
+  const intent: Intent = {
+    kind: 'send',
+    from: identity.did,
+    to: { kind: 'evm', address: RECIPIENT as `0x${string}` },
+    asset: { scope: 'tenzro-native', symbol: 'TNZO', decimals: 18 },
+    amount,
+  };
+  return { identity, intent };
+}
+
+describe('tenzroNativeSurface (passkey account)', () => {
+  it('reads nonce, chain id, EntryPoint and gas price from the node during prepare', async () => {
+    const { identity, intent } = await sendIntent('native-1');
     const { port, log } = fakePort();
     const surface = tenzroNativeSurface({
       keyResolver: () => identity.keys.get('tenzro-native'),
-      signingDriver: internalMpcDriver(),
+      signingDriver: testSigningDriver(),
       rpc: port,
     });
-
-    const intent: Intent = {
-      kind: 'send',
-      from: identity.did,
-      to: { kind: 'tdip', did: identity.did },
-      asset: { scope: 'tenzro-native', symbol: 'TNZO', decimals: 18 },
-      amount: 1n,
-    };
-
-    await surface.prepare(intent);
-    expect(log.nonceLookups).toHaveLength(1);
+    const prepared = await surface.prepare(intent);
+    const key = identity.keys.get('tenzro-native');
+    if (!key || key.surface !== 'tenzro-native') throw new Error('unreachable');
+    expect(log.nonceLookups).toEqual([key.address]);
     expect(log.chainIdLookups).toBe(1);
+    expect(prepared.route).toEqual({ kind: 'native', surface: 'tenzro-native' });
+    // (100k + 500k + 50k) gas at 1 gwei.
+    expect(prepared.fees[0]?.amount).toBe(650_000n * 1_000_000_000n);
   });
 
-  it('forwards canonical send args to port.sendTransaction on submit', async () => {
-    const identity = await provisionIdentity({ uuid: 'native-port-2' });
+  it('signs the EIP-712 UserOperation hash with the passkey scheme', async () => {
+    const { identity, intent } = await sendIntent('native-2', 5n * 10n ** 18n);
+    const { port } = fakePort();
+    const { driver, requests } = recordingDriver();
+    const surface = tenzroNativeSurface({
+      keyResolver: () => identity.keys.get('tenzro-native'),
+      signingDriver: driver,
+      rpc: port,
+    });
+    const prepared = await surface.prepare(intent);
+    await surface.sign(prepared, { approvedAt: Date.now() });
+
+    expect(requests).toHaveLength(1);
+    const req = requests[0]!;
+    expect(req.scheme).toBe('webauthn-p256+ml-dsa-65');
+    const body = prepared.body as { userOp: UserOperation };
+    expect(toHex(req.preimage, true)).toBe(
+      toHex(userOperationHash(body.userOp, 20_260_901n, ENTRY_POINT), true),
+    );
+  });
+
+  it('submits execute(to, value) calldata with the signature bundle', async () => {
+    const amount = 5n * 10n ** 18n;
+    const { identity, intent } = await sendIntent('native-3', amount);
     const { port, log } = fakePort();
     const surface = tenzroNativeSurface({
       keyResolver: () => identity.keys.get('tenzro-native'),
-      signingDriver: internalMpcDriver(),
+      signingDriver: recordingDriver().driver,
       rpc: port,
     });
-
-    const amount = 5n * 10n ** 18n;
-    const intent: Intent = {
-      kind: 'send',
-      from: identity.did,
-      to: { kind: 'tdip', did: identity.did },
-      asset: { scope: 'tenzro-native', symbol: 'TNZO', decimals: 18 },
-      amount,
-    };
     const prepared = await surface.prepare(intent);
     const signed = await surface.sign(prepared, { approvedAt: Date.now() });
     const handle = await surface.submit(signed);
 
-    expect(handle.surface).toBe('tenzro-native');
-    expect(log.sends).toHaveLength(1);
-    const sent = log.sends[0]!;
-    expect(sent.value).toBe(amount);
-    expect(sent.nonce).toBe(42);
-    expect(sent.chainId).toBe(1337);
-    // `from` and `to` should be the resolved Base58 tenzro-native addresses,
-    // not the DIDs themselves.
-    expect(sent.from).toMatch(/^[1-9A-HJ-NP-Za-km-z]+$/);
-    expect(sent.to).toMatch(/^[1-9A-HJ-NP-Za-km-z]+$/);
+    expect(handle.hash).toBe(`0x${'ab'.repeat(32)}`);
+    expect(log.sent).toHaveLength(1);
+    const { op, entryPoint } = log.sent[0]!;
+    expect(entryPoint).toBe(ENTRY_POINT);
+    expect(op.nonce).toBe('0x2a');
+    expect(op.signature).toBe('0x010203');
+    const callData = fromHex(op.callData ?? '');
+    expect(toHex(callData.slice(0, 4))).toBe('b61d27f6');
+    expect(toHex(callData.slice(16, 36), true)).toBe(RECIPIENT);
+    expect(BigInt(toHex(callData.slice(36, 68), true))).toBe(amount);
   });
 
-  it('still produces hybrid signatures from the local signing driver (M2 retains the leg for M5)', async () => {
-    const identity = await provisionIdentity({ uuid: 'native-port-3' });
-    const { port } = fakePort();
+  it('refuses a send to the account itself', async () => {
+    const identity = await testIdentity({ uuid: 'native-4' });
     const surface = tenzroNativeSurface({
       keyResolver: () => identity.keys.get('tenzro-native'),
-      signingDriver: internalMpcDriver(),
-      rpc: port,
+      signingDriver: testSigningDriver(),
+      rpc: fakePort().port,
     });
-    const intent: Intent = {
-      kind: 'send',
-      from: identity.did,
-      to: { kind: 'tdip', did: identity.did },
-      asset: { scope: 'tenzro-native', symbol: 'TNZO', decimals: 18 },
-      amount: 1n,
-    };
-    const prepared = await surface.prepare(intent);
-    const signed = await surface.sign(prepared, { approvedAt: Date.now() });
-    expect(signed.signatures).toHaveLength(2);
+    await expect(
+      surface.prepare({
+        kind: 'send',
+        from: identity.did,
+        to: { kind: 'tdip', did: identity.did },
+        asset: { scope: 'tenzro-native', symbol: 'TNZO', decimals: 18 },
+        amount: 1n,
+      }),
+    ).rejects.toThrow(/your own account/);
   });
 
-  it('reads the on-chain address straight from the resolved SurfaceKey', async () => {
-    const identity = await provisionIdentity({ uuid: 'native-port-4' });
-    const { port, log } = fakePort();
-    const surface = tenzroNativeSurface({
-      keyResolver: () => identity.keys.get('tenzro-native'),
-      signingDriver: internalMpcDriver(),
-      rpc: port,
-    });
-    const intent: Intent = {
-      kind: 'send',
-      from: identity.did,
-      to: { kind: 'tdip', did: identity.did },
-      asset: { scope: 'tenzro-native', symbol: 'TNZO', decimals: 18 },
-      amount: 1n,
-    };
-    const prepared = await surface.prepare(intent);
-    const signed = await surface.sign(prepared, { approvedAt: Date.now() });
-    await surface.submit(signed);
-    const nativeKey = identity.keys.get('tenzro-native');
-    if (!nativeKey || nativeKey.surface !== 'tenzro-native') throw new Error('unreachable');
-    expect(log.sends[0]?.from).toBe(nativeKey.address);
-    expect(log.sends[0]?.to).toBe(nativeKey.address);
-  });
-
-  it('refuses to resolve a remote TDIP recipient when no identity port is wired', async () => {
-    const me = await provisionIdentity({ uuid: 'native-port-5-self' });
-    const them = await provisionIdentity({ uuid: 'native-port-5-other' });
-    const { port } = fakePort();
-    const surface = tenzroNativeSurface({
-      keyResolver: (did) => (did === me.did ? me.keys.get('tenzro-native') : undefined),
-      signingDriver: internalMpcDriver(),
-      rpc: port,
-    });
-    const intent: Intent = {
-      kind: 'send',
-      from: me.did,
-      to: { kind: 'tdip', did: them.did },
-      asset: { scope: 'tenzro-native', symbol: 'TNZO', decimals: 18 },
-      amount: 1n,
-    };
-    await expect(surface.prepare(intent)).rejects.toThrow(/no identity port wired/);
-  });
-
-  it('resolves a remote TDIP recipient via the identity port and forwards the address to sendTransaction', async () => {
-    const me = await provisionIdentity({ uuid: 'native-port-6-self' });
-    const them = await provisionIdentity({ uuid: 'native-port-6-other' });
-    const themKey = them.keys.get('tenzro-native');
-    if (!themKey || themKey.surface !== 'tenzro-native') throw new Error('unreachable');
-    const remoteAddress = themKey.address;
-
+  it('resolves a remote TDIP recipient through the identity port', async () => {
+    const me = await testIdentity({ uuid: 'native-5-self' });
+    const them = await testIdentity({ uuid: 'native-5-other' });
     const lookups: string[] = [];
     const { port, log } = fakePort();
     const surface = tenzroNativeSurface({
       keyResolver: (did) => (did === me.did ? me.keys.get('tenzro-native') : undefined),
-      signingDriver: internalMpcDriver(),
+      signingDriver: recordingDriver().driver,
       rpc: port,
       identityPort: {
         async resolveTenzroAddress(did) {
           lookups.push(did);
-          return did === them.did ? remoteAddress : undefined;
+          // A 32-byte widened address resolves to its low 20 bytes.
+          return `0x${'00'.repeat(12)}${RECIPIENT.slice(2)}`;
         },
       },
     });
-    const intent: Intent = {
+    const prepared = await surface.prepare({
       kind: 'send',
       from: me.did,
       to: { kind: 'tdip', did: them.did },
       asset: { scope: 'tenzro-native', symbol: 'TNZO', decimals: 18 },
       amount: 7n,
-    };
-    const prepared = await surface.prepare(intent);
-    const signed = await surface.sign(prepared, { approvedAt: Date.now() });
-    await surface.submit(signed);
-
-    // The port was consulted exactly once for the recipient — never for `me`,
-    // because the local keyResolver hit serves the sender path without an
-    // await round-trip.
+    });
+    await surface.submit(await surface.sign(prepared, { approvedAt: Date.now() }));
     expect(lookups).toEqual([them.did]);
-    expect(log.sends[0]?.to).toBe(remoteAddress);
+    const callData = fromHex(log.sent[0]?.op.callData ?? '');
+    expect(toHex(callData.slice(16, 36), true)).toBe(RECIPIENT);
   });
 
-  it('throws when the identity port returns undefined (DID has no tenzro-native key)', async () => {
-    const me = await provisionIdentity({ uuid: 'native-port-7-self' });
-    const cantonOnly = await provisionIdentity({ uuid: 'native-port-7-canton-only' });
-    const { port } = fakePort();
+  it('refuses a remote TDIP recipient when no identity port is wired', async () => {
+    const me = await testIdentity({ uuid: 'native-6-self' });
+    const them = await testIdentity({ uuid: 'native-6-other' });
     const surface = tenzroNativeSurface({
       keyResolver: (did) => (did === me.did ? me.keys.get('tenzro-native') : undefined),
-      signingDriver: internalMpcDriver(),
-      rpc: port,
-      identityPort: {
-        async resolveTenzroAddress() {
-          return undefined;
-        },
-      },
+      signingDriver: testSigningDriver(),
+      rpc: fakePort().port,
     });
-    const intent: Intent = {
-      kind: 'send',
-      from: me.did,
-      to: { kind: 'tdip', did: cantonOnly.did },
-      asset: { scope: 'tenzro-native', symbol: 'TNZO', decimals: 18 },
-      amount: 1n,
-    };
-    await expect(surface.prepare(intent)).rejects.toThrow(/has no tenzro-native key/);
+    await expect(
+      surface.prepare({
+        kind: 'send',
+        from: me.did,
+        to: { kind: 'tdip', did: them.did },
+        asset: { scope: 'tenzro-native', symbol: 'TNZO', decimals: 18 },
+        amount: 1n,
+      }),
+    ).rejects.toThrow(/identityPort/);
+  });
+
+  it('watch() walks created, pending, finalized from the receipt', async () => {
+    const { identity, intent } = await sendIntent('native-7');
+    const surface = tenzroNativeSurface({
+      keyResolver: () => identity.keys.get('tenzro-native'),
+      signingDriver: recordingDriver().driver,
+      rpc: fakePort().port,
+      watch: { intervalMs: 1, timeoutMs: 1_000 },
+    });
+    const prepared = await surface.prepare(intent);
+    const handle = await surface.submit(await surface.sign(prepared, { approvedAt: Date.now() }));
+    const phases: TxStatus['phase'][] = [];
+    for await (const s of surface.watch(handle)) phases.push(s.phase);
+    expect(phases).toEqual(['created', 'pending', 'finalized']);
+  });
+
+  it('watch() reports a reverted operation as failed', async () => {
+    const { identity, intent } = await sendIntent('native-8');
+    const surface = tenzroNativeSurface({
+      keyResolver: () => identity.keys.get('tenzro-native'),
+      signingDriver: recordingDriver().driver,
+      rpc: fakePort(false).port,
+      watch: { intervalMs: 1, timeoutMs: 1_000 },
+    });
+    const prepared = await surface.prepare(intent);
+    const handle = await surface.submit(await surface.sign(prepared, { approvedAt: Date.now() }));
+    const phases: TxStatus['phase'][] = [];
+    for await (const s of surface.watch(handle)) phases.push(s.phase);
+    expect(phases.at(-1)).toBe('failed');
   });
 });

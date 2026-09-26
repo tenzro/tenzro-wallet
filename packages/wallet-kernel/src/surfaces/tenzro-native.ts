@@ -1,26 +1,29 @@
 /**
- * Tenzro native surface — the canonical TNZO ledger. Hybrid signing
- * (Ed25519 + ML-DSA-65) per https://tenzro.com/docs/wallet-sdk.
+ * Tenzro native surface — TNZO on the Tenzro Ledger, from a person's passkey
+ * smart account.
  *
- * M2 path (current):
- *   prepare → sign (local placeholder) → submit (server-side hybrid signing
- *   via `tenzro_signAndSendTransaction`, see TenzroRpcPort.sendTransaction).
+ *   prepare  builds an ERC-4337 v0.8 UserOperation calling the account's
+ *            `execute(to, value, data)`, with the nonce, gas price, chain id
+ *            and EntryPoint read from the node, and computes its hash;
+ *   sign     hands the 32-byte hash to the signing driver: the passkey signs
+ *            it on the device (user verification required) and the ML-DSA-65
+ *            key derived from the passkey signs the same hash;
+ *   submit   `eth_sendUserOperation`;
+ *   watch    `eth_getUserOperationReceipt`.
  *
- * M5 path (future):
- *   sign() runs the FROST-Ed25519 device-leg with a passkey assertion;
- *   submit() sends the local share + assertion to the node, which combines
- *   with the TEE share and the ML-DSA leg. Same surface contract; the
- *   signing driver gets swapped under the kernel.
- *
- * The signing-driver call here is retained so the M1 mock test continues to
- * exercise the threshold-share collection abstraction. Its output is not
- * consumed by `submit()` in M2 (the node signs server-side); it will be
- * consumed in M5.
+ * The node never holds a key for the account and never signs for it.
  */
 
-import { type CrossVmPointerOp, dustResidual, truncateForView } from '../ports/cross-vm.ts';
+import { fromHex, toHex } from '../custody/passkey/bytes.ts';
+import {
+  DEFAULT_USER_OP_GAS,
+  type UserOperation,
+  encodeExecuteCall,
+  userOperationHash,
+  userOperationToJson,
+} from '../custody/passkey/userop.ts';
 import type { TenzroIdentityPort } from '../ports/tenzro-identity.ts';
-import type { TenzroRpcPort, TenzroTxStatus } from '../ports/tenzro-rpc.ts';
+import type { TenzroRpcPort, UserOperationReceipt } from '../ports/tenzro-rpc.ts';
 import type { Consent } from '../types/consent.ts';
 import type { SurfaceKey, TdipDid } from '../types/identity.ts';
 import type { Intent, PreparedTx, SignedTx, TxHandle, TxStatus } from '../types/intent.ts';
@@ -29,56 +32,41 @@ import type { SurfaceModule } from '../types/surface-module.ts';
 import { makeHandle } from './util.ts';
 
 interface TenzroNativeBody {
-  readonly kind: 'tenzro-native-send';
+  readonly kind: 'tenzro-native-userop';
   readonly from: TdipDid;
   readonly fromAddress: string;
   readonly toDid?: TdipDid;
   readonly toAddress: string;
   readonly amount: bigint;
   readonly assetSymbol: string;
-  readonly nonce: number;
-  readonly chainId: number;
-}
-
-/**
- * Cross-VM pointer op originating from the canonical Tenzro-native VM. The
- * native runtime exposes this as a `crossvm_pointer_move` syscall — the body
- * is structurally identical to a send except `kind` and that destination
- * is a surface tag, not an address. M3 stores the structured payload; the
- * server-side path on `submit()` already accepts this shape via the
- * existing `tenzro_signAndSendTransaction` envelope.
- */
-interface TenzroNativePointerBody {
-  readonly kind: 'tenzro-native-pointer';
-  readonly from: TdipDid;
-  readonly fromAddress: string;
-  readonly nonce: number;
-  readonly chainId: number;
-  readonly pointer: CrossVmPointerOp;
+  readonly chainId: bigint;
+  readonly entryPoint: string;
+  readonly userOp: UserOperation;
+  /** The hash the passkey signs, `0x` hex. */
+  readonly userOpHash: string;
 }
 
 export interface TenzroNativeDeps {
-  /** Resolves the surface key (with on-chain address) for a given DID. */
+  /** Resolves the surface key (the passkey smart account) for a given DID. */
   readonly keyResolver: (did: TdipDid) => SurfaceKey | undefined;
+  /** Normally `passkeySigningDriver(...)`. */
   readonly signingDriver: SigningDriver;
+  /** Real builds inject `TenzroJsonRpcAdapter`; tests inject a fake. */
+  readonly rpc: TenzroRpcPort;
   /**
-   * Tenzro RPC port. Real builds inject `TenzroSdkAdapter.fromClient(...)`;
-   * tests inject an in-memory fake. Optional only because the M1 smoke tests
-   * exercise the abstraction without a node — defaults to a stub that returns
-   * deterministic placeholders.
-   */
-  readonly rpc?: TenzroRpcPort;
-  /**
-   * Optional remote identity port. Used only when a recipient DID is *not*
-   * the user's own (i.e., not in `keyResolver`'s local cache). Without it,
-   * sends to non-self DIDs throw — useful in tests and offline-first builds
-   * where every DID is locally known.
+   * Optional remote identity port, used when a recipient DID is not the
+   * user's own. Without it, sends to other DIDs throw.
    */
   readonly identityPort?: TenzroIdentityPort;
+  /** Gas limits for the operation. Defaults suit a plain value transfer. */
+  readonly gas?: Partial<typeof DEFAULT_USER_OP_GAS>;
+  /** Receipt polling. Defaults: 500 ms interval, 60 s timeout. */
+  readonly watch?: { readonly intervalMs?: number; readonly timeoutMs?: number };
 }
 
 export function tenzroNativeSurface(deps: TenzroNativeDeps): SurfaceModule {
-  const rpc = deps.rpc ?? stubRpc();
+  const rpc = deps.rpc;
+  const gas = { ...DEFAULT_USER_OP_GAS, ...(deps.gas ?? {}) };
 
   return {
     name: 'tenzro-native',
@@ -89,27 +77,45 @@ export function tenzroNativeSurface(deps: TenzroNativeDeps): SurfaceModule {
       }
       const fromKey = deps.keyResolver(intent.from);
       if (!fromKey || fromKey.surface !== 'tenzro-native') {
-        throw new Error(`no tenzro-native key for ${intent.from}`);
+        throw new Error(`no tenzro-native account for ${intent.from}`);
       }
-      const fromAddress = fromKey.address;
-      const nonce = await rpc.getNonce(fromAddress);
-      const chainId = await rpc.getChainId();
-      const toAddress = await resolveRecipientAddress(
-        intent.to,
-        deps.keyResolver,
-        deps.identityPort,
+      const toAddress = executeTarget(
+        await resolveRecipientAddress(intent.to, deps.keyResolver, deps.identityPort),
       );
+      if (toAddress === normalizeAddress(fromKey.address)) {
+        throw new Error('cannot send to your own account');
+      }
+      const [nonce, chainId, entryPoint, gasPrice] = await Promise.all([
+        rpc.getAccountNonce(fromKey.address),
+        rpc.getChainId(),
+        rpc.getEntryPoint(),
+        rpc.getGasPrice(),
+      ]);
+
+      const userOp: UserOperation = {
+        sender: fromKey.address,
+        nonce,
+        callData: encodeExecuteCall(toAddress, intent.amount),
+        callGasLimit: gas.callGasLimit,
+        verificationGasLimit: gas.verificationGasLimit,
+        preVerificationGas: gas.preVerificationGas,
+        maxFeePerGas: gasPrice,
+        maxPriorityFeePerGas: gasPrice,
+      };
+      const hash = userOperationHash(userOp, chainId, entryPoint);
 
       const body: TenzroNativeBody = {
-        kind: 'tenzro-native-send',
+        kind: 'tenzro-native-userop',
         from: intent.from,
-        fromAddress,
+        fromAddress: fromKey.address,
         ...(intent.to.kind === 'tdip' ? { toDid: intent.to.did } : {}),
         toAddress,
         amount: intent.amount,
         assetSymbol: intent.asset.symbol,
-        nonce,
         chainId,
+        entryPoint,
+        userOp,
+        userOpHash: toHex(hash, true),
       };
 
       return {
@@ -118,132 +124,70 @@ export function tenzroNativeSurface(deps: TenzroNativeDeps): SurfaceModule {
         fees: [
           {
             asset: intent.asset,
-            // M2: 21000 gas × 1 gwei placeholder; real estimate via
-            // node-side gas oracle lands when the SDK exposes one.
-            amount: 21_000n * 1_000_000_000n,
-            label: 'tenzro gas',
+            amount:
+              (gas.callGasLimit + gas.verificationGasLimit + gas.preVerificationGas) * gasPrice,
+            label: 'network fee (maximum)',
           },
         ],
-        etaMs: 500,
+        etaMs: 2_000,
         reversibility: 'final-on-submit',
         warnings: [],
         body,
       };
     },
 
-    async preparePointer(intent: Intent, op: CrossVmPointerOp): Promise<PreparedTx> {
-      if (intent.kind !== 'send') {
-        throw new Error(`unsupported intent on tenzro-native: ${intent.kind}`);
-      }
-      const fromKey = deps.keyResolver(intent.from);
-      if (!fromKey || fromKey.surface !== 'tenzro-native') {
-        throw new Error(`no tenzro-native key for ${intent.from}`);
-      }
-      const [nonce, chainId] = await Promise.all([rpc.getNonce(fromKey.address), rpc.getChainId()]);
-
-      const body: TenzroNativePointerBody = {
-        kind: 'tenzro-native-pointer',
-        from: intent.from,
-        fromAddress: fromKey.address,
-        nonce,
-        chainId,
-        pointer: op,
-      };
-
-      const dust = dustResidual(op.amount, op.toSurface);
-      const truncated = truncateForView(op.amount, op.toSurface);
-      const warnings: string[] = [];
-      if (dust > 0n) {
-        warnings.push(
-          `${dust.toString()} sub-units below ${op.toSurface} precision will ` +
-            `not appear in the destination view; ${truncated.toString()} ` +
-            `canonical units will move`,
-        );
-      }
-
-      return {
-        route: {
-          kind: 'cross-vm-pointer',
-          fromSurface: 'tenzro-native',
-          toSurface: op.toSurface,
-          precompile: '0x1003',
-        },
-        intent,
-        fees: [
-          {
-            asset: intent.asset,
-            amount: 21_000n * 1_000_000_000n,
-            label: 'tenzro gas (pointer call)',
-          },
-        ],
-        etaMs: 500,
-        reversibility: 'final-on-submit',
-        warnings,
-        body,
-      };
-    },
-
     async sign(prepared: PreparedTx, _consent: Consent): Promise<SignedTx> {
-      const body = prepared.body as TenzroNativeBody | TenzroNativePointerBody;
+      const body = prepared.body as TenzroNativeBody;
       const surfaceKey = deps.keyResolver(body.from);
       if (!surfaceKey || surfaceKey.surface !== 'tenzro-native') {
-        throw new Error(`no tenzro-native key for ${body.from}`);
+        throw new Error(`no tenzro-native account for ${body.from}`);
       }
-      const preimage = canonicalize(body);
-      // M2: the signing driver still runs (so the M1 test fixture keeps
-      // working and the consent/policy gate stays at the kernel-level
-      // sign() boundary). In M5 the driver becomes a real FROST-Ed25519
-      // device-leg + passkey assertion, and `submit()` forwards that to
-      // the node along with the canonical body for TEE-side completion.
       const result = await deps.signingDriver.sign({
         did: body.from,
         surfaceKey,
-        scheme: 'ed25519+ml-dsa-65',
-        preimage,
-        purpose:
-          body.kind === 'tenzro-native-pointer' ? 'tenzro-native-pointer' : 'tenzro-native-send',
+        scheme: 'webauthn-p256+ml-dsa-65',
+        preimage: fromHex(body.userOpHash),
+        purpose: 'tenzro-native-send',
       });
-      return { prepared, signatures: result.signatures, body };
+      const bundle = result.signatures[0];
+      if (!bundle || result.signatures.length !== 1) {
+        throw new Error('the signing driver must return one signature bundle');
+      }
+      return { prepared, signatures: [bundle], body };
     },
 
     async submit(signed: SignedTx): Promise<TxHandle> {
-      const body = signed.body as TenzroNativeBody | TenzroNativePointerBody;
-      // M2: server-side hybrid signing path. The kernel's local signature
-      // shares are not yet wire-bound; the SDK's DPoP-asserted session is
-      // the auth boundary. M5 wires the local Ed25519 leg + passkey
-      // assertion through to the node here.
-      //
-      // M3: pointer ops also flow through `sendTransaction` for now — the
-      // node's RPC will branch on the body's `kind` to invoke the
-      // `crossvm_pointer_move` syscall instead of value-transfer settlement.
-      // When the SDK adds a dedicated pointer endpoint this branches.
-      const sendArgs =
-        body.kind === 'tenzro-native-pointer'
-          ? {
-              from: body.fromAddress,
-              to: '0x1003',
-              value: 0n,
-              nonce: body.nonce,
-              chainId: body.chainId,
-            }
-          : {
-              from: body.fromAddress,
-              to: body.toAddress,
-              value: body.amount,
-              nonce: body.nonce,
-              chainId: body.chainId,
-            };
-      const hash = await rpc.sendTransaction(sendArgs);
+      const body = signed.body as TenzroNativeBody;
+      const signature = signed.signatures[0];
+      if (!signature) throw new Error('missing signature bundle');
+      const op = userOperationToJson({ ...body.userOp, signature });
+      const hash = await rpc.sendUserOperation(op, body.entryPoint);
       return makeHandle('tenzro-native', signed.prepared.intent, hash);
     },
 
     watch(handle: TxHandle): AsyncIterable<TxStatus> {
-      return watchViaPort(handle, rpc);
+      return watchReceipt(handle, rpc, deps.watch ?? {});
     },
   };
 }
 
 // --- helpers ---
+
+const normalizeAddress = (a: string): string => toHex(fromHex(a), true);
+
+/**
+ * `execute` takes a 20-byte address. Tenzro addresses may arrive widened to
+ * 32 bytes with 12 leading zero bytes; anything else is not reachable from
+ * an account call.
+ */
+function executeTarget(address: string): string {
+  const bytes = fromHex(address);
+  if (bytes.length === 20) return toHex(bytes, true);
+  if (bytes.length === 32 && bytes.slice(0, 12).every((b) => b === 0)) {
+    return toHex(bytes.slice(12), true);
+  }
+  throw new Error(`recipient ${address} is not a 20-byte account address`);
+}
 
 async function resolveRecipientAddress(
   to: Intent['to'],
@@ -252,142 +196,61 @@ async function resolveRecipientAddress(
 ): Promise<string> {
   switch (to.kind) {
     case 'tdip': {
-      // Local-first: self-sends and any DID the kernel already knows about
-      // resolve from the in-memory `SurfaceKey` map without a round-trip.
       const k = keyResolver(to.did);
       if (k && k.surface === 'tenzro-native') return k.address;
-      // Remote: ask the identity port. This is where `resolveDidDocument`
-      // happens in real builds; tests can leave the port unset to enforce
-      // local-only resolution.
       if (!identityPort) {
         throw new Error(
-          `cannot resolve tenzro-native address for recipient DID ${to.did}; ` +
-            `no identity port wired (pass deps.identityPort to enable remote DID resolution)`,
+          `cannot resolve a Tenzro address for ${to.did}; ` +
+            'pass deps.identityPort to resolve other identities',
         );
       }
       const remote = await identityPort.resolveTenzroAddress(to.did);
-      if (!remote) {
-        throw new Error(
-          `DID ${to.did} has no tenzro-native key; cannot send to it on this surface`,
-        );
-      }
+      if (!remote) throw new Error(`DID ${to.did} has no Tenzro account`);
       return remote;
     }
     case 'evm':
       return to.address;
     case 'svm':
-      return to.publicKey;
     case 'canton':
-      return to.partyId;
+      throw new Error(`a ${to.kind} recipient is not reachable on the tenzro-native surface`);
   }
 }
 
-function canonicalize(body: TenzroNativeBody | TenzroNativePointerBody): Uint8Array {
-  // Stable JSON canonicalization is fine for the M2 stub; the wire format
-  // the chain actually verifies is `Transaction::hash()` per wallet-sdk
-  // docs, but server-side signing means the node owns canonicalization.
-  // Local canonicalization here only matters for the local signing-driver
-  // leg (which is a placeholder until M5).
-  const json = JSON.stringify(body, (_k, v) => (typeof v === 'bigint' ? v.toString() : v));
-  return new TextEncoder().encode(json);
-}
-
-function stubRpc(): TenzroRpcPort {
-  return {
-    getNonce: async () => 0,
-    getChainId: async () => 1337,
-    sendTransaction: async () => '0xmock',
-    getTransaction: async () => null,
-  };
-}
-
-/**
- * Watch loop: yields one `created` status, then polls the node every
- * `intervalMs` and yields whenever the inferred status changes. Stops
- * after `finalized` or `failed`, or when `timeoutMs` elapses (yielding a
- * synthetic `dropped`).
- *
- * Defaults: 250ms poll, 60s timeout. Both can be overridden via the
- * `TENZRO_WATCH_INTERVAL_MS` / `TENZRO_WATCH_TIMEOUT_MS` env vars at
- * runtime — useful for smoke tests against slow testnets.
- */
-async function* watchViaPort(handle: TxHandle, rpc: TenzroRpcPort): AsyncIterable<TxStatus> {
-  const env = readEnv();
-  const intervalMs = Number(env.TENZRO_WATCH_INTERVAL_MS ?? 250);
-  const timeoutMs = Number(env.TENZRO_WATCH_TIMEOUT_MS ?? 60_000);
+async function* watchReceipt(
+  handle: TxHandle,
+  rpc: TenzroRpcPort,
+  opts: { readonly intervalMs?: number; readonly timeoutMs?: number },
+): AsyncIterable<TxStatus> {
+  const intervalMs = opts.intervalMs ?? 500;
+  const timeoutMs = opts.timeoutMs ?? 60_000;
 
   yield { handle, phase: 'created' };
   if (handle.hash === undefined) {
-    // No hash to poll for — surface produced a placeholder handle. Treat as
-    // dropped immediately rather than spinning a doomed poll loop.
-    yield { handle, phase: 'dropped', error: 'no transaction hash on handle' };
+    yield { handle, phase: 'dropped', error: 'no operation hash on handle' };
     return;
   }
+  yield { handle, phase: 'pending', hash: handle.hash };
 
   const deadline = Date.now() + timeoutMs;
-  let lastPhase: TxStatus['phase'] = 'created';
-
   while (Date.now() < deadline) {
-    let nodeStatus: TenzroTxStatus | null = null;
+    let receipt: UserOperationReceipt | null = null;
     try {
-      nodeStatus = await rpc.getTransaction(handle.hash);
-    } catch (err) {
-      // Transient RPC errors don't kill the walk — they just fall through
-      // to the next interval. M3+ may surface them as warnings.
-      const message = err instanceof Error ? err.message : String(err);
-      // Yielding a `failed` here would lie about the on-chain state; just
-      // sleep and retry. If the issue is persistent we'll time out.
-      void message;
+      receipt = await rpc.getUserOperationReceipt(handle.hash);
+    } catch {
+      // Transient RPC errors fall through to the next interval.
     }
-
-    const phase = mapStatusToPhase(nodeStatus);
-    if (phase !== lastPhase) {
-      lastPhase = phase;
-      const update: TxStatus = {
-        handle,
-        phase,
-        ...(handle.hash !== undefined ? { hash: handle.hash } : {}),
-        ...(nodeStatus?.blockHeight !== undefined ? { blockHeight: nodeStatus.blockHeight } : {}),
-      };
-      yield update;
-      if (phase === 'finalized' || phase === 'failed') return;
+    if (receipt) {
+      yield receipt.success
+        ? { handle, phase: 'finalized', hash: handle.hash }
+        : { handle, phase: 'failed', hash: handle.hash, error: 'operation reverted' };
+      return;
     }
-
-    await sleep(intervalMs);
+    await new Promise((r) => setTimeout(r, intervalMs));
   }
-
-  // Timed out without seeing finalization.
   yield {
     handle,
     phase: 'dropped',
-    ...(handle.hash !== undefined ? { hash: handle.hash } : {}),
-    error: `watch timed out after ${timeoutMs}ms`,
+    hash: handle.hash,
+    error: `no receipt after ${timeoutMs}ms`,
   };
-}
-
-function mapStatusToPhase(s: TenzroTxStatus | null): TxStatus['phase'] {
-  if (s === null) return 'pending';
-  switch (s.status) {
-    case 'pending':
-      return 'pending';
-    case 'included':
-      return 'confirmed';
-    case 'finalized':
-      return 'finalized';
-    case 'failed':
-      return 'failed';
-  }
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((r) => setTimeout(r, ms));
-}
-
-/**
- * Read env vars without requiring `@types/node`. Falls back to an empty
- * object in non-Node runtimes (browsers, web workers).
- */
-function readEnv(): Record<string, string | undefined> {
-  const g = globalThis as { process?: { env?: Record<string, string | undefined> } };
-  return g.process?.env ?? {};
 }

@@ -54,7 +54,7 @@ export interface AgentPortsBundle {
   readonly nanopayment?: NanopaymentPort;
   /** Human-in-the-loop pending-approvals queue (auth engine). */
   readonly authApproval?: AuthApprovalPort;
-  /** TEE attestation verification for the node's hybrid-signing co-signer. */
+  /** TEE attestation verification for services that run in a provider's enclave. */
   readonly teeAttestation?: TeeAttestationPort;
   /** Scoped delegations (substrate for AP2 / Mastercard / x402 caps). */
   readonly sessionKey?: SessionKeyPort;

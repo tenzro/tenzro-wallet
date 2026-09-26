@@ -8,7 +8,7 @@
  *
  * The wallet:
  *   - asks the node for the signing hash,
- *   - signs it with the EOA's secp256k1 key (via the custody quorum),
+ *   - signs it with the EOA's secp256k1 key (via the host-supplied signing driver),
  *   - submits the authorization out of band,
  *   - parses delegate codes on incoming accounts to flag delegated EOAs.
  */

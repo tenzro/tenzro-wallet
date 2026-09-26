@@ -7,10 +7,9 @@
  *   crosschainBurn(token, from, amount, targetChain)       → BurnResult
  *   getCrossChainSupply(token)                             → CrossChainSupply
  *
- * The SDK performs the operation atomically via
- * `tenzro_signAndSendTransaction`; the wallet does not need to drive a
- * `prepare → sign → submit` lifecycle. Snake-case wire fields are mapped
- * to camelCase at the adapter boundary.
+ * The SDK submits the operation itself (see `erc7802.ts` for what that
+ * means for passkey accounts). Snake-case wire fields are mapped to
+ * camelCase at the adapter boundary.
  */
 
 import type { Erc7802Client } from 'tenzro-sdk';

@@ -1,13 +1,9 @@
 /**
- * Testnet faucet — POST {address} to api.tenzro.xyz/faucet.
- *
- * The endpoint always returns HTTP 200 with `{success, tx_hash, amount,
- * message}`. Rate-limit failures come back as `success:false` with a
- * `Try again in N seconds` message, so we surface the message verbatim
- * rather than throwing on the HTTP layer.
+ * Faucet: `tenzro_faucet {address}` on the node. A cooldown answers with
+ * error -32004 and `data.remaining_seconds`, surfaced as a message.
  */
 
-import { TENZRO_API_URL } from './config';
+import { RpcError, rpcCall } from './rpc';
 
 export interface FaucetResult {
   readonly success: boolean;
@@ -17,13 +13,27 @@ export interface FaucetResult {
 }
 
 export async function requestFaucet(address: string): Promise<FaucetResult> {
-  const res = await fetch(`${TENZRO_API_URL}/faucet`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ address }),
-  });
-  if (!res.ok) {
-    throw new Error(`Faucet HTTP ${res.status}: ${await res.text().catch(() => res.statusText)}`);
+  try {
+    const r = await rpcCall<{ tx_hash?: string; amount_wei?: string; message?: string }>(
+      'tenzro_faucet',
+      { address },
+    );
+    return {
+      success: true,
+      tx_hash: r.tx_hash ?? null,
+      amount: r.amount_wei ?? '',
+      message: r.message ?? 'Faucet transfer queued.',
+    };
+  } catch (e) {
+    if (e instanceof RpcError && e.code === -32004) {
+      const wait = (e.data as { remaining_seconds?: number } | undefined)?.remaining_seconds;
+      return {
+        success: false,
+        tx_hash: null,
+        amount: '',
+        message: wait ? `Try again in ${Math.ceil(wait / 60)} minutes.` : e.message,
+      };
+    }
+    throw e;
   }
-  return (await res.json()) as FaucetResult;
 }

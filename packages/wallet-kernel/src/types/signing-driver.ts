@@ -1,29 +1,32 @@
 /**
  * Signing driver abstraction. Maps to the same shape Splice Wallet Kernel uses
- * (core-signing-internal, core-signing-fireblocks, core-signing-blockdaemon,
- * core-signing-participant) plus a Tenzro-native MPC driver.
+ * (core-signing-internal, core-signing-participant, ...) plus the Tenzro
+ * passkey driver.
  *
- * Surface modules call these; they never see raw key material.
+ * Surface modules call these; they never see raw key material. Every key is
+ * hardware-rooted: a passkey (WebAuthn P-256 with user verification) or a
+ * TPM / Secure Enclave key on the machine running the wallet. Nothing is
+ * held by a node.
  */
 
 import type { SurfaceKey, TdipDid } from './identity.ts';
 
 /**
- * - `ed25519` — single Ed25519 signature (Tenzro native non-hybrid surfaces,
- *   SVM, Canton).
- * - `secp256k1` — single ECDSA signature (EVM).
- * - `ed25519+ml-dsa-65` — hybrid pair (Tenzro native). Per DESIGN.md §4.3.4
- *   and §11, M5 threshold-signs the Ed25519 leg across the passkey-quorum
- *   (FROST-Ed25519) but the ML-DSA-65 leg is supplied by the node TEE
- *   alone, since threshold ML-DSA has no audited WASM-shippable
- *   implementation as of 2026-04. Device-side `SigningDriver`s therefore
- *   return a *single* Ed25519 signature for this scheme; the ML-DSA leg
- *   is appended server-side and the node submits the hybrid pair. This
- *   means the TEE is in every Tenzro-native signature until threshold
- *   ML-DSA exists. Track NIST IR 8214B and FROST-PQ for when that flips
- *   to a 2-element `signatures` array assembled locally.
+ * - `webauthn-p256+ml-dsa-65` — the Tenzro account scheme. A WebAuthn
+ *   assertion from an enrolled passkey plus an ML-DSA-65 signature from the
+ *   post-quantum key derived on the device from that passkey (PRF). The
+ *   driver returns ONE entry: the encoded signature bundle the account's
+ *   WebAuthn validator verifies (`userOp.signature`).
+ * - `ed25519` — single Ed25519 signature (SVM, Canton, machine keys).
+ * - `secp256k1` — single ECDSA signature (external EVM keys).
+ * - `ed25519+ml-dsa-65` — composite hybrid pair for machine identities whose
+ *   device key signs both legs. Returns two entries.
  */
-export type SigningScheme = 'ed25519' | 'secp256k1' | 'ed25519+ml-dsa-65';
+export type SigningScheme =
+  | 'webauthn-p256+ml-dsa-65'
+  | 'ed25519'
+  | 'secp256k1'
+  | 'ed25519+ml-dsa-65';
 
 export interface SigningRequest {
   readonly did: TdipDid;
@@ -41,17 +44,14 @@ export interface SigningResult {
 }
 
 export interface SigningDriver {
-  readonly id:
-    | 'internal-mpc'
-    | 'tenzro-tee'
+  readonly id: /** Passkey driver: WebAuthn assertion + passkey-derived ML-DSA-65. */
+    | 'passkey'
+    /** A TPM / Secure Enclave device key supplied by the host. */
+    | 'device-key'
     | 'fireblocks'
     | 'blockdaemon'
     | 'canton-participant'
-    /** Threshold Ed25519 device driver — FROST round-coordinated (M5). */
-    | 'frost-ed25519'
-    /** Threshold secp256k1 device driver — FROST round-coordinated (M5). */
-    | 'frost-secp256k1'
-    /** Hybrid driver — FROST-Ed25519 leg + node-TEE ML-DSA-65 leg (M5). */
-    | 'hybrid-ed25519-mldsa';
+    /** Deterministic in-memory stub for unit tests. */
+    | 'test';
   sign(req: SigningRequest): Promise<SigningResult>;
 }

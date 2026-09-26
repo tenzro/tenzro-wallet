@@ -1,57 +1,36 @@
 # @tenzro/wallet-app
 
-Scaffolded host that wires the three host-side pieces the wallet kernel can't ship itself:
+Framework-free host that wires the wallet kernel into a page:
 
-| Piece | File | Status |
-|---|---|---|
-| FROST WASM binding (`FrostBackend` seam) | `src/host/frost-wasm.ts` | Stub. Swap `loadStubFrostWasm()` for `await loadFrostWasm()` once the wasm-bindgen artifacts are bundled. |
-| Device-provisioning UI (drives `walletNew()` / `walletRecover()`) | `src/ui/onboarding.ts` | Framework-free DOM mount-point. |
-| `window.tenzro` dispatch (EIP-1193 provider + EIP-6963 announcement) | `src/dispatch/window-tenzro.ts` | Routes the always-cheap reads through the kernel; signing methods scaffolded with typed -32601 errors. |
+| Piece | File |
+|---|---|
+| Onboarding: create a wallet from a passkey, or sign in with one | `src/ui/onboarding.ts` |
+| `window.tenzro` provider (EIP-1193) and EIP-6963 announcement | `src/dispatch/window-tenzro.ts` |
+| Load order and wiring | `src/main.ts` |
 
-`src/main.ts` documents the load order and exposes the wiring as one entry function.
-
-## What's authoritative vs scaffolded
-
-The reference browser extension at `apps/tenzro-extension/` is the **production** dispatch surface — it runs in MV3, owns DPoP-bound JWT minting, opens user-confirmation popups, and manages CAIP-25 sessions. This wallet app is for **standalone web embeds** (hosted wallet, dev panel, integration tests) where you can't assume the extension is installed.
-
-If you only need a dApp page that consumes a Tenzro provider, you don't need this package at all — install `tenzro-sdk` and call `TenzroClient.fromInjected()`. See [the SDK README](../../packages/wallet-kernel/node_modules/tenzro-sdk/README.md) for the consume side.
+Custody is non-custodial and passkey-based: the passkey stays in the device's authenticator, the post-quantum
+ML-DSA-65 key is derived from it on demand, and nothing secret is stored. The chain id is always read from the
+node (`eth_chainId`).
 
 ## Wire-up
 
 ```typescript
-import { startWalletApp, defaultPasskeyAuthenticator } from '@tenzro/wallet-app';
-import {
-  FrostHttpAdapter,
-  MlDsaHttpAdapter,
-  ShareEnvelopeHttpAdapter,
-} from 'tenzro-wallet';
-
-const baseUrl = 'https://rpc.tenzro.xyz';
-
-// Embedder builds the HTTP adapters against the live /wallet/* endpoints.
-const provisioning = /* HTTP adapter targeting /wallet/new/* */;
-const recovery     = /* HTTP adapter targeting /wallet/recover/* */;
-const enroller     = /* WebAuthn create() wrapper — supplies rpId, origin */;
+import { startWalletApp } from '@tenzro/wallet-app';
 
 const app = await startWalletApp({
-  provisioning,
-  recovery,
-  enroller,
+  rpcUrl: 'https://rpc.tenzro.xyz', // default
+  rpId: 'tenzro.com', // WebAuthn relying party id; must match the node's
   onboardingContainer: document.getElementById('mount')!,
-  providerAnnouncement: {
-    uuid: crypto.randomUUID(),
-    icon: 'data:image/svg+xml;base64,...',
-  },
+  providerAnnouncement: { uuid: crypto.randomUUID(), icon: 'data:image/svg+xml;base64,...' },
 });
 
-// Show onboarding, then construct the kernel from the result, then install.
 await app.mountOnboarding();
-const kernel = /* construct WalletKernel from the onboarding result */;
+// Build a WalletKernel for the account (tenzroNativeSurface + passkeySigningDriver), then:
 const { dispose } = app.installProvider(kernel);
 ```
 
-## Reference docs
+After onboarding, prompt the user to link a second device (`app.custody.linkDevice`). A wallet with a single
+passkey can receive but should not send until a second device or a guardian is added.
 
-- SDK `fromInjected()` flow: `sdk/tenzro-ts-sdk/README.md`
-- Reference extension: `apps/tenzro-extension/README.md`
-- Kernel architecture: `docs/DESIGN.md`
+dApps that only consume a Tenzro provider do not need this package: install `tenzro-sdk` and call
+`TenzroClient.fromInjected()`.

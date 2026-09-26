@@ -11,8 +11,8 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { internalMpcDriver } from '../custody/internal-mpc.ts';
-import { provisionIdentity } from '../identity/provision.ts';
+import { testSigningDriver } from '../custody/test-driver.ts';
+import { testIdentity } from '../identity/test-identity.ts';
 import type {
   CantonValidatorPort,
   GenerateTopologyRequest,
@@ -104,12 +104,12 @@ async function recordingPort(
 
 describe('onboardExternalParty', () => {
   it('drives the full ceremony and threads the namespace signature into submitTopology', async () => {
-    const identity = await provisionIdentity({ uuid: 'onboarding-1' });
+    const identity = await testIdentity({ uuid: 'onboarding-1' });
     const { port, recording } = await recordingPort();
     const result = await onboardExternalParty(
       {
         keyResolver: (d) => (d === identity.did ? identity.keys.get('canton-external') : undefined),
-        signingDriver: internalMpcDriver(),
+        signingDriver: testSigningDriver(),
         validatorPort: port,
       },
       { did: identity.did, surface: 'canton-external', partyHint: 'alice' },
@@ -144,7 +144,7 @@ describe('onboardExternalParty', () => {
   });
 
   it('refuses to sign when the validator returns a tampered bundle hash', async () => {
-    const identity = await provisionIdentity({ uuid: 'onboarding-tamper-1' });
+    const identity = await testIdentity({ uuid: 'onboarding-tamper-1' });
     const { port } = await recordingPort({
       tamperedBundleHash: new Uint8Array(32), // 32 zero bytes — definitely not the real hash
     });
@@ -153,7 +153,7 @@ describe('onboardExternalParty', () => {
         {
           keyResolver: (d) =>
             d === identity.did ? identity.keys.get('canton-external') : undefined,
-          signingDriver: internalMpcDriver(),
+          signingDriver: testSigningDriver(),
           validatorPort: port,
         },
         { did: identity.did, surface: 'canton-external', partyHint: 'mallory' },
@@ -162,7 +162,7 @@ describe('onboardExternalParty', () => {
   });
 
   it('refuses to sign when the validator returns a tampered accept-setup hash', async () => {
-    const identity = await provisionIdentity({ uuid: 'onboarding-tamper-2' });
+    const identity = await testIdentity({ uuid: 'onboarding-tamper-2' });
     const { port } = await recordingPort({
       tamperedAcceptHash: new Uint8Array(32),
     });
@@ -171,7 +171,7 @@ describe('onboardExternalParty', () => {
         {
           keyResolver: (d) =>
             d === identity.did ? identity.keys.get('canton-external') : undefined,
-          signingDriver: internalMpcDriver(),
+          signingDriver: testSigningDriver(),
           validatorPort: port,
         },
         { did: identity.did, surface: 'canton-external', partyHint: 'mallory' },
@@ -180,13 +180,13 @@ describe('onboardExternalParty', () => {
   });
 
   it('rejects when the resolved key is for the wrong canton surface', async () => {
-    const identity = await provisionIdentity({ uuid: 'onboarding-surface-mismatch' });
+    const identity = await testIdentity({ uuid: 'onboarding-surface-mismatch' });
     const { port } = await recordingPort();
     await expect(
       onboardExternalParty(
         {
           keyResolver: (d) => (d === identity.did ? identity.keys.get('tenzro-native') : undefined),
-          signingDriver: internalMpcDriver(),
+          signingDriver: testSigningDriver(),
           validatorPort: port,
         },
         { did: identity.did, surface: 'canton-external', partyHint: 'alice' },

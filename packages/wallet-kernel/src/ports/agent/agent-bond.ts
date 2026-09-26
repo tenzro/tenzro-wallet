@@ -15,9 +15,11 @@
  *   • IncreaseAgentBond selector 0x01000021, ~60k gas
  *   • WithdrawAgentBond selector 0x01000022, ~50k gas
  *
- * The wallet wraps the SDK's `BondClient`; the SDK already owns the
- * canonical typed-tx encoding and routes through
- * `tenzro_signAndSendTransaction` for hybrid signing.
+ * The wallet wraps the SDK's `BondClient`, which owns the typed-tx
+ * encoding. Note: the SDK submits the operation itself with `tenzro_signAndSendTransaction`, which
+ * signs with a key the node holds for the caller's session. A passkey account
+ * has no such key: from a passkey account these operations must be sent as
+ * UserOperations the passkey signs (not wired yet).
  */
 
 export type AgentBondStatus = 'active' | 'cooldown' | 'withdrawn' | 'slashed';

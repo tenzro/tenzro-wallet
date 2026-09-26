@@ -9,8 +9,8 @@
  *   get      → BondClient.getAgentBond(bondId)
  *   list     → BondClient.listAgentBondsByController(controllerDid)
  *
- * The SDK already handles `tenzro_signAndSendTransaction` routing for
- * hybrid (server-side MPC) signing, so we forward verbatim.
+ * The SDK submits each call itself (see `agent-bond.ts` for what that
+ * means for passkey accounts); we forward verbatim.
  */
 
 import type { BondClient } from 'tenzro-sdk';

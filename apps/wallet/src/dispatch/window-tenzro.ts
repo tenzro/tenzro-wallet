@@ -14,15 +14,9 @@
  * and an `installTenzroProvider()` helper that puts it on `window.tenzro`
  * and dispatches the EIP-6963 announcement.
  *
- * Most methods are scaffolded — they return a typed "not yet wired"
- * response so the dispatch path is exercisable end-to-end (the
- * announcement fires; the SDK's `discoverEip6963Provider()` resolves; the
- * dApp gets a provider object) before the production routing decisions
- * (DPoP-bound JWT minting, user-confirmation popups, CAIP-25 sessions)
- * are wired. The reference extension at `apps/tenzro-extension/` is the
- * authoritative implementation; this scaffold lives in the wallet app so
- * a self-contained build can demo the announce/consume handshake without
- * the extension installed.
+ * Signing methods return a typed "not yet wired" error until they are
+ * routed through the kernel's passkey-signed UserOperation path with a
+ * user-confirmation step. The chain id is always read from the node.
  */
 
 import {
@@ -51,6 +45,8 @@ export interface KernelEip1193ProviderOptions {
    * without touching the announcement plumbing.
    */
   readonly methods?: Readonly<Record<string, RpcHandler>>;
+  /** Reads the chain id from the node (`eth_chainId`). Never a hard-coded value. */
+  readonly chainId: () => Promise<bigint>;
 }
 
 /**
@@ -64,9 +60,11 @@ export interface KernelEip1193ProviderOptions {
 export class KernelEip1193Provider implements EIP1193Provider {
   readonly #kernel: WalletKernel;
   readonly #methods: Map<string, RpcHandler>;
+  readonly #chainId: () => Promise<bigint>;
 
   constructor(opts: KernelEip1193ProviderOptions) {
     this.#kernel = opts.kernel;
+    this.#chainId = opts.chainId;
     this.#methods = new Map(Object.entries(this.#defaultMethods()));
     if (opts.methods) {
       for (const [method, handler] of Object.entries(opts.methods)) {
@@ -87,20 +85,19 @@ export class KernelEip1193Provider implements EIP1193Provider {
   }
 
   /**
-   * Default scaffolded dispatch table. Returns the wallet's TDIP DID for
-   * the always-cheap identity reads, and a typed "not yet wired" error
-   * for everything that requires the M5/M6 DPoP-session machinery.
-   *
-   * The reference extension overrides each "not yet wired" entry with the
-   * real router → prepare → sign → submit call.
+   * Default dispatch table: identity and chain reads, and a typed "not yet
+   * wired" error for methods that need a passkey-approved signature.
    */
   #defaultMethods(): Record<string, RpcHandler> {
     const kernel = this.#kernel;
+    const account = () => {
+      const key = kernel.identity.keys.get('tenzro-native');
+      return key && key.surface === 'tenzro-native' ? [key.address] : [];
+    };
     return {
-      // EIP-1193 housekeeping — safe to answer from kernel state alone.
-      eth_chainId: async () => '0x0',
-      eth_accounts: async () => [],
-      net_version: async () => '0',
+      eth_chainId: async () => `0x${(await this.#chainId()).toString(16)}`,
+      eth_accounts: async () => account(),
+      net_version: async () => (await this.#chainId()).toString(10),
 
       // Identity — the kernel already knows this.
       tenzro_did: async () => kernel.identity.did,
@@ -112,20 +109,19 @@ export class KernelEip1193Provider implements EIP1193Provider {
       eth_sendTransaction: async () => {
         throw rpcError(
           -32601,
-          'eth_sendTransaction: kernel scaffold — wire through the reference ' +
-            'extension at apps/tenzro-extension/ for production dispatch.',
+          'eth_sendTransaction: not wired yet; send through the wallet UI (passkey-signed).',
         );
       },
       personal_sign: async () => {
         throw rpcError(
           -32601,
-          'personal_sign: kernel scaffold — wire through the reference extension.',
+          'personal_sign: not wired yet.',
         );
       },
       tenzro_prepareIntent: async () => {
         throw rpcError(
           -32601,
-          'tenzro_prepareIntent: kernel scaffold — wire through the reference extension.',
+          'tenzro_prepareIntent: not wired yet.',
         );
       },
     };

@@ -1,10 +1,11 @@
 /**
  * TeeAttestationPort — verify the node's TEE attestation.
  *
- * The wallet's hybrid-signing path leans on a TEE-resident co-signer at
- * the Tenzro node. Before trusting that co-signer (in particular before
- * sending a passkey-derived share to it), the wallet should verify the
- * node's attestation report against the TEE vendor's certificate chain.
+ * A TEE is evidence, not custody: no key of the wallet lives in a node
+ * enclave. Attestation matters when the wallet relies on a provider's
+ * enclave for a service (confidential inference, compute), so before
+ * trusting that service the wallet verifies the node's attestation report
+ * against the TEE vendor's certificate chain.
  *
  * The wallet does NOT itself decode TDX/SEV/Nitro reports — that's a
  * mountain of vendor-specific code, with cert chains that need keeping

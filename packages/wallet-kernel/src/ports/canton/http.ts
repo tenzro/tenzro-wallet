@@ -12,8 +12,8 @@
  *
  * Both share an Auth0 JWT (audience `https://canton.network.global`,
  * client_credentials grant). The token provider is injected — the kernel
- * doesn't manage the OAuth dance, that lives in the host app or the node-
- * side `/wallet/*` endpoints.
+ * doesn't manage the OAuth dance, that lives in the host app or the
+ * Tenzro node's Canton surface.
  */
 
 export interface CantonHttpConfig {

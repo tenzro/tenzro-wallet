@@ -1,23 +1,20 @@
 /**
- * TenzroSdkAdapter — the only kernel file that imports from `tenzro-sdk`.
+ * TenzroSdkAdapter — read helpers over the `tenzro-sdk` client.
  *
  * Wraps a `TenzroClient` (or any object with the same shape — useful when
- * tests want to swap a partial fake) and exposes the narrow `TenzroRpcPort`
- * surface the kernel actually uses. If the SDK's shape changes, this is the
- * single file that breaks; the rest of the kernel stays put.
+ * tests want to swap a partial fake) and exposes nonce, chain id and
+ * transaction status reads. Sending from a passkey account goes through
+ * `TenzroJsonRpcAdapter` (UserOperations signed on the device); this adapter
+ * never submits anything.
  *
  * Two construction paths:
  *
- *  1. **Direct fetch transport** — `fromClient(new TenzroClient(config))`
- *     is the M2 path: the kernel/host owns the bearer JWT + DPoP proof and
- *     the SDK's default `RpcClient` reads them from ambient env (`rpc.ts`).
+ *  1. **Direct fetch transport** — `fromClient(new TenzroClient(config))`.
  *
- *  2. **Injected EIP-1193 transport** — `fromInjected({rdns, timeoutMs})`
- *     is the M6 path: a dApp page loads, discovers `window.tenzro` via
- *     EIP-6963, and routes every `client.rpc.call(...)` through
- *     `provider.request(...)` so the extension owns auth + user
- *     confirmation. The SDK's `TenzroClient.fromInjected()` does the
- *     discovery + transport wiring for us.
+ *  2. **Injected EIP-1193 transport** — `fromInjected({rdns, timeoutMs})`:
+ *     a dApp page discovers `window.tenzro` via EIP-6963 and routes every
+ *     `client.rpc.call(...)` through `provider.request(...)`, so the wallet
+ *     owns user confirmation.
  */
 
 import {
@@ -26,7 +23,7 @@ import {
   type TenzroConfig,
   TenzroNotInstalledError,
 } from 'tenzro-sdk';
-import type { TenzroRpcPort, TenzroSendArgs, TenzroTxStatus } from '../tenzro-rpc.ts';
+import type { TenzroTxStatus } from '../tenzro-rpc.ts';
 
 /**
  * Just the slice of `TenzroClient` the adapter touches. Listed explicitly so
@@ -40,18 +37,9 @@ export interface TenzroClientLike {
     hash: string;
     blockHeight?: number;
   } | null>;
-  sendTransaction(params: {
-    from: string;
-    to: string;
-    value: bigint;
-    gas_limit?: number;
-    gas_price?: number;
-    nonce?: number;
-    chain_id?: number;
-  }): Promise<string>;
 }
 
-export class TenzroSdkAdapter implements TenzroRpcPort {
+export class TenzroSdkAdapter {
   constructor(private readonly client: TenzroClientLike) {}
 
   /** Construct from a real `TenzroClient`. The cast is safe because
@@ -93,20 +81,6 @@ export class TenzroSdkAdapter implements TenzroRpcPort {
 
   getChainId(): Promise<number> {
     return this.client.getChainId();
-  }
-
-  async sendTransaction(args: TenzroSendArgs): Promise<string> {
-    // Map our camelCase port shape to the SDK's snake_case wire shape.
-    const params: Parameters<TenzroClientLike['sendTransaction']>[0] = {
-      from: args.from,
-      to: args.to,
-      value: args.value,
-    };
-    if (args.gasLimit !== undefined) params.gas_limit = args.gasLimit;
-    if (args.gasPrice !== undefined) params.gas_price = args.gasPrice;
-    if (args.nonce !== undefined) params.nonce = args.nonce;
-    if (args.chainId !== undefined) params.chain_id = args.chainId;
-    return this.client.sendTransaction(params);
   }
 
   async getTransaction(hash: string): Promise<TenzroTxStatus | null> {

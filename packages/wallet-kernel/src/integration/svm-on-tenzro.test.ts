@@ -26,7 +26,7 @@
  *      18). A mock leg used to omit `svm_wtnzo` or return 18 decimals.
  *
  * Required env (see `.env.example`):
- *   - TENZRO_RPC_URL — the Tenzro JSON-RPC base URL (testnet default).
+ *   - TENZRO_RPC_URL — the Tenzro JSON-RPC base URL (e.g. https://rpc.tenzro.xyz).
  *   - TENZRO_TEST_ADDRESS — a Tenzro-shape (0x… 20-byte) address. Used
  *     read-only — no funds spent. The same address that funds the EVM smoke;
  *     under the pointer model, EVM and SVM views read against the same

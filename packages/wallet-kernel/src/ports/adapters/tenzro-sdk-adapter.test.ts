@@ -40,10 +40,6 @@ function fakeClient(overrides: Partial<TenzroClientLike> = {}): {
       calls.push({ method: 'getTransaction', args: hash });
       return null;
     },
-    sendTransaction: async (params) => {
-      calls.push({ method: 'sendTransaction', args: params });
-      return '0xdeadbeef';
-    },
     ...overrides,
   };
   return { client, calls };
@@ -56,45 +52,6 @@ describe('TenzroSdkAdapter', () => {
     expect(await adapter.getNonce('0xabc')).toBe(7);
     expect(await adapter.getChainId()).toBe(1337);
     expect(calls.map((c) => c.method)).toEqual(['getNonce', 'getChainId']);
-  });
-
-  it('maps camelCase send args to the SDK snake_case shape', async () => {
-    const { client, calls } = fakeClient();
-    const adapter = new TenzroSdkAdapter(client);
-    await adapter.sendTransaction({
-      from: '0xfrom',
-      to: '0xto',
-      value: 5n * 10n ** 18n,
-      gasLimit: 30000,
-      gasPrice: 2_000_000_000,
-      nonce: 4,
-      chainId: 1337,
-    });
-    expect(calls).toHaveLength(1);
-    expect(calls[0]?.args).toEqual({
-      from: '0xfrom',
-      to: '0xto',
-      value: 5n * 10n ** 18n,
-      gas_limit: 30000,
-      gas_price: 2_000_000_000,
-      nonce: 4,
-      chain_id: 1337,
-    });
-  });
-
-  it('omits optional fields when not provided', async () => {
-    const { client, calls } = fakeClient();
-    const adapter = new TenzroSdkAdapter(client);
-    await adapter.sendTransaction({
-      from: '0xfrom',
-      to: '0xto',
-      value: 1n,
-    });
-    expect(calls[0]?.args).toEqual({
-      from: '0xfrom',
-      to: '0xto',
-      value: 1n,
-    });
   });
 
   it('returns null when the node has no record of the tx', async () => {

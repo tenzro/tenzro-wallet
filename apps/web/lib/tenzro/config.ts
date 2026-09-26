@@ -1,19 +1,12 @@
 /**
- * Tenzro testnet endpoints. The RPC is open-CORS and serves the
- * JSON-RPC 2.0 surface; the API host carries side helpers like the
- * faucet that aren't part of the consensus RPC.
+ * Tenzro Network 1 endpoints and WebAuthn settings. Every value can be set
+ * per deployment; the chain id is never configured here: it is read from the
+ * node (`eth_chainId`).
  */
 
-export const TENZRO_RPC_URL = 'https://rpc.tenzro.xyz';
-export const TENZRO_API_URL = 'https://api.tenzro.xyz';
-export const TENZRO_CHAIN_ID = 1337;
-export const TENZRO_NETWORK_NAME = 'Tenzro Testnet';
+export const TENZRO_RPC_URL = process.env.NEXT_PUBLIC_TENZRO_RPC_URL || 'https://rpc.tenzro.xyz';
+export const TENZRO_API_URL = process.env.NEXT_PUBLIC_TENZRO_API_URL || 'https://api.tenzro.xyz';
+export const TENZRO_NETWORK_NAME = 'Tenzro Network 1';
 
-/**
- * The DPoP `htu` claim must equal the URL the server sees itself as,
- * which is its internal bind address — not the public RPC URL we
- * post to. Verified by the rpc.tenzro.xyz server rejecting
- * proofs with `htu=https://rpc.tenzro.xyz` and accepting
- * `htu=http://0.0.0.0:8545/`. Matches the `iss` claim on issued JWTs.
- */
-export const TENZRO_DPOP_HTU = 'http://0.0.0.0:8545/';
+/** WebAuthn relying party id. Must match the node's configured RP id. */
+export const TENZRO_RP_ID = process.env.NEXT_PUBLIC_TENZRO_RP_ID || 'tenzro.com';

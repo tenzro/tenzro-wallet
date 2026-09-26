@@ -109,8 +109,8 @@ export type { EscrowClientLike } from './adapters/escrow-adapter.ts';
 
 // ERC-7802 SuperchainERC20 cross-chain mint/burn — supply-consistent moves
 // between chains where the token implements ERC-7802 directly (no aggregator).
-// Wraps tenzro-sdk Erc7802Client; the SDK performs the operation atomically
-// via tenzro_signAndSendTransaction (no calldata returned to the wallet).
+// Wraps tenzro-sdk Erc7802Client. The SDK submits the operation itself; a
+// passkey account needs it as a passkey-signed UserOperation (not wired yet).
 export type {
   Erc7802Port,
   Erc7802MintResult,

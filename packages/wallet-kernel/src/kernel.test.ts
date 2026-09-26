@@ -1,14 +1,15 @@
 /**
- * End-to-end smoke test: provision identity → prepare → sign → submit → watch
+ * End-to-end smoke test: identity fixture → prepare → sign → submit → watch
  * a Tenzro-native send through the kernel facade.
  */
 
 import { describe, expect, it } from 'vitest';
-import { internalMpcDriver } from './custody/internal-mpc.ts';
-import { provisionIdentity } from './identity/provision.ts';
+import { testSigningDriver } from './custody/test-driver.ts';
+import { testIdentity } from './identity/test-identity.ts';
 import { WalletKernel } from './kernel.ts';
 import type { CantonValidatorPort } from './ports/canton/canton-validator.ts';
-import type { TenzroRpcPort, TenzroTxStatus } from './ports/tenzro-rpc.ts';
+import type { TenzroIdentityPort } from './ports/tenzro-identity.ts';
+import type { TenzroRpcPort } from './ports/tenzro-rpc.ts';
 import {
   cantonExternalSurface,
   cantonInternalSurface,
@@ -23,29 +24,21 @@ import type { SurfaceModule } from './types/surface-module.ts';
 import type { SurfaceName } from './types/surface.ts';
 
 /**
- * In-memory port that walks a tx through pending → included → finalized on
- * successive `getTransaction` calls. Lets the kernel-level e2e exercise the
- * real port-driven `watch()` loop without standing up a node.
+ * In-memory port: the receipt is missing on the first poll and present on
+ * the next, so the kernel-level e2e exercises the real port-driven `watch()`
+ * loop without standing up a node.
  */
 function progressingRpcPort(): TenzroRpcPort {
-  const walk: TenzroTxStatus['status'][] = ['pending', 'included', 'finalized'];
-  let i = 0;
-  let hash = '';
+  let polls = 0;
   return {
-    getNonce: async () => 0,
-    getChainId: async () => 1337,
-    sendTransaction: async () => {
-      hash = '0xfeedface';
-      return hash;
-    },
-    getTransaction: async () => {
-      const status = walk[Math.min(i, walk.length - 1)]!;
-      i += 1;
-      return {
-        hash,
-        status,
-        ...(status === 'pending' ? {} : { blockHeight: 1 }),
-      };
+    getChainId: async () => 20_260_901n,
+    getEntryPoint: async () => '0x0000000000000000000000000000000000004337',
+    getAccountNonce: async () => 0n,
+    getGasPrice: async () => 1_000_000_000n,
+    sendUserOperation: async () => '0xfeedface',
+    getUserOperationReceipt: async (hash) => {
+      polls += 1;
+      return polls < 2 ? null : { userOpHash: hash, success: true };
     },
   };
 }
@@ -79,8 +72,13 @@ function throwingCantonPort(): CantonValidatorPort {
   };
 }
 
+const RECIPIENT_DID = 'did:tenzro:human:00000000-0000-8000-8000-000000000001' as TdipDid;
+const recipientPort: TenzroIdentityPort = {
+  resolveTenzroAddress: async () => '0x1111111111111111111111111111111111111111',
+};
+
 function buildKernel(identity: TdipIdentity): WalletKernel {
-  const driver = internalMpcDriver();
+  const driver = testSigningDriver();
   const keyResolver = (did: TdipDid, surface: SurfaceName): SurfaceKey | undefined => {
     if (did !== identity.did) return undefined;
     return identity.keys.get(surface);
@@ -92,6 +90,7 @@ function buildKernel(identity: TdipIdentity): WalletKernel {
         keyResolver: (d) => keyResolver(d, 'tenzro-native'),
         signingDriver: driver,
         rpc: progressingRpcPort(),
+        identityPort: recipientPort,
       }),
     ],
     [
@@ -134,13 +133,13 @@ const TNZO: AssetId = { scope: 'tenzro-native', symbol: 'TNZO', decimals: 18 };
 
 describe('WalletKernel end-to-end', () => {
   it('runs prepare → sign → submit → watch on a Tenzro-native send', async () => {
-    const identity = await provisionIdentity({ uuid: 'kernel-test-1' });
+    const identity = await testIdentity({ uuid: 'kernel-test-1' });
     const kernel = buildKernel(identity);
 
     const intent: Intent = {
       kind: 'send',
       from: identity.did,
-      to: { kind: 'tdip', did: identity.did },
+      to: { kind: 'tdip', did: RECIPIENT_DID },
       asset: TNZO,
       amount: 5n * 10n ** 18n,
     };
@@ -149,19 +148,19 @@ describe('WalletKernel end-to-end', () => {
     expect(prepared.route.kind).toBe('native');
 
     const signed = await kernel.sign(prepared, { approvedAt: Date.now() });
-    // Hybrid signing → two signatures.
-    expect(signed.signatures).toHaveLength(2);
+    // A passkey account returns one signature bundle.
+    expect(signed.signatures).toHaveLength(1);
 
     const handle = await kernel.submit(signed);
     expect(handle.surface).toBe('tenzro-native');
 
     const phases: TxStatus['phase'][] = [];
     for await (const status of kernel.watch(handle)) phases.push(status.phase);
-    expect(phases).toEqual(['created', 'pending', 'confirmed', 'finalized']);
+    expect(phases).toEqual(['created', 'pending', 'finalized']);
   });
 
   it('routes EVM→SVM same-DID send as a cross-VM pointer op (no bridge)', async () => {
-    const identity = await provisionIdentity({ uuid: 'kernel-test-pointer' });
+    const identity = await testIdentity({ uuid: 'kernel-test-pointer' });
     const kernel = buildKernel(identity);
     const svmKey = identity.keys.get('svm-on-tenzro');
     if (!svmKey || svmKey.surface !== 'svm-on-tenzro') throw new Error('no svm key');
@@ -189,7 +188,7 @@ describe('WalletKernel end-to-end', () => {
   });
 
   it('warns about sub-lamport dust on EVM→SVM pointer ops', async () => {
-    const identity = await provisionIdentity({ uuid: 'kernel-test-dust' });
+    const identity = await testIdentity({ uuid: 'kernel-test-dust' });
     const kernel = buildKernel(identity);
     const svmKey = identity.keys.get('svm-on-tenzro');
     if (!svmKey || svmKey.surface !== 'svm-on-tenzro') throw new Error('no svm key');
@@ -211,14 +210,16 @@ describe('WalletKernel end-to-end', () => {
   });
 
   it('refuses to sign when policy is violated', async () => {
-    const identity = await provisionIdentity({ uuid: 'kernel-test-2' });
-    const driver = internalMpcDriver();
+    const identity = await testIdentity({ uuid: 'kernel-test-2' });
+    const driver = testSigningDriver();
     const surfaces = new Map<SurfaceName, SurfaceModule>([
       [
         'tenzro-native',
         tenzroNativeSurface({
-          keyResolver: () => identity.keys.get('tenzro-native'),
+          keyResolver: (d) => (d === identity.did ? identity.keys.get('tenzro-native') : undefined),
           signingDriver: driver,
+          rpc: progressingRpcPort(),
+          identityPort: recipientPort,
         }),
       ],
     ]);
@@ -231,7 +232,7 @@ describe('WalletKernel end-to-end', () => {
     const intent: Intent = {
       kind: 'send',
       from: identity.did,
-      to: { kind: 'tdip', did: identity.did },
+      to: { kind: 'tdip', did: RECIPIENT_DID },
       asset: TNZO,
       amount: 1000n,
     };
@@ -247,7 +248,7 @@ describe('WalletKernel end-to-end', () => {
     // (intent → canton-external) and `prepare()` fails inside
     // `port.prepareSubmission` rather than at a kernel-level stub. The real
     // wire path is exercised against `LedgerApiAdapter` in adapter tests.
-    const identity = await provisionIdentity({ uuid: 'kernel-test-3' });
+    const identity = await testIdentity({ uuid: 'kernel-test-3' });
     const kernel = buildKernel(identity);
     const intent: Intent = {
       kind: 'send',
