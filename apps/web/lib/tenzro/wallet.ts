@@ -1,95 +1,133 @@
 /**
- * Per-user wallet store backed by localStorage.
+ * The web wallet's passkey account.
  *
- * The wallet record holds the DID, address, and DPoP-bound JWT minted
- * by `tenzro_onboardHuman`. The accompanying private key for DPoP
- * signing lives in IndexedDB (see `./dpop`) — together they identify
- * the user to the testnet.
- *
- * `getOrCreateWallet()` is the only entry point most callers should
- * touch: it reads from storage if present, otherwise calls onboarding
- * end-to-end (DPoP key → onboarding RPC with proof → persist).
+ * Non-custodial: the passkey lives in the user's authenticator and the
+ * post-quantum key is re-derived from it for each signature. The only thing
+ * stored on this device is public: the DID, the account address and which
+ * passkey this device uses.
  */
 
-import { TENZRO_DPOP_HTU } from './config';
-import { getOrCreateDpopKey, mintDpopProof } from './dpop';
-import { rpcCallWithProof } from './rpc';
+import {
+  BrowserPasskeyAuthenticator,
+  DEFAULT_USER_OP_GAS,
+  type PasskeyAccount,
+  PasskeyCustody,
+  encodeExecuteCall,
+  hexToBytes,
+  parseQuantity,
+  passkeySigningDriver,
+  userOperationHash,
+  userOperationToJson,
+} from 'tenzro-wallet/custody';
 
-const STORAGE_KEY = 'tenzro.wallet.v1';
+import { TENZRO_RP_ID } from './config';
+import { transport } from './rpc';
 
-export interface StoredWallet {
-  readonly did: string;
-  readonly address: string;
-  readonly publicKey: string;
-  readonly accessToken: string;
-  readonly displayName: string;
-  readonly createdAt: number;
-}
+const STORAGE_KEY = 'tenzro.wallet.v2';
 
-interface OnboardHumanResult {
-  identity: {
-    did: string;
-    identity_type: string;
-    display_name: string;
-    status: string;
-  };
-  wallet: {
-    wallet_id: string;
-    address: string;
-    public_key: string;
-  };
-  access_token: string;
+export type StoredWallet = PasskeyAccount;
+
+let custodySingleton: PasskeyCustody | null = null;
+
+export function custody(): PasskeyCustody {
+  custodySingleton ??= new PasskeyCustody({
+    rpc: transport,
+    authenticator: new BrowserPasskeyAuthenticator({ rpId: TENZRO_RP_ID }),
+  });
+  return custodySingleton;
 }
 
 export function getStoredWallet(): StoredWallet | null {
   if (typeof window === 'undefined') return null;
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    return JSON.parse(raw) as StoredWallet;
+    return raw ? (JSON.parse(raw) as StoredWallet) : null;
   } catch {
     return null;
   }
 }
 
-function saveWallet(w: StoredWallet): void {
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(w));
+export function saveWallet(w: StoredWallet): void {
+  try {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(w));
+  } catch {
+    // Storage can be unavailable (private mode); the account then lasts for this page.
+  }
 }
 
 export function clearStoredWallet(): void {
   if (typeof window === 'undefined') return;
-  window.localStorage.removeItem(STORAGE_KEY);
+  try {
+    window.localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    // ignore
+  }
+}
+
+export async function createWallet(displayName: string): Promise<StoredWallet> {
+  const w = await custody().createWallet({ displayName });
+  saveWallet(w);
+  return w;
+}
+
+export async function signIn(): Promise<StoredWallet> {
+  const w = await custody().signIn();
+  saveWallet(w);
+  return w;
 }
 
 /**
- * Create a fresh wallet via `tenzro_onboardHuman`.
- *
- * Token binding: the server pins `cnf.jkt` from the `dpop_jwk` *param*
- * — not from the proof header — so we must pass the public JWK in the
- * params. We still send a DPoP proof on the request so the same key is
- * exercised end-to-end (and to keep our request shape uniform with
- * authed calls). htu must be the server's internal bind URL.
+ * Sends TNZO from the passkey account: an ERC-4337 UserOperation calling
+ * `execute(to, value)`, signed on this device by the passkey and its
+ * ML-DSA-65 key, submitted with `eth_sendUserOperation`.
  */
-export async function createWallet(displayName?: string): Promise<StoredWallet> {
-  const { publicJwk } = await getOrCreateDpopKey();
-  const proof = await mintDpopProof(TENZRO_DPOP_HTU, 'POST');
-  const params: Record<string, unknown> = { dpop_jwk: publicJwk };
-  if (displayName) params.display_name = displayName;
-  const result = await rpcCallWithProof<OnboardHumanResult>('tenzro_onboardHuman', params, proof);
-  const wallet: StoredWallet = {
-    did: result.identity.did,
-    address: result.wallet.address,
-    publicKey: result.wallet.public_key,
-    accessToken: result.access_token,
-    displayName: result.identity.display_name,
-    createdAt: Date.now(),
+export async function sendTnzo(
+  wallet: StoredWallet,
+  to: string,
+  valueWei: bigint,
+): Promise<{ userOpHash: string }> {
+  const [chainIdHex, entryPoints, gasPriceHex, account] = await Promise.all([
+    transport.call<string>('eth_chainId', []),
+    transport.call<string[]>('eth_supportedEntryPoints', []),
+    transport.call<string>('eth_gasPrice', []),
+    transport.call<{ nonce: number }>('tenzro_getSmartAccount', {
+      account_address: wallet.account,
+    }),
+  ]);
+  const entryPoint = entryPoints[0];
+  if (!entryPoint) throw new Error('This node serves no EntryPoint.');
+  const gasPrice = parseQuantity(gasPriceHex);
+  const op = {
+    sender: wallet.account,
+    nonce: parseQuantity(account.nonce),
+    callData: encodeExecuteCall(to, valueWei),
+    ...DEFAULT_USER_OP_GAS,
+    maxFeePerGas: gasPrice,
+    maxPriorityFeePerGas: gasPrice,
   };
-  saveWallet(wallet);
-  return wallet;
+  const hash = userOperationHash(op, parseQuantity(chainIdHex), entryPoint);
+  const driver = passkeySigningDriver({
+    authenticator: custody().authenticator,
+    credentials: () => [{ id: wallet.credentialId, transports: wallet.transports }],
+  });
+  const { signatures } = await driver.sign({
+    did: wallet.did as never,
+    surfaceKey: {
+      surface: 'tenzro-native',
+      scheme: 'webauthn-p256+ml-dsa-65',
+      address: wallet.account,
+      credentialIds: [wallet.credentialId],
+    },
+    scheme: 'webauthn-p256+ml-dsa-65',
+    preimage: hash,
+  });
+  const signature = signatures[0];
+  if (!signature) throw new Error('The passkey did not sign.');
+  const userOpHash = await transport.call<string>('eth_sendUserOperation', [
+    userOperationToJson({ ...op, signature }),
+    entryPoint,
+  ]);
+  return { userOpHash };
 }
 
-export async function getOrCreateWallet(displayName?: string): Promise<StoredWallet> {
-  const existing = getStoredWallet();
-  if (existing) return existing;
-  return createWallet(displayName);
-}
+export { hexToBytes };
