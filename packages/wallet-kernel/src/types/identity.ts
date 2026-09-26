@@ -1,8 +1,12 @@
 /**
  * TDIP identity types — the root of all wallet identity.
  *
- * A user has exactly one root DID. Each surface (native, evm, svm, canton-internal,
- * canton-external) projects a derived key from the same MPC quorum.
+ * A person has exactly one root DID, derived from their first passkey
+ * (`did:tenzro:human:<uuid>`, see `custody/passkey/derive.ts`). Their account
+ * is a smart account guarded by the WebAuthn validator: every enrolled
+ * passkey (one per device) can authorise it with a hybrid P-256 + ML-DSA-65
+ * signature. Machines (agents) are `did:tenzro:machine:...` identities rooted
+ * in a TPM / Secure Enclave device key.
  *
  * Spec refs:
  *  - https://tenzro.com/docs/identity (TDIP)
@@ -92,10 +96,12 @@ export interface CantonPartyKey {
 export type SurfaceKey =
   | {
       readonly surface: 'tenzro-native';
-      readonly scheme: 'ed25519';
-      readonly publicKey: Uint8Array;
-      /** Base58-encoded Tenzro address (per `Address` in tenzro-sdk types). */
+      /** Passkey smart account: WebAuthn P-256 assertion + ML-DSA-65 leg. */
+      readonly scheme: 'webauthn-p256+ml-dsa-65';
+      /** Smart-account address (`0x`-prefixed hex), as returned at enrolment. */
       readonly address: string;
+      /** Credential ids (`0x` hex) of the passkeys enrolled on the account. */
+      readonly credentialIds: readonly string[];
     }
   | {
       readonly surface: 'evm-on-tenzro';
@@ -115,7 +121,7 @@ export type SurfaceKey =
 export interface TdipIdentity {
   readonly did: TdipDid;
   readonly parts: TdipDidParts;
-  /** Surface keys derived from the MPC quorum. Indexed by surface name. */
+  /** Per-surface keys and accounts for this identity. Indexed by surface name. */
   readonly keys: ReadonlyMap<SurfaceKey['surface'], SurfaceKey>;
   readonly createdAt: number;
 }

@@ -4,8 +4,8 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { internalMpcDriver } from './custody/internal-mpc.ts';
-import { provisionIdentity } from './identity/provision.ts';
+import { testSigningDriver } from './custody/test-driver.ts';
+import { testIdentity } from './identity/test-identity.ts';
 import { WalletKernel } from './kernel.ts';
 import type { CantonValidatorPort } from './ports/canton/canton-validator.ts';
 import type { TenzroRpcPort, TenzroTxStatus } from './ports/tenzro-rpc.ts';
@@ -80,7 +80,7 @@ function throwingCantonPort(): CantonValidatorPort {
 }
 
 function buildKernel(identity: TdipIdentity): WalletKernel {
-  const driver = internalMpcDriver();
+  const driver = testSigningDriver();
   const keyResolver = (did: TdipDid, surface: SurfaceName): SurfaceKey | undefined => {
     if (did !== identity.did) return undefined;
     return identity.keys.get(surface);
@@ -134,7 +134,7 @@ const TNZO: AssetId = { scope: 'tenzro-native', symbol: 'TNZO', decimals: 18 };
 
 describe('WalletKernel end-to-end', () => {
   it('runs prepare → sign → submit → watch on a Tenzro-native send', async () => {
-    const identity = await provisionIdentity({ uuid: 'kernel-test-1' });
+    const identity = await testIdentity({ uuid: 'kernel-test-1' });
     const kernel = buildKernel(identity);
 
     const intent: Intent = {
@@ -161,7 +161,7 @@ describe('WalletKernel end-to-end', () => {
   });
 
   it('routes EVM→SVM same-DID send as a cross-VM pointer op (no bridge)', async () => {
-    const identity = await provisionIdentity({ uuid: 'kernel-test-pointer' });
+    const identity = await testIdentity({ uuid: 'kernel-test-pointer' });
     const kernel = buildKernel(identity);
     const svmKey = identity.keys.get('svm-on-tenzro');
     if (!svmKey || svmKey.surface !== 'svm-on-tenzro') throw new Error('no svm key');
@@ -189,7 +189,7 @@ describe('WalletKernel end-to-end', () => {
   });
 
   it('warns about sub-lamport dust on EVM→SVM pointer ops', async () => {
-    const identity = await provisionIdentity({ uuid: 'kernel-test-dust' });
+    const identity = await testIdentity({ uuid: 'kernel-test-dust' });
     const kernel = buildKernel(identity);
     const svmKey = identity.keys.get('svm-on-tenzro');
     if (!svmKey || svmKey.surface !== 'svm-on-tenzro') throw new Error('no svm key');
@@ -211,8 +211,8 @@ describe('WalletKernel end-to-end', () => {
   });
 
   it('refuses to sign when policy is violated', async () => {
-    const identity = await provisionIdentity({ uuid: 'kernel-test-2' });
-    const driver = internalMpcDriver();
+    const identity = await testIdentity({ uuid: 'kernel-test-2' });
+    const driver = testSigningDriver();
     const surfaces = new Map<SurfaceName, SurfaceModule>([
       [
         'tenzro-native',
@@ -247,7 +247,7 @@ describe('WalletKernel end-to-end', () => {
     // (intent → canton-external) and `prepare()` fails inside
     // `port.prepareSubmission` rather than at a kernel-level stub. The real
     // wire path is exercised against `LedgerApiAdapter` in adapter tests.
-    const identity = await provisionIdentity({ uuid: 'kernel-test-3' });
+    const identity = await testIdentity({ uuid: 'kernel-test-3' });
     const kernel = buildKernel(identity);
     const intent: Intent = {
       kind: 'send',

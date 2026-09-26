@@ -1,0 +1,56 @@
+/**
+ * TenzroJsonRpcAdapter — `TenzroRpcPort` over plain JSON-RPC.
+ *
+ * Uses the custody module's transport, so a host configures one endpoint
+ * (default `https://rpc.tenzro.xyz`) for custody ceremonies and for sending.
+ */
+
+import {
+  HttpJsonRpcTransport,
+  type HttpJsonRpcTransportOptions,
+  type JsonRpcTransport,
+  parseQuantity,
+} from '../../custody/passkey/rpc.ts';
+import type { TenzroRpcPort, UserOperationReceipt } from '../tenzro-rpc.ts';
+
+export class TenzroJsonRpcAdapter implements TenzroRpcPort {
+  readonly #rpc: JsonRpcTransport;
+
+  constructor(rpc: JsonRpcTransport) {
+    this.#rpc = rpc;
+  }
+
+  static fromUrl(opts: HttpJsonRpcTransportOptions = {}): TenzroJsonRpcAdapter {
+    return new TenzroJsonRpcAdapter(new HttpJsonRpcTransport(opts));
+  }
+
+  async getChainId(): Promise<bigint> {
+    return parseQuantity(await this.#rpc.call<string>('eth_chainId', []));
+  }
+
+  async getEntryPoint(): Promise<string> {
+    const list = await this.#rpc.call<string[]>('eth_supportedEntryPoints', []);
+    const first = list[0];
+    if (!first) throw new Error('this node serves no EntryPoint');
+    return first;
+  }
+
+  async getAccountNonce(account: string): Promise<bigint> {
+    const acct = await this.#rpc.call<{ nonce: number | string }>('tenzro_getSmartAccount', {
+      account_address: account,
+    });
+    return parseQuantity(acct.nonce);
+  }
+
+  async getGasPrice(): Promise<bigint> {
+    return parseQuantity(await this.#rpc.call<string>('eth_gasPrice', []));
+  }
+
+  sendUserOperation(userOp: Readonly<Record<string, string>>, entryPoint: string): Promise<string> {
+    return this.#rpc.call<string>('eth_sendUserOperation', [userOp, entryPoint]);
+  }
+
+  getUserOperationReceipt(userOpHash: string): Promise<UserOperationReceipt | null> {
+    return this.#rpc.call<UserOperationReceipt | null>('eth_getUserOperationReceipt', [userOpHash]);
+  }
+}

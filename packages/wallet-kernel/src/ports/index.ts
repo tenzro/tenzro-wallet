@@ -1,8 +1,9 @@
 export type {
   TenzroRpcPort,
-  TenzroSendArgs,
   TenzroTxStatus,
+  UserOperationReceipt,
 } from './tenzro-rpc.ts';
+export { TenzroJsonRpcAdapter } from './adapters/tenzro-jsonrpc-adapter.ts';
 export {
   TenzroSdkAdapter,
   TenzroNotInstalledError,

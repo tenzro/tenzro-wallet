@@ -4,9 +4,9 @@
  * `prepare` is read-mostly: it can hit RPCs to estimate fees, check nonces, and
  * validate the recipient. It must never request user signing.
  *
- * `sign` is where the MPC quorum runs. Surface modules call into the
- * `SigningDriver` (passed at kernel construction) rather than holding key
- * material directly.
+ * `sign` is where the user approves with a hardware-rooted key (a passkey
+ * for a person's account). Surface modules call into the `SigningDriver`
+ * (passed at kernel construction) rather than holding key material directly.
  *
  * `submit` is fire-and-forget; `watch` is the long-poll for finality.
  *

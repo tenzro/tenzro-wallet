@@ -1,28 +1,30 @@
 /**
- * Provision a new TDIP identity. M1: deterministic mock — generates a uuid,
- * derives placeholder per-surface keys. M2 swaps in real key derivation inside
- * the MPC quorum.
+ * Deterministic TDIP identity fixture for unit tests.
+ *
+ * Real identities come from `PasskeyCustody.createWallet()` (human DID derived
+ * from the passkey, smart account guarded by the WebAuthn validator). This
+ * fixture fills every surface with placeholder keys so surface and kernel
+ * tests can run without a passkey or a node. It is not exported from the
+ * package entry point.
  */
 
 import { cantonFingerprint } from '../ports/canton/fingerprint.ts';
 import type { CantonKeyScheme, SurfaceKey, TdipIdentity, TdipKind } from '../types/identity.ts';
 import { formatTdipDid } from './did.ts';
 
-export interface ProvisionOptions {
+export interface TestIdentityOptions {
   readonly kind?: TdipKind;
   /** For deterministic test fixtures. */
   readonly uuid?: string;
 }
 
-export async function provisionIdentity(opts: ProvisionOptions = {}): Promise<TdipIdentity> {
+export async function testIdentity(opts: TestIdentityOptions = {}): Promise<TdipIdentity> {
   const kind = opts.kind ?? 'human';
   const uuid = opts.uuid ?? newUuid();
   const did = formatTdipDid({ kind, uuid });
 
-  // M1: each surface gets a deterministic mock key. M2 derives real keys via
-  // the MPC quorum (BIP32-like derivation paths inside the threshold scheme).
+  // Each surface gets a deterministic placeholder key derived from the DID.
   const seed = new TextEncoder().encode(did);
-  const nativePub = derive(seed, 'native', 32);
   const svmPub = derive(seed, 'svm', 32);
   const cantonInternal = await cantonPartyKey(
     seed,
@@ -35,9 +37,9 @@ export async function provisionIdentity(opts: ProvisionOptions = {}): Promise<Td
       'tenzro-native',
       {
         surface: 'tenzro-native',
-        scheme: 'ed25519',
-        publicKey: nativePub,
-        address: base58Encode(nativePub),
+        scheme: 'webauthn-p256+ml-dsa-65',
+        address: deriveEvmAddress(derive(seed, 'account', 32)),
+        credentialIds: [`0x${hex(derive(seed, 'credential', 16))}`],
       },
     ],
     [
@@ -62,18 +64,17 @@ export async function provisionIdentity(opts: ProvisionOptions = {}): Promise<Td
 
 // --- helpers ---
 
-/**
- * Generate an RFC 4122 v4 UUID. Uses `crypto.randomUUID()` (universally
- * available in WebCrypto-capable runtimes — browsers, Node 19+, Workers).
- * M2 will move provisioning into the MPC ceremony where the quorum agrees
- * on the uuid as part of the threshold key generation; this lives here
- * until then.
- */
 function newUuid(): string {
   if (!globalThis.crypto?.randomUUID) {
-    throw new Error('provisionIdentity: crypto.randomUUID unavailable on this runtime');
+    throw new Error('testIdentity: crypto.randomUUID unavailable on this runtime');
   }
   return globalThis.crypto.randomUUID();
+}
+
+function hex(bytes: Uint8Array): string {
+  let out = '';
+  for (const b of bytes) out += b.toString(16).padStart(2, '0');
+  return out;
 }
 
 function derive(seed: Uint8Array, label: string, len: number): Uint8Array {
@@ -87,10 +88,7 @@ function derive(seed: Uint8Array, label: string, len: number): Uint8Array {
 }
 
 function deriveEvmAddress(seed: Uint8Array): `0x${string}` {
-  const bytes = derive(seed, 'evm', 20);
-  let hex = '0x';
-  for (const b of bytes) hex += b.toString(16).padStart(2, '0');
-  return hex as `0x${string}`;
+  return `0x${hex(derive(seed, 'evm', 20))}`;
 }
 
 function partyIdFor(hint: string, namespaceFingerprint: string): string {
@@ -104,11 +102,8 @@ function partyIdFor(hint: string, namespaceFingerprint: string): string {
  * Build the canton-internal/canton-external SurfaceKey shape with the new
  * two-key model (per DESIGN.md §4.5.4 and identity.ts:CantonPartyKey).
  *
- * M1 placeholders: namespace + signing keys are deterministic 32-byte
- * derivations from the DID seed, threshold = 1, single signing key. M5+
- * onboarding-flow work replaces this with real Ed25519 keys produced under
- * the passkey-quorum and a M-of-N signing-key set registered via
- * `PartyToKeyMapping`.
+ * Placeholders: namespace + signing keys are deterministic 32-byte
+ * derivations from the DID seed, threshold = 1, single signing key.
  *
  * `synchronizerHostPrefix` is the Canton synchronizer id minus the trailing
  * fingerprint — `global-domain::1220` for external (MainNet),
@@ -146,10 +141,7 @@ async function cantonPartyKey(
 }
 
 /**
- * Base58 encoding (Bitcoin alphabet). Tenzro uses Base58 for native and SVM
- * addresses (per `Address` typedef in tenzro-sdk/types.ts). This is a tiny
- * pure-JS implementation; M5 swaps it for the canonical encoder used by
- * the threshold-key derivation routine.
+ * Base58 encoding (Bitcoin alphabet), used for the SVM placeholder address.
  */
 function base58Encode(bytes: Uint8Array): string {
   const ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';

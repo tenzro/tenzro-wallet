@@ -7,8 +7,8 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { internalMpcDriver } from '../custody/internal-mpc.ts';
-import { provisionIdentity } from '../identity/provision.ts';
+import { testSigningDriver } from '../custody/test-driver.ts';
+import { testIdentity } from '../identity/test-identity.ts';
 import type { TenzroRpcPort, TenzroSendArgs } from '../ports/tenzro-rpc.ts';
 import type { Intent } from '../types/intent.ts';
 import { tenzroNativeSurface } from './tenzro-native.ts';
@@ -45,11 +45,11 @@ function fakePort(): { port: TenzroRpcPort; log: FakePortLog } {
 
 describe('tenzroNativeSurface', () => {
   it('reads nonce and chainId via the port during prepare', async () => {
-    const identity = await provisionIdentity({ uuid: 'native-port-1' });
+    const identity = await testIdentity({ uuid: 'native-port-1' });
     const { port, log } = fakePort();
     const surface = tenzroNativeSurface({
       keyResolver: () => identity.keys.get('tenzro-native'),
-      signingDriver: internalMpcDriver(),
+      signingDriver: testSigningDriver(),
       rpc: port,
     });
 
@@ -67,11 +67,11 @@ describe('tenzroNativeSurface', () => {
   });
 
   it('forwards canonical send args to port.sendTransaction on submit', async () => {
-    const identity = await provisionIdentity({ uuid: 'native-port-2' });
+    const identity = await testIdentity({ uuid: 'native-port-2' });
     const { port, log } = fakePort();
     const surface = tenzroNativeSurface({
       keyResolver: () => identity.keys.get('tenzro-native'),
-      signingDriver: internalMpcDriver(),
+      signingDriver: testSigningDriver(),
       rpc: port,
     });
 
@@ -100,11 +100,11 @@ describe('tenzroNativeSurface', () => {
   });
 
   it('still produces hybrid signatures from the local signing driver (M2 retains the leg for M5)', async () => {
-    const identity = await provisionIdentity({ uuid: 'native-port-3' });
+    const identity = await testIdentity({ uuid: 'native-port-3' });
     const { port } = fakePort();
     const surface = tenzroNativeSurface({
       keyResolver: () => identity.keys.get('tenzro-native'),
-      signingDriver: internalMpcDriver(),
+      signingDriver: testSigningDriver(),
       rpc: port,
     });
     const intent: Intent = {
@@ -120,11 +120,11 @@ describe('tenzroNativeSurface', () => {
   });
 
   it('reads the on-chain address straight from the resolved SurfaceKey', async () => {
-    const identity = await provisionIdentity({ uuid: 'native-port-4' });
+    const identity = await testIdentity({ uuid: 'native-port-4' });
     const { port, log } = fakePort();
     const surface = tenzroNativeSurface({
       keyResolver: () => identity.keys.get('tenzro-native'),
-      signingDriver: internalMpcDriver(),
+      signingDriver: testSigningDriver(),
       rpc: port,
     });
     const intent: Intent = {
@@ -144,12 +144,12 @@ describe('tenzroNativeSurface', () => {
   });
 
   it('refuses to resolve a remote TDIP recipient when no identity port is wired', async () => {
-    const me = await provisionIdentity({ uuid: 'native-port-5-self' });
-    const them = await provisionIdentity({ uuid: 'native-port-5-other' });
+    const me = await testIdentity({ uuid: 'native-port-5-self' });
+    const them = await testIdentity({ uuid: 'native-port-5-other' });
     const { port } = fakePort();
     const surface = tenzroNativeSurface({
       keyResolver: (did) => (did === me.did ? me.keys.get('tenzro-native') : undefined),
-      signingDriver: internalMpcDriver(),
+      signingDriver: testSigningDriver(),
       rpc: port,
     });
     const intent: Intent = {
@@ -163,8 +163,8 @@ describe('tenzroNativeSurface', () => {
   });
 
   it('resolves a remote TDIP recipient via the identity port and forwards the address to sendTransaction', async () => {
-    const me = await provisionIdentity({ uuid: 'native-port-6-self' });
-    const them = await provisionIdentity({ uuid: 'native-port-6-other' });
+    const me = await testIdentity({ uuid: 'native-port-6-self' });
+    const them = await testIdentity({ uuid: 'native-port-6-other' });
     const themKey = them.keys.get('tenzro-native');
     if (!themKey || themKey.surface !== 'tenzro-native') throw new Error('unreachable');
     const remoteAddress = themKey.address;
@@ -173,7 +173,7 @@ describe('tenzroNativeSurface', () => {
     const { port, log } = fakePort();
     const surface = tenzroNativeSurface({
       keyResolver: (did) => (did === me.did ? me.keys.get('tenzro-native') : undefined),
-      signingDriver: internalMpcDriver(),
+      signingDriver: testSigningDriver(),
       rpc: port,
       identityPort: {
         async resolveTenzroAddress(did) {
@@ -201,12 +201,12 @@ describe('tenzroNativeSurface', () => {
   });
 
   it('throws when the identity port returns undefined (DID has no tenzro-native key)', async () => {
-    const me = await provisionIdentity({ uuid: 'native-port-7-self' });
-    const cantonOnly = await provisionIdentity({ uuid: 'native-port-7-canton-only' });
+    const me = await testIdentity({ uuid: 'native-port-7-self' });
+    const cantonOnly = await testIdentity({ uuid: 'native-port-7-canton-only' });
     const { port } = fakePort();
     const surface = tenzroNativeSurface({
       keyResolver: (did) => (did === me.did ? me.keys.get('tenzro-native') : undefined),
-      signingDriver: internalMpcDriver(),
+      signingDriver: testSigningDriver(),
       rpc: port,
       identityPort: {
         async resolveTenzroAddress() {

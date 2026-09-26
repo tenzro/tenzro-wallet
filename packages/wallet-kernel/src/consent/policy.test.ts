@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { provisionIdentity } from '../identity/provision.ts';
+import { testIdentity } from '../identity/test-identity.ts';
 import type { AssetId } from '../types/asset.ts';
 import type { Consent } from '../types/consent.ts';
 import type { Intent } from '../types/intent.ts';
@@ -8,7 +8,7 @@ import { PolicyViolationError, enforcePolicy } from './policy.ts';
 const TNZO: AssetId = { scope: 'tenzro-native', symbol: 'TNZO', decimals: 18 };
 const USDC: AssetId = { scope: 'tenzro-asset', symbol: 'USDC', decimals: 6 };
 
-const id = await provisionIdentity({ uuid: 'test-1' });
+const id = await testIdentity({ uuid: 'test-1' });
 const consent: Consent = { approvedAt: Date.now() };
 const intent = (amount: bigint, asset = TNZO): Intent => ({
   kind: 'send',

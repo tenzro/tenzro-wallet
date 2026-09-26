@@ -6,7 +6,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { provisionIdentity } from './identity/provision.ts';
+import { testIdentity } from './identity/test-identity.ts';
 import { WalletKernel } from './kernel.ts';
 import type {
   AgentPaymentPort,
@@ -136,7 +136,7 @@ const noSurfaces: ReadonlyMap<SurfaceName, SurfaceModule> = new Map();
 
 describe('WalletKernel agent-ports bundle', () => {
   it('exposes configured ports through `kernel.agent.<port>()`', async () => {
-    const identity = await provisionIdentity({ uuid: 'kernel-agent-1' });
+    const identity = await testIdentity({ uuid: 'kernel-agent-1' });
     const kernel = new WalletKernel({
       identity,
       surfaces: noSurfaces,
@@ -176,7 +176,7 @@ describe('WalletKernel agent-ports bundle', () => {
   });
 
   it('throws a clear error when a port is not configured', async () => {
-    const identity = await provisionIdentity({ uuid: 'kernel-agent-2' });
+    const identity = await testIdentity({ uuid: 'kernel-agent-2' });
     const kernel = new WalletKernel({
       identity,
       surfaces: noSurfaces,
@@ -192,13 +192,13 @@ describe('WalletKernel agent-ports bundle', () => {
   });
 
   it('accessing any agent port throws when agentPorts is omitted entirely', async () => {
-    const identity = await provisionIdentity({ uuid: 'kernel-agent-3' });
+    const identity = await testIdentity({ uuid: 'kernel-agent-3' });
     const kernel = new WalletKernel({ identity, surfaces: noSurfaces });
     expect(() => kernel.agent.ap2()).toThrow(/agent port "ap2" not configured/);
   });
 
   it('htlcEscrow accessor mirrors the agent-port pattern', async () => {
-    const identity = await provisionIdentity({ uuid: 'kernel-agent-htlc' });
+    const identity = await testIdentity({ uuid: 'kernel-agent-htlc' });
     const stubHtlc = {
       lock: async () => ({ htlcId: 'h1', txHash: '0x', status: 'locked' as const }),
       redeem: async () => ({ txHash: '0xredeem' }),
@@ -217,7 +217,7 @@ describe('WalletKernel agent-ports bundle', () => {
   });
 
   it('erc7802 accessor mirrors the agent-port pattern', async () => {
-    const identity = await provisionIdentity({ uuid: 'kernel-agent-erc7802' });
+    const identity = await testIdentity({ uuid: 'kernel-agent-erc7802' });
     const stubErc7802 = {
       crosschainMint: async () => ({
         txHash: '0xmint',
@@ -253,7 +253,7 @@ describe('WalletKernel agent-ports bundle', () => {
   });
 
   it('bridge.adapters() returns registered adapters; bridge.get() looks up by id', async () => {
-    const identity = await provisionIdentity({ uuid: 'kernel-bridge-1' });
+    const identity = await testIdentity({ uuid: 'kernel-bridge-1' });
     const stub = (id: 'lifi' | 'ccip' | 'layerzero') => ({
       adapterId: id,
       quote: async () => {
@@ -281,7 +281,7 @@ describe('WalletKernel agent-ports bundle', () => {
   });
 
   it('bridge.adapters() defaults to empty when none registered', async () => {
-    const identity = await provisionIdentity({ uuid: 'kernel-bridge-2' });
+    const identity = await testIdentity({ uuid: 'kernel-bridge-2' });
     const kernel = new WalletKernel({ identity, surfaces: noSurfaces });
     expect(kernel.bridge.adapters()).toEqual([]);
   });

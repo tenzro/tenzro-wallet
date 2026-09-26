@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { provisionIdentity } from '../identity/provision.ts';
+import { testIdentity } from '../identity/test-identity.ts';
 import type { AssetId } from '../types/asset.ts';
 import type { Intent } from '../types/intent.ts';
 import { selectRoute } from './route.ts';
 
 const TNZO: AssetId = { scope: 'tenzro-native', symbol: 'TNZO', decimals: 18 };
 const CC: AssetId = { scope: 'canton-mainnet', symbol: 'CC', decimals: 10 };
-const id = await provisionIdentity({ uuid: 'route-1' });
+const id = await testIdentity({ uuid: 'route-1' });
 
 describe('route selection', () => {
   it('routes TNZO to a TDIP recipient as native on tenzro-native', () => {
