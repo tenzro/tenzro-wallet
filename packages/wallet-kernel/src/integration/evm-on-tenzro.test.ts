@@ -26,7 +26,7 @@
  * leg that broke.
  *
  * Required env (see `.env.example`):
- *   - TENZRO_RPC_URL — the Tenzro JSON-RPC base URL (testnet default).
+ *   - TENZRO_RPC_URL — the Tenzro JSON-RPC base URL (e.g. https://rpc.tenzro.xyz).
  *   - TENZRO_TEST_ADDRESS — an EVM-shape address (`0x` + 40 hex) on the
  *     network. Read-only — no funds spent.
  *
@@ -63,7 +63,7 @@ describe.skipIf(!HAS_AUTH)('integration: evm-on-tenzro smoke', () => {
   it(
     'serves real eth_* methods (not mocks) for EVM-on-Tenzro',
     async () => {
-      // 1. eth_chainId — cheapest call. 1337 on testnet.
+      // 1. eth_chainId — cheapest call; read from the node.
       const chainHex = await rpc<string>('eth_chainId', []);
       const chainId = Number.parseInt(chainHex, 16);
       expect(Number.isFinite(chainId)).toBe(true);

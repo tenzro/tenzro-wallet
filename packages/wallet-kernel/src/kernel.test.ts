@@ -1,5 +1,5 @@
 /**
- * End-to-end smoke test: provision identity → prepare → sign → submit → watch
+ * End-to-end smoke test: identity fixture → prepare → sign → submit → watch
  * a Tenzro-native send through the kernel facade.
  */
 
@@ -8,7 +8,8 @@ import { testSigningDriver } from './custody/test-driver.ts';
 import { testIdentity } from './identity/test-identity.ts';
 import { WalletKernel } from './kernel.ts';
 import type { CantonValidatorPort } from './ports/canton/canton-validator.ts';
-import type { TenzroRpcPort, TenzroTxStatus } from './ports/tenzro-rpc.ts';
+import type { TenzroIdentityPort } from './ports/tenzro-identity.ts';
+import type { TenzroRpcPort } from './ports/tenzro-rpc.ts';
 import {
   cantonExternalSurface,
   cantonInternalSurface,
@@ -23,29 +24,21 @@ import type { SurfaceModule } from './types/surface-module.ts';
 import type { SurfaceName } from './types/surface.ts';
 
 /**
- * In-memory port that walks a tx through pending → included → finalized on
- * successive `getTransaction` calls. Lets the kernel-level e2e exercise the
- * real port-driven `watch()` loop without standing up a node.
+ * In-memory port: the receipt is missing on the first poll and present on
+ * the next, so the kernel-level e2e exercises the real port-driven `watch()`
+ * loop without standing up a node.
  */
 function progressingRpcPort(): TenzroRpcPort {
-  const walk: TenzroTxStatus['status'][] = ['pending', 'included', 'finalized'];
-  let i = 0;
-  let hash = '';
+  let polls = 0;
   return {
-    getNonce: async () => 0,
-    getChainId: async () => 1337,
-    sendTransaction: async () => {
-      hash = '0xfeedface';
-      return hash;
-    },
-    getTransaction: async () => {
-      const status = walk[Math.min(i, walk.length - 1)]!;
-      i += 1;
-      return {
-        hash,
-        status,
-        ...(status === 'pending' ? {} : { blockHeight: 1 }),
-      };
+    getChainId: async () => 20_260_901n,
+    getEntryPoint: async () => '0x0000000000000000000000000000000000004337',
+    getAccountNonce: async () => 0n,
+    getGasPrice: async () => 1_000_000_000n,
+    sendUserOperation: async () => '0xfeedface',
+    getUserOperationReceipt: async (hash) => {
+      polls += 1;
+      return polls < 2 ? null : { userOpHash: hash, success: true };
     },
   };
 }
@@ -78,6 +71,11 @@ function throwingCantonPort(): CantonValidatorPort {
     submitAcceptSetup: async () => nope('submitAcceptSetup'),
   };
 }
+
+const RECIPIENT_DID = 'did:tenzro:human:00000000-0000-8000-8000-000000000001' as TdipDid;
+const recipientPort: TenzroIdentityPort = {
+  resolveTenzroAddress: async () => '0x1111111111111111111111111111111111111111',
+};
 
 function buildKernel(identity: TdipIdentity): WalletKernel {
   const driver = testSigningDriver();
@@ -140,7 +138,7 @@ describe('WalletKernel end-to-end', () => {
     const intent: Intent = {
       kind: 'send',
       from: identity.did,
-      to: { kind: 'tdip', did: identity.did },
+      to: { kind: 'tdip', did: RECIPIENT_DID },
       asset: TNZO,
       amount: 5n * 10n ** 18n,
     };
@@ -149,15 +147,15 @@ describe('WalletKernel end-to-end', () => {
     expect(prepared.route.kind).toBe('native');
 
     const signed = await kernel.sign(prepared, { approvedAt: Date.now() });
-    // Hybrid signing → two signatures.
-    expect(signed.signatures).toHaveLength(2);
+    // A passkey account returns one signature bundle.
+    expect(signed.signatures).toHaveLength(1);
 
     const handle = await kernel.submit(signed);
     expect(handle.surface).toBe('tenzro-native');
 
     const phases: TxStatus['phase'][] = [];
     for await (const status of kernel.watch(handle)) phases.push(status.phase);
-    expect(phases).toEqual(['created', 'pending', 'confirmed', 'finalized']);
+    expect(phases).toEqual(['created', 'pending', 'finalized']);
   });
 
   it('routes EVM→SVM same-DID send as a cross-VM pointer op (no bridge)', async () => {
@@ -219,6 +217,8 @@ describe('WalletKernel end-to-end', () => {
         tenzroNativeSurface({
           keyResolver: () => identity.keys.get('tenzro-native'),
           signingDriver: driver,
+          rpc: progressingRpcPort(),
+          identityPort: recipientPort,
         }),
       ],
     ]);
@@ -231,7 +231,7 @@ describe('WalletKernel end-to-end', () => {
     const intent: Intent = {
       kind: 'send',
       from: identity.did,
-      to: { kind: 'tdip', did: identity.did },
+      to: { kind: 'tdip', did: RECIPIENT_DID },
       asset: TNZO,
       amount: 1000n,
     };
