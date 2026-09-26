@@ -90,6 +90,7 @@ function buildKernel(identity: TdipIdentity): WalletKernel {
         keyResolver: (d) => keyResolver(d, 'tenzro-native'),
         signingDriver: driver,
         rpc: progressingRpcPort(),
+        identityPort: recipientPort,
       }),
     ],
     [
@@ -215,7 +216,7 @@ describe('WalletKernel end-to-end', () => {
       [
         'tenzro-native',
         tenzroNativeSurface({
-          keyResolver: () => identity.keys.get('tenzro-native'),
+          keyResolver: (d) => (d === identity.did ? identity.keys.get('tenzro-native') : undefined),
           signingDriver: driver,
           rpc: progressingRpcPort(),
           identityPort: recipientPort,

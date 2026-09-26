@@ -6,7 +6,7 @@
  * transfer (optionally bound to a 32-byte witness — used by ERC-7683
  * origin opens to bind the permit to a specific cross-chain order).
  * The wallet asks the node for the domain separator + digest, signs
- * via the EVM custody quorum, then submits the verify-and-consume
+ * with the account's signing driver, then submits the verify-and-consume
  * call out of band.
  */
 

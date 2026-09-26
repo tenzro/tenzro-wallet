@@ -132,7 +132,9 @@ export class MockRpc {
   }
 
   paramsOf(method: string): Array<Record<string, unknown>> {
-    return this.calls.filter((c) => c.method === method).map((c) => c.params as Record<string, unknown>);
+    return this.calls
+      .filter((c) => c.method === method)
+      .map((c) => c.params as Record<string, unknown>);
   }
 }
 

@@ -8,10 +8,10 @@
  */
 
 import type { SigningDriver, SigningRequest, SigningResult } from '../../types/signing-driver.ts';
+import { toHex } from './bytes.ts';
 import { signWithPrf } from './gate.ts';
 import { type HybridSignatureEntry, encodeHybridSignatureBundle } from './userop.ts';
 import { type CredentialRef, type PasskeyAuthenticator, PasskeyError } from './webauthn.ts';
-import { toHex } from './bytes.ts';
 
 export interface PasskeySigningDriverOptions {
   readonly authenticator: PasskeyAuthenticator;
@@ -50,7 +50,10 @@ export function passkeySigningDriver(opts: PasskeySigningDriverOptions): Signing
         });
         const id = toHex(signed.credentialId);
         if (used.has(id)) {
-          throw new PasskeyError('Approve with a different passkey for the second signature.', 'invalid');
+          throw new PasskeyError(
+            'Approve with a different passkey for the second signature.',
+            'invalid',
+          );
         }
         used.add(id);
         entries.push({

@@ -1,7 +1,7 @@
 {
   "name": "tenzro-wallet",
-  "version": "0.2.7",
-  "description": "Tenzro Wallet kernel — one identity, four VM surfaces (Tenzro native, EVM, SVM, Canton). Passkey-quorum custody, post-quantum signing, agent-payment ports, capital intents + multi-party workflows, EVM primitives (EIP-7702 / Permit2 / Secure-Mint / ERC-7683 + BridgeFeeHint), eight-vendor bridge router, cross-chain bridge fee in TNZO + Chainlink-backed oracle + per-tenant analytics, CAIP discovery, Babylon Bitcoin staking, Tenzro Train protocol port (Phase 4 Confidential-tier), ERC-7943 uRWA compliance, FATF Travel Rule (IVMS101), TEE-attested clock, A2A v1.0 SignedAgentCard, Wormhole NTT.",
+  "version": "0.3.0",
+  "description": "Tenzro Wallet kernel: non-custodial passkey accounts (P-256 + ML-DSA-65, device linking, guardian recovery), hardware-rooted agents and machines, and one identity across the Tenzro native, EVM, SVM and Canton surfaces. Agent-payment ports, capital intents, bridge router, CAIP discovery.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -9,6 +9,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./custody": {
+      "types": "./dist/custody/passkey/index.d.ts",
+      "import": "./dist/custody/passkey/index.js"
     },
     "./surfaces": {
       "types": "./dist/surfaces/index.d.ts",
@@ -19,11 +23,7 @@
       "import": "./dist/types/index.js"
     }
   },
-  "files": [
-    "dist",
-    "README.md",
-    "LICENSE"
-  ],
+  "files": ["dist", "README.md", "LICENSE"],
   "scripts": {
     "build": "tsc -p tsconfig.build.json && node scripts/rewrite-dts-extensions.mjs",
     "typecheck": "tsc --noEmit",
@@ -55,8 +55,9 @@
     "ml-dsa",
     "post-quantum",
     "passkey",
-    "frost",
-    "mpc",
+    "device-linking",
+    "non-custodial",
+    "webauthn",
     "evm",
     "solana",
     "canton",
@@ -65,9 +66,6 @@
     "ap2",
     "x402",
     "mpp",
-    "stripe-spt",
-    "visa-tap",
-    "mastercard-agent-pay",
     "erc-8004",
     "erc-7802",
     "erc-7683",

@@ -4,7 +4,7 @@
  * Kept separate from the canton-external/canton-internal "send" surface
  * because onboarding is a one-shot ceremony, not a transaction:
  *   1. Wallet derives namespace + signing keypairs (provisioned at identity
- *      creation time — see `provisionIdentity`).
+ *      creation time by the host's hardware-rooted key store).
  *   2. `generateTopology` asks the validator to render the three unsigned
  *      topology transactions (NamespaceDelegation, PartyToKeyMapping,
  *      PartyToParticipant) plus a bundle hash.

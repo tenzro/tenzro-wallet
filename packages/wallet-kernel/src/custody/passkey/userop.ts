@@ -105,7 +105,11 @@ export function userOperationStructHash(op: UserOperation): Uint8Array {
 }
 
 /** `keccak256(0x19 0x01 || domainSeparator || structHash)`: the hash the passkey signs. */
-export function userOperationHash(op: UserOperation, chainId: bigint, entryPoint: string): Uint8Array {
+export function userOperationHash(
+  op: UserOperation,
+  chainId: bigint,
+  entryPoint: string,
+): Uint8Array {
   return keccak256(
     concatBytes(
       new Uint8Array([0x19, 0x01]),
@@ -116,7 +120,11 @@ export function userOperationHash(op: UserOperation, chainId: bigint, entryPoint
 }
 
 /** ABI `execute(address to, uint256 value, bytes data)` calldata (selector `0xb61d27f6`). */
-export function encodeExecuteCall(to: string, value: bigint, data: Uint8Array = new Uint8Array(0)): Uint8Array {
+export function encodeExecuteCall(
+  to: string,
+  value: bigint,
+  data: Uint8Array = new Uint8Array(0),
+): Uint8Array {
   const target = fromHex(to);
   if (target.length !== 20) throw new Error('execute target must be a 20-byte address');
   const padded = new Uint8Array(Math.ceil(data.length / 32) * 32);

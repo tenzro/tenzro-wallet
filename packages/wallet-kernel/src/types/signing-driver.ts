@@ -44,8 +44,7 @@ export interface SigningResult {
 }
 
 export interface SigningDriver {
-  readonly id:
-    /** Passkey driver: WebAuthn assertion + passkey-derived ML-DSA-65. */
+  readonly id: /** Passkey driver: WebAuthn assertion + passkey-derived ML-DSA-65. */
     | 'passkey'
     /** A TPM / Secure Enclave device key supplied by the host. */
     | 'device-key'

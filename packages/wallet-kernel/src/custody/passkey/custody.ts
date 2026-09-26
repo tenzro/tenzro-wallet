@@ -161,7 +161,10 @@ export class PasskeyCustody {
 
     const expectedDid = humanDidFromPasskey(created.publicKey);
     if (enrolled.did !== expectedDid) {
-      throw new PasskeyError('The node returned an identity that does not match this passkey.', 'invalid');
+      throw new PasskeyError(
+        'The node returned an identity that does not match this passkey.',
+        'invalid',
+      );
     }
     return {
       did: enrolled.did,
@@ -427,15 +430,23 @@ export class PasskeyCustody {
     readonly approver: CredentialRef;
   }): Promise<unknown> {
     const key = fromHex(opts.grant.sessionPublicKeyHex);
-    if (key.length !== 32) throw new PasskeyError('A session key must be 32 bytes (Ed25519).', 'invalid');
-    const authorization = await this.#authorize(opts.account, 'grant_session_key', key, opts.approver);
+    if (key.length !== 32)
+      throw new PasskeyError('A session key must be 32 bytes (Ed25519).', 'invalid');
+    const authorization = await this.#authorize(
+      opts.account,
+      'grant_session_key',
+      key,
+      opts.approver,
+    );
     const g = opts.grant;
     return this.rpc.call('tenzro_grantSessionKey', {
       account_address: opts.account,
       session_pubkey_hex: toHex(key),
       allowed_selectors_hex: g.allowedSelectors.map(stripped),
       allowed_targets: g.allowedTargets ?? [],
-      ...(g.maxValuePerCallWei !== undefined ? { max_value_per_call_wei: g.maxValuePerCallWei } : {}),
+      ...(g.maxValuePerCallWei !== undefined
+        ? { max_value_per_call_wei: g.maxValuePerCallWei }
+        : {}),
       ...(g.maxTotalValueWei !== undefined ? { max_total_value_wei: g.maxTotalValueWei } : {}),
       valid_after_unix: g.validAfterUnix,
       valid_until_unix: g.validUntilUnix,
@@ -499,7 +510,10 @@ export class PasskeyCustody {
       userId: fromHex(opts.account).slice(-20),
       userName: opts.label,
     });
-    const credential: CredentialRef = { id: toHex(created.credentialId), transports: created.transports };
+    const credential: CredentialRef = {
+      id: toHex(created.credentialId),
+      transports: created.transports,
+    };
     const prf = created.prf ?? (await this.#prfFor(credential));
     const { publicKey, secretKey } = deriveCustodyKey(prf);
     secretKey.fill(0);
@@ -535,7 +549,10 @@ export class PasskeyCustody {
 
   /** One extra assertion to read the PRF when the authenticator did not return it at creation. */
   async #prfFor(credential: CredentialRef): Promise<Uint8Array> {
-    const signed = await this.authenticator.get({ challenge: randomBytes(32), allow: [credential] });
+    const signed = await this.authenticator.get({
+      challenge: randomBytes(32),
+      allow: [credential],
+    });
     if (!signed.prf) {
       throw new PasskeyError(
         'This passkey provider cannot derive keys (PRF). Try a phone, a security key, or a different browser.',

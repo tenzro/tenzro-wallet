@@ -15,14 +15,7 @@
  *     lower tier and can never be the only root of an account.
  */
 
-import {
-  asBytes,
-  fromHex,
-  randomBytes,
-  toArrayBuffer,
-  toHex,
-  toNumberArray,
-} from './bytes.ts';
+import { asBytes, fromHex, randomBytes, toArrayBuffer, toHex, toNumberArray } from './bytes.ts';
 import { COSE_ES256, DEFAULT_RP_ID, DEFAULT_RP_NAME } from './constants.ts';
 import { custodyPrfSalt, normalizeP256PublicKey } from './derive.ts';
 
@@ -229,9 +222,9 @@ export class BrowserPasskeyAuthenticator implements PasskeyAuthenticator {
   #container(): CredentialsContainer {
     const c =
       this.#credentials ??
-      (globalThis as { navigator?: { credentials?: CredentialsContainer } }).navigator
-        ?.credentials;
-    if (!c) throw new PasskeyError('Passkeys are not available in this environment.', 'unsupported');
+      (globalThis as { navigator?: { credentials?: CredentialsContainer } }).navigator?.credentials;
+    if (!c)
+      throw new PasskeyError('Passkeys are not available in this environment.', 'unsupported');
     return c;
   }
 

@@ -10,9 +10,11 @@
  * Vault address is deterministic from `escrow_id`; only the original
  * payer can release or refund. Six release modes, all enforced VM-side.
  *
- * The wallet wraps the SDK's `SettlementClient`; the SDK already owns the
- * canonical CreateEscrow/ReleaseEscrow/RefundEscrow tx_type encoding and
- * routes through `tenzro_signAndSendTransaction` for hybrid signing.
+ * The wallet wraps the SDK's `SettlementClient`, which owns the
+ * CreateEscrow/ReleaseEscrow/RefundEscrow encoding. Note: the SDK submits the operation itself with `tenzro_signAndSendTransaction`, which
+ * signs with a key the node holds for the caller's session. A passkey account
+ * has no such key: from a passkey account these operations must be sent as
+ * UserOperations the passkey signs (not wired yet).
  */
 
 export type EscrowReleaseMode =
@@ -24,7 +26,7 @@ export type EscrowReleaseMode =
   | 'custom';
 
 export interface CreateEscrowRequest {
-  /** Payer address (the holder's MPC wallet address). */
+  /** Payer address (the holder's account address). */
   readonly payer: string;
   /** Recipient on successful release. */
   readonly payee: string;

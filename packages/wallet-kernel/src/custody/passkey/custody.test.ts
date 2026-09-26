@@ -55,7 +55,10 @@ function nodeMock(extra: Record<string, (params: never) => unknown> = {}) {
         credentials_total: credentialIds.length,
       };
     },
-    tenzro_removePasskey: () => ({ removed: true, credentials_remaining: credentialIds.length - 1 }),
+    tenzro_removePasskey: () => ({
+      removed: true,
+      credentials_remaining: credentialIds.length - 1,
+    }),
     tenzro_setSpendingLimit: (p: unknown) => p,
     tenzro_grantSessionKey: (p: unknown) => p,
     tenzro_setPasskeyPolicy: (p: unknown) => p,
@@ -162,9 +165,7 @@ describe('createWallet', () => {
       }),
     });
     const custody = new PasskeyCustody({ rpc, authenticator: auth });
-    await expect(custody.createWallet({ displayName: 'Ada' })).rejects.toBeInstanceOf(
-      PasskeyError,
-    );
+    await expect(custody.createWallet({ displayName: 'Ada' })).rejects.toBeInstanceOf(PasskeyError);
   });
 });
 
@@ -352,9 +353,14 @@ describe('passkeySigningDriver', () => {
     expect(toHex(bundle.slice(0, 8))).toBe('0100000000000000');
     // The ML-DSA signature is the 3309-byte field before the credential id.
     const credLen = fromHex(account.credentialId).length;
-    const mlSig = bundle.slice(bundle.length - 8 - credLen - ML_DSA_65_SIGNATURE_BYTES, bundle.length - 8 - credLen);
+    const mlSig = bundle.slice(
+      bundle.length - 8 - credLen - ML_DSA_65_SIGNATURE_BYTES,
+      bundle.length - 8 - credLen,
+    );
     const signed = await auth.get({ challenge: new Uint8Array(32), allow: [] });
-    expect(verifyCustodySignature(opHash, mlSig, deriveCustodyKey(signed.prf!).publicKey)).toBe(true);
+    expect(verifyCustodySignature(opHash, mlSig, deriveCustodyKey(signed.prf!).publicKey)).toBe(
+      true,
+    );
   });
 
   it('refuses other schemes and non-32-byte preimages', async () => {
@@ -366,7 +372,12 @@ describe('passkeySigningDriver', () => {
       credentialIds: [],
     };
     await expect(
-      driver.sign({ did: 'x' as never, surfaceKey, scheme: 'ed25519', preimage: new Uint8Array(32) }),
+      driver.sign({
+        did: 'x' as never,
+        surfaceKey,
+        scheme: 'ed25519',
+        preimage: new Uint8Array(32),
+      }),
     ).rejects.toBeInstanceOf(PasskeyError);
     await expect(
       driver.sign({

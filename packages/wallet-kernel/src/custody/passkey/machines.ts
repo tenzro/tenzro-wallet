@@ -54,7 +54,11 @@ export interface DelegatedAgentResult {
     readonly capabilities: readonly string[];
     readonly status: string;
   };
-  readonly wallet: { readonly wallet_id: string; readonly address: string; readonly public_key: string };
+  readonly wallet: {
+    readonly wallet_id: string;
+    readonly address: string;
+    readonly public_key: string;
+  };
   /** Tokens belong to the agent. Hand them to its runtime; never keep them in the wallet. */
   readonly access_token: string;
   readonly refresh_token: string;
@@ -69,10 +73,16 @@ function requireHumanController(did: string): void {
   try {
     kind = parseTdipDid(did).kind;
   } catch {
-    throw new PasskeyError('The owner must be a Tenzro identity (did:tenzro:human:...).', 'invalid');
+    throw new PasskeyError(
+      'The owner must be a Tenzro identity (did:tenzro:human:...).',
+      'invalid',
+    );
   }
   if (kind !== 'human') {
-    throw new PasskeyError('Only a person (a human DID) can own agents created from this wallet.', 'invalid');
+    throw new PasskeyError(
+      'Only a person (a human DID) can own agents created from this wallet.',
+      'invalid',
+    );
   }
 }
 
@@ -94,7 +104,9 @@ function scopeJson(scope: DelegationScopeInput): Record<string, unknown> {
   return {
     max_transaction_value: scope.maxTransactionValueWei,
     max_daily_spend: scope.maxDailySpendWei,
-    ...(scope.allowedOperations?.length ? { allowed_operations: [...scope.allowedOperations] } : {}),
+    ...(scope.allowedOperations?.length
+      ? { allowed_operations: [...scope.allowedOperations] }
+      : {}),
     ...(scope.allowedPaymentProtocols?.length
       ? { allowed_payment_protocols: [...scope.allowedPaymentProtocols] }
       : {}),
@@ -140,7 +152,12 @@ export async function registerControlledMachine(
     readonly capabilities: readonly string[];
     readonly scope: DelegationScopeInput;
   },
-): Promise<{ did: string; controller_did: string; status: string; capabilities: readonly string[] }> {
+): Promise<{
+  did: string;
+  controller_did: string;
+  status: string;
+  capabilities: readonly string[];
+}> {
   requireHumanController(opts.controllerDid);
   const key = requirePairing({ devicePublicKeyHex: opts.devicePublicKeyHex, machineId: 'machine' });
   if (opts.capabilities.length === 0) {

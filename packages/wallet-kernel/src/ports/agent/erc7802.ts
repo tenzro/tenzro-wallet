@@ -7,14 +7,11 @@
  * compatible SuperchainERC20s; the wallet exposes it so dApps can
  * bypass aggregators when the asset itself implements ERC-7802.
  *
- * **Implementation note (2026-05).** `tenzro-sdk@0.1.0` `Erc7802Client`
- * actually performs the operation server-side via the node's
- * `tenzro_signAndSendTransaction` hybrid-signing path — it does not
- * return raw calldata. The wallet kernel's `Erc7802Port` mirrors that
- * shape: callers receive a `tx_hash` directly, no `prepare → sign →
- * submit` lifecycle to drive on the wallet side. This is consistent
- * with how `client.sendTransaction` works for native TNZO transfers
- * (the wallet's keys live in the node TEE; the wire never carries them).
+ * **Implementation note.** `Erc7802Client` returns a `tx_hash`, not
+ * calldata: the SDK submits the operation itself with `tenzro_signAndSendTransaction`, which
+ * signs with a key the node holds for the caller's session. A passkey account
+ * has no such key: from a passkey account these operations must be sent as
+ * UserOperations the passkey signs (not wired yet).
  *
  * SDK methods (per `tenzro-sdk` `src/erc7802.ts`):
  *   - `client.erc7802().crosschainMint(token, recipient, amount, sourceChain)`
