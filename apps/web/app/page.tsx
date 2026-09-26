@@ -6,7 +6,7 @@
  * the extension. Layout choices:
  *   - hero with the four-surface mark and a single CTA → /onboarding
  *   - "what makes Tenzro top-tier" panel — the four execution surfaces,
- *     pointer-ops, passkey-quorum, agentic stack
+ *     pointer-ops, passkey custody, agentic stack
  *   - 2026 trend signals — agentic mandates, x402, ERC-8004 — to make
  *     it obvious this is a forward-looking wallet
  *
@@ -31,14 +31,14 @@ import Link from 'next/link';
 import { Badge, Button, Card, ChainBadge, type ChainId, Logo } from '@tenzro/ui';
 
 const chainHighlights: { chain: ChainId; desc: string }[] = [
-  { chain: 'tenzro', desc: 'Sub-second finality. Pointer-op cross-VM via precompile 0x1003.' },
+  { chain: 'tenzro', desc: 'Tenzro Network 1. One TNZO balance with EVM, SVM and DAML views.' },
   { chain: 'tenzro-evm', desc: 'Real eth_* — Tenzro-FeeMarket pricing, EIP-1559, EIP-6963.' },
   { chain: 'tenzro-svm', desc: 'Solana program model on the Tenzro synchronizer.' },
   { chain: 'tempo', desc: 'Payments stablechain — AI-agent payments built in.' },
   { chain: 'base', desc: 'EVM L2 — first-class for stablecoin commerce.' },
   { chain: 'ethereum', desc: 'Mainnet via canonical bridge.' },
   { chain: 'solana', desc: 'External SVM via the same SDK as Tenzro SVM.' },
-  { chain: 'canton', desc: 'External-party DAML, Splice 0.5 baseline, validator co-signing.' },
+  { chain: 'canton', desc: 'External-party DAML, signed locally by the wallet.' },
 ];
 
 const trendFacts = [
@@ -49,18 +49,18 @@ const trendFacts = [
   },
   {
     icon: Fingerprint,
-    title: 'Passkey-quorum custody',
-    body: 'No seed phrases. FROST Ed25519 + ML-DSA-65 quorum across your devices and a node-TEE co-signer. Post-quantum ready.',
+    title: 'Your passkey is your wallet',
+    body: 'Non-custodial. No seed phrases, no key files. Every approval is a passkey signature plus a post-quantum ML-DSA-65 signature derived from it. Link more devices to stay safe.',
   },
   {
     icon: Zap,
     title: 'Cross-VM is a pointer op',
-    body: 'EVM ↔ SVM ↔ native on Tenzro flows through precompile 0x1003. Sub-second, no bridge risk, no LP exposure.',
+    body: 'EVM, SVM and native on Tenzro are views of one balance. No bridge risk, no LP exposure.',
   },
   {
     icon: ShieldCheck,
     title: 'TDIP, one identity',
-    body: 'A single did:tenzro: roots all four surfaces. Surface keys derived deterministically — Ed25519, secp256k1, Canton external party.',
+    body: 'Your did:tenzro identity is derived from your passkey. Agents you create are machine identities you own, with their own hardware keys and spending limits.',
   },
 ];
 
@@ -118,7 +118,7 @@ export default function LandingPage() {
           </h1>
           <p className="text-xl text-foreground-muted leading-relaxed max-w-2xl">
             The official wallet for the Tenzro Ledger and Network. Native, EVM, SVM, and Canton —
-            under one TDIP identity, with passkey-quorum custody and an agentic stack built in.
+            under one TDIP identity, secured by your passkeys, with an agentic stack built in.
           </p>
           <div className="flex flex-wrap items-center gap-3 mt-10">
             <Button
@@ -172,7 +172,7 @@ export default function LandingPage() {
           </h2>
           <p className="text-lg text-foreground-muted max-w-2xl">
             One TDIP identity, twelve chains. Tenzro-internal value moves through the cross-VM
-            precompile — sub-second, no LP. External chains sit behind the canonical bridge router
+            precompile, with no LP. External chains sit behind the canonical bridge router
             with vendor attribution at signing time.
           </p>
         </div>
@@ -250,9 +250,10 @@ export default function LandingPage() {
             <span className="text-foreground-muted">Use what you already have.</span>
           </h2>
           <p className="text-lg text-foreground-muted max-w-2xl mx-auto leading-relaxed mb-8">
-            Tenzro&apos;s custody model is a passkey-backed FROST Ed25519 quorum across your devices
-            and a node-TEE co-signer, with an ML-DSA-65 leg for post-quantum resistance. No words to
-            write down. No seed to lose.
+            Your wallet is created from a passkey on your device and never leaves your hands: every
+            approval is signed on the device with the passkey and a post-quantum ML-DSA-65 key
+            derived from it. Link a phone, a laptop or a security key so that losing one device
+            never means losing the wallet. No words to write down.
           </p>
           <div className="flex justify-center gap-3">
             <Button

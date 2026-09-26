@@ -1,5 +1,5 @@
 /**
- * Settings — quorum management, network, agentic policy defaults.
+ * Settings — linked devices, recovery, network, agent defaults.
  */
 
 'use client';
@@ -17,62 +17,37 @@ import {
   CardTitle,
   Separator,
   Switch,
-  formatRelativeTime,
 } from '@tenzro/ui';
+import { assessReadiness } from 'tenzro-wallet/custody';
 
-const devices = [
-  { id: 'd1', name: 'MacBook Pro · Hilary', ts: Date.now() - 600_000, primary: true },
-  { id: 'd2', name: 'iPhone 17 Pro', ts: Date.now() - 86_400_000 * 2, primary: false },
-];
+import { TENZRO_NETWORK_NAME, TENZRO_RP_ID, TENZRO_RPC_URL } from '@/lib/tenzro/config';
+import { useChainId, useDeviceActions, useDevices, useWallet } from '@/lib/tenzro/hooks';
 
 export default function SettingsPage() {
   return (
     <div className="max-w-4xl space-y-8">
       <header>
         <h1 className="text-3xl font-semibold tracking-tight mb-1">Settings</h1>
-        <p className="text-foreground-muted">Quorum, network, and agentic defaults.</p>
+        <p className="text-foreground-muted">Devices, recovery, network, and agent defaults.</p>
       </header>
+
+      <DevicesCard />
 
       <Card variant="raised">
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>Custody quorum</CardTitle>
-              <CardDescription>2-of-2 (testnet) · upgrades to 2-of-3 at MainNet</CardDescription>
-            </div>
-            <Badge variant="success" size="sm" dot>
-              Healthy
-            </Badge>
-          </div>
+          <CardTitle>Recovery</CardTitle>
+          <CardDescription>If you lose every device</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-3">
-          {devices.map((d) => (
-            <div
-              key={d.id}
-              className="flex items-center gap-3 rounded-xl bg-surface-2 border border-border-subtle p-3"
-            >
-              <Smartphone className="size-5 text-foreground-muted" />
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="font-medium text-sm">{d.name}</span>
-                  {d.primary && (
-                    <Badge variant="agent" size="xs">
-                      This device
-                    </Badge>
-                  )}
-                </div>
-                <span className="text-xs text-foreground-subtle">
-                  Last signed {formatRelativeTime(d.ts)}
-                </span>
-              </div>
-              <Button variant="ghost" size="sm">
-                Manage
-              </Button>
-            </div>
-          ))}
-          <Button variant="secondary" size="sm" leftIcon={<Fingerprint className="size-4" />}>
-            Add a device
-          </Button>
+        <CardContent className="space-y-2 text-sm text-foreground-muted">
+          <p>
+            Your first line of recovery is another linked device: any enrolled passkey can approve
+            and can remove a lost one.
+          </p>
+          <p>
+            Guardians are people or organisations you trust. A recovery starts from a new device,
+            runs for a waiting period that any of your existing passkeys can cancel, and completes
+            when your guardians approve.
+          </p>
         </CardContent>
       </Card>
 
@@ -81,42 +56,138 @@ export default function SettingsPage() {
           <CardTitle>Network</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <Row icon={Globe} label="Tenzro RPC" value="rpc.tenzro.xyz · testnet" />
-          <Row icon={Cpu} label="Splice baseline" value="0.5.x (gated · post-2026-05-05)" />
-          <Row
-            icon={Shield}
-            label="ML-DSA-65 leg"
-            value="node-TEE only · until threshold ML-DSA matures"
-          />
+          <Row icon={Globe} label="Network" value={TENZRO_NETWORK_NAME} />
+          <Row icon={Globe} label="RPC" value={TENZRO_RPC_URL} />
+          <ChainIdRow />
+          <Row icon={Shield} label="Passkey domain" value={TENZRO_RP_ID} />
         </CardContent>
       </Card>
 
       <Card variant="raised">
         <CardHeader>
-          <CardTitle>Agentic defaults</CardTitle>
-          <CardDescription>What new mandates inherit unless you change them</CardDescription>
+          <CardTitle>Agent defaults</CardTitle>
+          <CardDescription>What new agents inherit unless you change them</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <RowSwitch
             label="Require TEE attestation"
-            description="Refuse mandates without a TEE receipt from a known verifier"
+            description="Only use services whose enclave attestation verifies"
             defaultChecked
           />
           <Separator />
           <RowSwitch
             label="Show ERC-8004 reputation inline"
-            description="Surface reputation score on the agent's first request"
+            description="Surface reputation on the agent's first request"
             defaultChecked
           />
           <Separator />
           <RowSwitch
             label="Cap session keys at 30 days"
-            description="ERC-7702 session keys expire after 30 days unless renewed"
+            description="Agent session keys expire after 30 days unless renewed"
             defaultChecked
           />
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+function ChainIdRow() {
+  const chainId = useChainId();
+  return <Row icon={Cpu} label="Chain id" value={chainId.data ?? '…'} />;
+}
+
+function DevicesCard() {
+  const { wallet } = useWallet();
+  const devices = useDevices(wallet);
+  const { link, remove } = useDeviceActions(wallet);
+  const list = devices.data ?? [];
+  const readiness = assessReadiness(list);
+
+  if (!wallet) {
+    return (
+      <Card variant="raised">
+        <CardHeader>
+          <CardTitle>Devices</CardTitle>
+          <CardDescription>Create or sign in to a wallet to manage its devices.</CardDescription>
+        </CardHeader>
+      </Card>
+    );
+  }
+
+  return (
+    <Card variant="raised">
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle>Devices</CardTitle>
+            <CardDescription>{readiness.guidance}</CardDescription>
+          </div>
+          <Badge variant={readiness.ready ? 'success' : 'warning'} size="sm" dot>
+            {list.length} {list.length === 1 ? 'device' : 'devices'}
+          </Badge>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {devices.error && <p className="text-sm text-danger">{devices.error.message}</p>}
+        {list.map((d) => (
+          <div
+            key={d.credentialIdHex}
+            className="flex items-center gap-3 rounded-xl bg-surface-2 border border-border-subtle p-3"
+          >
+            <Smartphone className="size-5 text-foreground-muted" />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="font-medium text-sm">{d.label ?? 'Passkey'}</span>
+                {d.thisDevice && (
+                  <Badge variant="agent" size="xs">
+                    This device
+                  </Badge>
+                )}
+                {d.tier === 'synced' && (
+                  <Badge variant="warning" size="xs">
+                    Synced
+                  </Badge>
+                )}
+              </div>
+              <span className="text-xs text-foreground-subtle font-mono">
+                {d.credentialIdHex.slice(0, 18)}…
+              </span>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={list.length <= 1 || d.thisDevice || remove.isPending}
+              onClick={() => remove.mutate(d.credentialIdHex)}
+            >
+              Remove
+            </Button>
+          </div>
+        ))}
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="secondary"
+            size="sm"
+            leftIcon={<Fingerprint className="size-4" />}
+            pending={link.isPending && !link.variables?.securityKey}
+            onClick={() => link.mutate({ label: 'Linked device' })}
+          >
+            Link a phone or computer
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            pending={link.isPending && !!link.variables?.securityKey}
+            onClick={() => link.mutate({ label: 'Security key', securityKey: true })}
+          >
+            Add a security key
+          </Button>
+        </div>
+        {(link.error || remove.error) && (
+          <p className="text-sm text-danger">{(link.error ?? remove.error)?.message}</p>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 

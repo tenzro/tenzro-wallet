@@ -17,14 +17,14 @@ pnpm --filter @tenzro/web typecheck
 app/
   layout.tsx          # root layout, fonts, providers, toaster
   page.tsx            # marketing landing
-  onboarding/         # passkey-quorum setup (5 steps)
+  onboarding/         # passkey wallet: create or sign in, link a second device
   dashboard/          # portfolio + cross-VM legs + agent inbox
   send/               # intent composer + cross-VM route preview
   agents/             # AP2 mandates, ERC-7702 session keys
   activity/           # cross-VM transaction feed
   connect/            # EIP-6963 / CAIP-25 dApp sessions
   canton/             # external DAML party + validator status
-  settings/           # quorum, network, agentic defaults
+  settings/           # linked devices, recovery, network, agent defaults
 components/
   layout/             # Sidebar, Topbar
   wallet/             # ActivityRow + page-specific compositions

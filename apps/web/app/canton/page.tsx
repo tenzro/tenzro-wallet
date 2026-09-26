@@ -1,7 +1,7 @@
 /**
  * Canton — Tenzro's institutional surface.
  *
- * Maps to DESIGN.md §M4: external party display, validator co-signing
+ * Maps to DESIGN.md §4.5: external party display, signed locally by the wallet
  * status, DAML holdings, internal vs external Canton flows. M4b
  * (MainNet) is gated on the Splice 0.5.x baseline (post-2026-05-05) —
  * surfaced here as a "coming soon" panel rather than a connect button
@@ -38,8 +38,8 @@ export default function CantonPage() {
         </Badge>
         <h1 className="text-3xl font-semibold tracking-tight mb-1">Canton holdings</h1>
         <p className="text-foreground-muted">
-          External-party DAML positions, validator co-signed. Splice 0.5.x baseline lands
-          post-2026-05-05; testnet flows are live today.
+          External-party DAML positions. The wallet signs every Canton submission locally and
+          checks it against your intent first.
         </p>
       </header>
 
@@ -49,7 +49,7 @@ export default function CantonPage() {
         <KeyStat
           label="Validator"
           value="splice.tenzro"
-          delta={{ value: 'co-signing live', positive: true }}
+          delta={{ value: 'signed locally', positive: true }}
           icon={ShieldCheck}
           accent="success"
         />
@@ -115,7 +115,7 @@ export default function CantonPage() {
                   External
                 </Badge>
                 <p>
-                  Settlement on Canton MainNet — validator co-signed, splice-baselined. Higher
+                  Settlement on Canton MainNet, signed locally by the wallet. Higher
                   latency, real institutional finality.
                 </p>
               </div>
@@ -131,7 +131,7 @@ export default function CantonPage() {
           <CardContent className="space-y-4">
             <div className="flex items-center gap-2.5">
               <span className="size-2 rounded-full bg-success animate-pulse-glow" />
-              <span className="text-sm">Co-signing</span>
+              <span className="text-sm">Local signing</span>
               <Badge variant="success" size="xs" className="ml-auto">
                 v0.5.0-rc4
               </Badge>

@@ -1,5 +1,5 @@
 /**
- * TNZO has 18 decimals (matching the testnet's wei-style hex returns
+ * TNZO has 18 decimals (wei-style hex returns
  * from `tenzro_getBalance`). These helpers do the hex↔decimal
  * conversion without dragging in a BigNumber library — `BigInt` is
  * exact for any integer base-unit count.

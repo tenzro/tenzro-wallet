@@ -17,13 +17,13 @@ import type { TenzroTransaction } from '@/lib/tenzro/methods';
 
 export function LiveActivityList() {
   const { wallet } = useWallet();
-  const history = useTransactionHistory(wallet?.address);
+  const history = useTransactionHistory(wallet?.account);
 
   if (!wallet) {
     return (
       <Card variant="raised" className="p-6 text-center">
         <p className="text-sm text-foreground-muted">
-          Onboard a wallet to see live testnet activity.
+          Create or sign in to a wallet to see its activity.
         </p>
       </Card>
     );
@@ -56,8 +56,8 @@ export function LiveActivityList() {
             Empty
           </Badge>
           <p className="text-sm text-foreground-muted">
-            No transactions yet. Drip from the faucet on the dashboard, then send to yourself to
-            populate the feed.
+            No transactions yet. Get TNZO from the faucet on the dashboard to
+            see it here.
           </p>
         </CardContent>
       </Card>
@@ -67,7 +67,7 @@ export function LiveActivityList() {
   return (
     <Card variant="raised" className="p-2">
       {txs.map((tx) => (
-        <LiveActivityRow key={tx.hash} tx={tx} self={wallet.address} />
+        <LiveActivityRow key={tx.hash} tx={tx} self={wallet.account} />
       ))}
     </Card>
   );
@@ -122,7 +122,7 @@ function LiveActivityRow({ tx, self }: { tx: TenzroTransaction; self: string }) 
             isIncoming ? 'text-success' : 'text-foreground',
           )}
         >
-          {isIncoming ? '+' : '−'} {formatTnzo(tx.amount)} {tx.asset ?? 'TNZO'}
+          {isIncoming ? '+' : '−'} {formatTnzo(tx.amount ?? tx.value ?? '0x0')} {tx.asset ?? 'TNZO'}
         </span>
         <TxStatus state={status} />
       </div>

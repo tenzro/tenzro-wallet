@@ -141,13 +141,13 @@ export default function AgentsPage() {
           <div>
             <h3 className="text-foreground font-medium mb-1">Verifiable identity</h3>
             <p>
-              Agents present an ERC-8004 DID with on-chain reputation and a TEE attestation receipt.
+              Every agent is a machine identity you own: its key lives in the machine's TPM or Secure Enclave, and its scope and spending limits are set by you.
             </p>
           </div>
           <div>
             <h3 className="text-foreground font-medium mb-1">Revocable instantly</h3>
             <p>
-              Revoke a session key or mandate from any device — propagates across the quorum in
+              Revoke a session key or mandate from any of your devices, approved with your passkey, in
               seconds.
             </p>
           </div>

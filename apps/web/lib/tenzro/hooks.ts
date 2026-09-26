@@ -1,10 +1,7 @@
 /**
- * React hooks that wrap the Tenzro testnet integration.
- *
- * `useWallet()` is the bottom of the stack — every other hook waits
- * for it before issuing RPC. Onboarding is lazy: the first caller
- * triggers `tenzro_onboardHuman`, subsequent calls hydrate from
- * localStorage.
+ * React hooks over the Tenzro Network 1 integration. `useWallet()` is the
+ * bottom of the stack: the account comes from a passkey (create or sign in)
+ * and is remembered on this device as public data only.
  */
 
 'use client';
@@ -14,27 +11,29 @@ import * as React from 'react';
 
 import { requestFaucet } from './faucet';
 import {
-  type BridgeTokensArgs,
-  type CrossVmTransferArgs,
-  type TenzroVm,
   type TokenBalances,
-  type WrapTnzoArgs,
-  bridgeTokens,
-  crossVmTransfer,
   getBalance,
   getBlockNumber,
+  getChainId,
   getTokenBalance,
   getTransactionHistory,
-  signAndSendTransaction,
-  wrapTnzo,
 } from './methods';
-import { type StoredWallet, clearStoredWallet, createWallet, getStoredWallet } from './wallet';
+import {
+  type StoredWallet,
+  clearStoredWallet,
+  createWallet,
+  custody,
+  getStoredWallet,
+  sendTnzo,
+  signIn,
+} from './wallet';
 
 interface UseWalletResult {
   readonly wallet: StoredWallet | null;
   readonly loading: boolean;
   readonly error: Error | null;
-  readonly create: (displayName?: string) => Promise<StoredWallet>;
+  readonly create: (displayName: string) => Promise<StoredWallet>;
+  readonly signIn: () => Promise<StoredWallet>;
   readonly reset: () => void;
 }
 
@@ -49,11 +48,11 @@ export function useWallet(): UseWalletResult {
     setLoading(false);
   }, []);
 
-  const create = React.useCallback(async (displayName?: string) => {
+  const wrap = React.useCallback(async (fn: () => Promise<StoredWallet>) => {
     setLoading(true);
     setError(null);
     try {
-      const w = await createWallet(displayName);
+      const w = await fn();
       setWallet(w);
       return w;
     } catch (e) {
@@ -65,13 +64,19 @@ export function useWallet(): UseWalletResult {
     }
   }, []);
 
+  const create = React.useCallback(
+    (displayName: string) => wrap(() => createWallet(displayName)),
+    [wrap],
+  );
+  const doSignIn = React.useCallback(() => wrap(signIn), [wrap]);
+
   const reset = React.useCallback(() => {
     clearStoredWallet();
     setWallet(null);
     qc.clear();
   }, [qc]);
 
-  return { wallet, loading, error, create, reset };
+  return { wallet, loading, error, create, signIn: doSignIn, reset };
 }
 
 export function useBalance(address: string | undefined): UseQueryResult<string> {
@@ -84,11 +89,7 @@ export function useBalance(address: string | undefined): UseQueryResult<string> 
   });
 }
 
-/**
- * Per-VM projections of the wallet's TNZO balance — native ledger,
- * EVM wTNZO, SVM wTNZO, Canton CIP-56 holding. Same address, four
- * views via the pointer-token model.
- */
+/** Views of the account's TNZO balance on each VM (one balance, several views). */
 export function useTokenBalances(address: string | undefined): UseQueryResult<TokenBalances> {
   return useQuery({
     queryKey: ['tenzro', 'tokenBalance', address],
@@ -105,6 +106,15 @@ export function useTransactionHistory(address: string | undefined) {
     queryFn: () => getTransactionHistory(address as string),
     enabled: !!address,
     refetchInterval: 30_000,
+  });
+}
+
+/** Chain id as the node reports it (decimal string). */
+export function useChainId() {
+  return useQuery({
+    queryKey: ['tenzro', 'chainId'],
+    queryFn: async () => BigInt(await getChainId()).toString(10),
+    staleTime: Number.POSITIVE_INFINITY,
   });
 }
 
@@ -126,7 +136,7 @@ export function useFaucet(address: string | undefined) {
     onSuccess: (result) => {
       if (result.success) {
         qc.invalidateQueries({ queryKey: ['tenzro', 'balance', address] });
-        qc.invalidateQueries({ queryKey: ['tenzro', 'txhistory', address] });
+        qc.invalidateQueries({ queryKey: ['tenzro', 'tokenBalance', address] });
       }
     },
   });
@@ -134,191 +144,63 @@ export function useFaucet(address: string | undefined) {
 
 export interface SendInput {
   readonly to: string;
+  /** Wei, decimal string. */
   readonly amount: string;
-  readonly asset?: string;
 }
 
-export interface CrossVmInput {
-  readonly amount: string;
-  readonly fromVm: TenzroVm;
-  readonly toVm: TenzroVm;
-  /** Defaults to the wallet's own address (same-wallet projection move). */
-  readonly toAddress?: string;
-}
-
-/**
- * Move TNZO between two VM projections of the same wallet (or between
- * two Tenzro wallets, by setting `toAddress`). Internal pointer-token
- * transfer — never leaves Tenzro.
- */
-export function useCrossVmTransfer(wallet: StoredWallet | null) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (input: CrossVmInput) => {
-      if (!wallet) throw new Error('Wallet not initialized');
-      const args: CrossVmTransferArgs = {
-        from_address: wallet.address,
-        to_address: input.toAddress ?? wallet.address,
-        amount: input.amount,
-        from_vm: input.fromVm,
-        to_vm: input.toVm,
-      };
-      return crossVmTransfer(args, wallet.accessToken);
-    },
-    onSuccess: () => {
-      if (!wallet) return;
-      qc.invalidateQueries({ queryKey: ['tenzro', 'tokenBalance', wallet.address] });
-      qc.invalidateQueries({ queryKey: ['tenzro', 'balance', wallet.address] });
-    },
-  });
-}
-
-export interface WrapInput {
-  readonly amount: string;
-  readonly toVm: Exclude<TenzroVm, 'native'>;
-}
-
-/** Wrap native TNZO into a VM-specific representation. */
-export function useWrapTnzo(wallet: StoredWallet | null) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (input: WrapInput) => {
-      if (!wallet) throw new Error('Wallet not initialized');
-      const args: WrapTnzoArgs = {
-        address: wallet.address,
-        amount: input.amount,
-        to_vm: input.toVm,
-      };
-      return wrapTnzo(args, wallet.accessToken);
-    },
-    onSuccess: () => {
-      if (!wallet) return;
-      qc.invalidateQueries({ queryKey: ['tenzro', 'tokenBalance', wallet.address] });
-    },
-  });
-}
-
-/**
- * One-shot send: takes a plain `(recipient, amount)` and routes to the
- * right RPC based on address shape. UI doesn't need to know about
- * cross-VM, wrap, or bridge — those are picked here.
- *
- * EVM destinations are ambiguous (the same 20-byte address could be
- * Ethereum, Base, Polygon, …) so the caller must pass `destChain` for
- * those. SVM and Tenzro are unambiguous from the address alone.
- */
-export interface SmartSendInput {
-  readonly recipient: string;
-  readonly amount: string;
-  /** Required when the recipient is an EVM address; ignored otherwise. */
-  readonly destChain?: string | undefined;
-}
-
-export type SmartSendResult =
-  | { route: 'tenzro'; tx_hash: string }
-  | { route: 'bridge'; status: string; tx_hash?: string | undefined; error?: string | undefined };
-
-export function useSmartSend(wallet: StoredWallet | null) {
-  const qc = useQueryClient();
-  return useMutation<SmartSendResult, Error, SmartSendInput>({
-    mutationFn: async (input) => {
-      if (!wallet) throw new Error('Wallet not initialized');
-      const { detectAddress } = await import('./address');
-      const detected = detectAddress(input.recipient);
-      if (detected.kind === 'unknown') throw new Error(detected.reason);
-
-      if (detected.kind === 'tenzro') {
-        if (detected.address.toLowerCase() === wallet.address.toLowerCase()) {
-          throw new Error('Cannot send to your own address');
-        }
-        const r = await signAndSendTransaction(
-          { from: wallet.address, to: detected.address, amount: input.amount, asset: 'TNZO' },
-          wallet.accessToken,
-        );
-        return { route: 'tenzro', tx_hash: r.tx_hash };
-      }
-
-      // EVM/SVM → bridge
-      const destChain = detected.kind === 'svm' ? 'solana' : input.destChain;
-      if (!destChain) {
-        throw new Error('Pick a destination chain for this EVM address');
-      }
-      const r = await bridgeTokens(
-        {
-          source_chain: 'tenzro',
-          dest_chain: destChain,
-          sender: wallet.address,
-          recipient: detected.address,
-          amount: input.amount,
-          asset: 'TNZO',
-        },
-        wallet.accessToken,
-      );
-      return { route: 'bridge', status: r.status, tx_hash: r.tx_hash, error: r.error };
-    },
-    onSuccess: () => {
-      if (!wallet) return;
-      qc.invalidateQueries({ queryKey: ['tenzro', 'tokenBalance', wallet.address] });
-      qc.invalidateQueries({ queryKey: ['tenzro', 'balance', wallet.address] });
-      qc.invalidateQueries({ queryKey: ['tenzro', 'txhistory', wallet.address] });
-    },
-  });
-}
-
-export interface BridgeInput {
-  readonly destChain: string;
-  readonly recipient: string;
-  readonly amount: string;
-  readonly asset?: string;
-}
-
-/**
- * Send to a real external chain via LayerZero V2. Today the testnet's
- * `tenzro_listChains` is empty, so most destinations will surface
- * "No route available" — that's a server-side config gap, not a
- * client bug.
- */
-export function useBridgeOut(wallet: StoredWallet | null) {
-  return useMutation({
-    mutationFn: async (input: BridgeInput) => {
-      if (!wallet) throw new Error('Wallet not initialized');
-      const args: BridgeTokensArgs = {
-        source_chain: 'tenzro',
-        dest_chain: input.destChain,
-        sender: wallet.address,
-        recipient: input.recipient,
-        amount: input.amount,
-        asset: input.asset ?? 'TNZO',
-      };
-      return bridgeTokens(args, wallet.accessToken);
-    },
-  });
-}
-
+/** Send TNZO from the passkey account. The passkey prompt is the approval. */
 export function useSend(wallet: StoredWallet | null) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: SendInput) => {
       if (!wallet) throw new Error('Wallet not initialized');
-      // Server rejects self-sends with "cannot transfer to self" —
-      // pre-empt with a clearer client-side message.
-      if (input.to.toLowerCase() === wallet.address.toLowerCase()) {
+      if (input.to.toLowerCase() === wallet.account.toLowerCase()) {
         throw new Error('Cannot send to your own address');
       }
-      return signAndSendTransaction(
-        {
-          from: wallet.address,
-          to: input.to,
-          amount: input.amount,
-          asset: input.asset ?? 'TNZO',
-        },
-        wallet.accessToken,
-      );
+      return sendTnzo(wallet, input.to, BigInt(input.amount));
     },
     onSuccess: () => {
       if (!wallet) return;
-      qc.invalidateQueries({ queryKey: ['tenzro', 'balance', wallet.address] });
-      qc.invalidateQueries({ queryKey: ['tenzro', 'txhistory', wallet.address] });
+      qc.invalidateQueries({ queryKey: ['tenzro', 'balance', wallet.account] });
+      qc.invalidateQueries({ queryKey: ['tenzro', 'tokenBalance', wallet.account] });
+      qc.invalidateQueries({ queryKey: ['tenzro', 'txhistory', wallet.account] });
     },
   });
+}
+
+/** Passkeys enrolled on the account and whether it can send yet. */
+export function useDevices(wallet: StoredWallet | null) {
+  const devices = useQuery({
+    queryKey: ['tenzro', 'devices', wallet?.account],
+    queryFn: () => custody().listDevices(wallet as StoredWallet),
+    enabled: !!wallet,
+  });
+  return devices;
+}
+
+export function useDeviceActions(wallet: StoredWallet | null) {
+  const qc = useQueryClient();
+  const refresh = () => qc.invalidateQueries({ queryKey: ['tenzro', 'devices', wallet?.account] });
+  const approver = wallet ? { id: wallet.credentialId, transports: wallet.transports } : undefined;
+  const link = useMutation({
+    mutationFn: async (input: { label: string; securityKey?: boolean }) => {
+      if (!wallet || !approver) throw new Error('Wallet not initialized');
+      return custody().linkDevice({
+        account: wallet.account,
+        label: input.label,
+        // A security key is added from this device and approved here; a new
+        // device approves from this one over a QR code.
+        ...(input.securityKey ? { crossPlatform: true, approver } : {}),
+      });
+    },
+    onSuccess: refresh,
+  });
+  const remove = useMutation({
+    mutationFn: async (credentialIdHex: string) => {
+      if (!wallet || !approver) throw new Error('Wallet not initialized');
+      return custody().removeDevice({ account: wallet.account, credentialIdHex, approver });
+    },
+    onSuccess: refresh,
+  });
+  return { link, remove };
 }

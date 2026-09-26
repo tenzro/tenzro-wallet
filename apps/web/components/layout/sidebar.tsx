@@ -93,7 +93,7 @@ export function Sidebar() {
       </Link>
       <div className="mt-3 px-2.5 py-2 text-[11px] text-foreground-disabled flex items-center gap-1.5">
         <Compass className="size-3" />
-        Testnet · v0.1.0
+        Network 1 · v0.3.0
       </div>
     </aside>
   );

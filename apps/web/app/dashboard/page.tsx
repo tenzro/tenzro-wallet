@@ -35,7 +35,7 @@ import {
 } from '@tenzro/ui';
 
 import { ActivityRow } from '@/components/wallet/activity-row';
-import { LiveTestnetCard } from '@/components/wallet/live-testnet-card';
+import { LiveNetworkCard } from '@/components/wallet/live-network-card';
 import { ACTIVITY, ASSETS, type AgentMandate, DAPPS, MANDATES, TOTAL_USD } from '@/lib/mock-data';
 
 // Top six chains by USD value, surfaced in the hero strip
@@ -52,7 +52,7 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <LiveTestnetCard />
+      <LiveNetworkCard />
 
       <BalanceHero totalUsd={TOTAL_USD} changePct={2.84} changeUsd={931.5} legs={heroLegs} />
 

@@ -28,7 +28,7 @@ export const metadata: Metadata = {
     template: '%s · Tenzro Wallet',
   },
   description:
-    'The official wallet for the Tenzro Ledger and Network. Native, EVM, SVM, and Canton — under one TDIP identity, with passkey-quorum custody and an agentic stack built in.',
+    'The official wallet for the Tenzro Ledger and Network. Native, EVM, SVM, and Canton — under one TDIP identity, secured by your passkeys, with an agentic stack built in.',
   applicationName: 'Tenzro Wallet',
   authors: [{ name: 'Tenzro' }],
   metadataBase: new URL('https://wallet.tenzro.xyz'),

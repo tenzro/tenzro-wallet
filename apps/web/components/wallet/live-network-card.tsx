@@ -1,6 +1,6 @@
 /**
- * Live testnet card — the only piece of the dashboard wired to real
- * chain state. Shows one TNZO total (sum of every VM projection of
+ * Live network card — the part of the dashboard wired to real chain
+ * state on Tenzro Network 1. Shows one TNZO total (sum of every VM projection of
  * the same Tenzro address) plus an expandable breakdown for users who
  * want to see where the balance currently sits.
  *
@@ -19,6 +19,7 @@ import * as React from 'react';
 
 import { Badge, Button, Card, CardContent, ChainBadge, cn } from '@tenzro/ui';
 
+import { TENZRO_NETWORK_NAME, TENZRO_RPC_URL } from '@/lib/tenzro/config';
 import { formatBaseUnits, shortAddress } from '@/lib/tenzro/format';
 import { useFaucet, useTokenBalances, useWallet } from '@/lib/tenzro/hooks';
 
@@ -68,10 +69,10 @@ function sumProjectionsBaseUnits(b: ReturnType<typeof useTokenBalances>['data'])
   return native + evm + svm + damlBaseUnits;
 }
 
-export function LiveTestnetCard() {
+export function LiveNetworkCard() {
   const { wallet, loading } = useWallet();
-  const balances = useTokenBalances(wallet?.address);
-  const faucet = useFaucet(wallet?.address);
+  const balances = useTokenBalances(wallet?.account);
+  const faucet = useFaucet(wallet?.account);
   const [copied, setCopied] = React.useState(false);
   const [showBreakdown, setShowBreakdown] = React.useState(false);
 
@@ -82,7 +83,7 @@ export function LiveTestnetCard() {
 
   const copy = React.useCallback(() => {
     if (!wallet) return;
-    void navigator.clipboard.writeText(wallet.address);
+    void navigator.clipboard.writeText(wallet.account);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   }, [wallet]);
@@ -107,7 +108,7 @@ export function LiveTestnetCard() {
               No wallet on this device
             </Badge>
             <p className="text-sm text-foreground">
-              Onboard to mint your DID and Tenzro testnet address.
+              Create a wallet with a passkey, or sign in with one you already have.
             </p>
           </div>
           <Button asChild variant="primary" size="md">
@@ -124,10 +125,10 @@ export function LiveTestnetCard() {
         <div className="flex items-center gap-2 mb-3">
           <ChainBadge chain="tenzro" size="xs" />
           <Badge variant="success" size="xs" dot>
-            Live testnet
+            {TENZRO_NETWORK_NAME}
           </Badge>
           <span className="text-xs text-foreground-subtle ml-auto font-mono">
-            rpc.tenzro.xyz
+            {new URL(TENZRO_RPC_URL).host}
           </span>
         </div>
 
@@ -161,7 +162,7 @@ export function LiveTestnetCard() {
             </div>
             <div className="flex items-center gap-2">
               <span className="tabular text-sm font-mono">
-                {shortAddress(wallet.address, 10, 8)}
+                {shortAddress(wallet.account, 10, 8)}
               </span>
               <button
                 type="button"
@@ -226,7 +227,7 @@ export function LiveTestnetCard() {
             pending={faucet.isPending}
             leftIcon={<Droplets className="size-3.5" />}
           >
-            Drip from faucet
+            Faucet
           </Button>
           <Button asChild variant="primary" size="sm">
             <Link href="/send">Send TNZO</Link>
@@ -240,7 +241,7 @@ export function LiveTestnetCard() {
                   : 'text-warning bg-warning-soft',
               )}
             >
-              {faucet.data.success ? `Sent ${faucet.data.amount}` : faucet.data.message}
+              {faucet.data.message}
             </span>
           )}
         </div>
