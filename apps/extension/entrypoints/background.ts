@@ -6,8 +6,7 @@
  *     script) and route EIP-1193 / SVM / Canton / Tenzro RPC calls
  *   - Open the popup or side-panel for user-confirmation flows
  *     (signature requests, mandate approvals)
- *   - Keep DPoP-bound JWTs fresh (M2 model — replaced by passkey-quorum
- *     once the /wallet/* endpoints land)
+ *   - Route approvals to the passkey ceremony (the wallet never holds keys)
  *   - Manage session-key TTL via chrome.alarms
  *
  * In this scaffold we wire the message router skeleton — the kernel
@@ -63,21 +62,37 @@ export default defineBackground(() => {
  * the SVM/Canton equivalents are mounted. For now it returns sensible
  * stubs so the inpage script can verify the message bus is alive.
  */
+const RPC_URL = 'https://rpc.tenzro.xyz';
+
+async function nodeCall(method: string, params: unknown[]): Promise<unknown> {
+  const res = await fetch(RPC_URL, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
+  });
+  const body = (await res.json()) as { result?: unknown; error?: { message: string } };
+  if (body.error) throw new Error(body.error.message);
+  return body.result;
+}
+
 async function dispatch(method: string, params: unknown[] = []): Promise<unknown> {
   switch (method) {
+    // Wallet-local info (never sent to the node).
     case 'tenzro_walletInfo':
       return {
-        version: '0.0.0',
+        version: '0.3.0',
+        network: 'Tenzro Network 1',
         surfaces: ['native', 'evm', 'svm', 'canton'],
-        rpc: 'https://rpc.tenzro.xyz',
+        rpc: RPC_URL,
       };
+    // Chain id is always read from the node.
     case 'eth_chainId':
-      return '0x7a69'; // Tenzro EVM testnet placeholder
+    case 'eth_blockNumber':
+      return nodeCall(method, params);
+    // No account is exposed until the user connects with a passkey in the popup.
     case 'eth_accounts':
-      return ['0x7e4c2a9b3e2c91dfa3d5c8b1f4c9a78e5d6f2b8a3'];
     case 'eth_requestAccounts':
-      // Real impl: open popup, await user consent, return the connected account
-      return ['0x7e4c2a9b3e2c91dfa3d5c8b1f4c9a78e5d6f2b8a3'];
+      return [];
     default:
       throw new Error(`Method ${method} not implemented`);
   }

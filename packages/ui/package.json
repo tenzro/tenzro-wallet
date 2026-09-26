@@ -1,7 +1,7 @@
 {
   "name": "@tenzro/ui",
-  "version": "0.1.0",
-  "description": "Tenzro Wallet design system — React component library and design tokens for building Tenzro wallet UIs across the four VM surfaces (Tenzro native, EVM, SVM, Canton). Chain registry, balance hero, asset rows, agent-mandate cards, identity cards, and primitives.",
+  "version": "0.2.0",
+  "description": "Tenzro Wallet design system \u2014 React component library and design tokens for building Tenzro wallet UIs across the four VM surfaces (Tenzro native, EVM, SVM, Canton). Chain registry, balance hero, asset rows, agent-mandate cards, identity cards, and primitives.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

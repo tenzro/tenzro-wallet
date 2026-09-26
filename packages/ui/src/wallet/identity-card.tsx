@@ -1,6 +1,6 @@
 /**
  * IdentityCard — the wallet's "self" representation: TDIP DID, the four
- * surface keys derived from it, and the current quorum status.
+ * surface keys derived from it, and how many devices protect it.
  *
  * On the dashboard this lives in the top-right and is the user's
  * primary handle — clicking it opens the account switcher.
@@ -19,7 +19,8 @@ import { formatAddress } from '../utils/format';
 export interface IdentityCardProps {
   did: string;
   label?: string;
-  quorumStatus?: 'healthy' | 'pairing' | 'compromised';
+  /** Passkeys enrolled on the account. Fewer than two shows a warning. */
+  devices?: number;
   onCopy?: () => void;
   onSwitch?: () => void;
   compact?: boolean;
@@ -29,7 +30,7 @@ export interface IdentityCardProps {
 export function IdentityCard({
   did,
   label,
-  quorumStatus = 'healthy',
+  devices,
   onCopy,
   onSwitch,
   compact,
@@ -73,28 +74,15 @@ export function IdentityCard({
           </button>
         </div>
       </div>
-      {quorumStatus && (
+      {devices !== undefined && (
         <motion.div
           initial={{ scale: 0.8 }}
           animate={{ scale: 1 }}
           transition={{ type: 'spring', stiffness: 380 }}
         >
-          <Badge
-            variant={
-              quorumStatus === 'healthy'
-                ? 'success'
-                : quorumStatus === 'pairing'
-                  ? 'warning'
-                  : 'danger'
-            }
-            size="xs"
-          >
+          <Badge variant={devices >= 2 ? 'success' : 'warning'} size="xs">
             <Shield className="size-2.5" />
-            {quorumStatus === 'healthy'
-              ? '2/2'
-              : quorumStatus === 'pairing'
-                ? 'Pairing'
-                : 'At risk'}
+            {devices >= 2 ? `${devices} devices` : 'Add a device'}
           </Badge>
         </motion.div>
       )}

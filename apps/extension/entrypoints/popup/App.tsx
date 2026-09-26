@@ -78,7 +78,7 @@ export function App() {
       <header className="flex items-center gap-2 px-4 py-3 border-b border-border-subtle">
         <Logo size={22} />
         <Badge variant="default" size="xs" className="ml-1">
-          testnet
+          Network 1
         </Badge>
         <button
           type="button"
@@ -90,7 +90,7 @@ export function App() {
 
       {/* Identity */}
       <div className="px-4 pt-3">
-        <IdentityCard did={SELF_DID} label="Hilary · Personal" compact onSwitch={() => {}} />
+        <IdentityCard did={SELF_DID} label="Personal" devices={2} compact onSwitch={() => {}} />
       </div>
 
       {/* Balance */}
@@ -163,18 +163,18 @@ export function App() {
 
         <TabsContent value="connect" className="flex-1 min-h-0 overflow-y-auto px-4 mt-2 space-y-2">
           <ConnectedRow
-            name="Uniswap"
-            origin="uniswap.org"
+            name="Inference Studio"
+            origin="inference.example"
             chains={['ethereum', 'base', 'arbitrum']}
           />
-          <ConnectedRow name="Jupiter" origin="jupiter.ag" chains={['solana', 'tenzro-svm']} />
+          <ConnectedRow name="Data Market" origin="data.example" chains={['solana', 'tenzro-svm']} />
           <ConnectedRow name="Tempo" origin="app.tempo.xyz" chains={['tempo']} />
         </TabsContent>
       </Tabs>
 
       {/* Footer link to web */}
       <div className="border-t border-border-subtle px-4 py-2 flex items-center justify-between">
-        <span className="text-[10px] text-foreground-subtle">v0.1.0 · rpc.tenzro.xyz</span>
+        <span className="text-[10px] text-foreground-subtle">v0.3.0 · rpc.tenzro.xyz</span>
         <a
           href="https://wallet.tenzro.xyz/dashboard"
           target="_blank"

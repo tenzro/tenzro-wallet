@@ -22,8 +22,8 @@ import {
 } from '@tenzro/ui';
 
 const devices = [
-  { id: 'd1', name: 'MacBook Pro · Hilary', ts: Date.now() - 600_000, primary: true },
-  { id: 'd2', name: 'iPhone 17 Pro', ts: Date.now() - 86_400_000 * 2, primary: false },
+  { id: 'd1', name: 'Laptop', ts: Date.now() - 600_000, primary: true },
+  { id: 'd2', name: 'Phone', ts: Date.now() - 86_400_000 * 2, primary: false },
 ];
 
 export function App() {
@@ -32,7 +32,7 @@ export function App() {
       <header className="flex items-center gap-3">
         <Logo size={28} withWordmark />
         <Badge variant="default" size="sm" className="ml-auto">
-          v0.0.0 · testnet
+          v0.3.0 · Network 1
         </Badge>
       </header>
 
@@ -40,11 +40,11 @@ export function App() {
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle>Custody quorum</CardTitle>
-              <CardDescription>2-of-2 (testnet)</CardDescription>
+              <CardTitle>Devices</CardTitle>
+              <CardDescription>Passkeys that can approve for this wallet</CardDescription>
             </div>
             <Badge variant="success" size="sm" dot>
-              Healthy
+              {devices.length} devices
             </Badge>
           </div>
         </CardHeader>
@@ -65,7 +65,7 @@ export function App() {
                   )}
                 </div>
                 <span className="text-xs text-foreground-subtle">
-                  Last signed {formatRelativeTime(d.ts)}
+                  Last approved {formatRelativeTime(d.ts)}
                 </span>
               </div>
             </div>
@@ -82,12 +82,8 @@ export function App() {
         </CardHeader>
         <CardContent className="space-y-3">
           <Row icon={Globe} label="Tenzro RPC" value="rpc.tenzro.xyz" />
-          <Row icon={Cpu} label="Splice baseline" value="0.5.x · gated" />
-          <Row
-            icon={Shield}
-            label="Signature flow"
-            value="DPoP-bound (M2 · until passkey-quorum)"
-          />
+          <Row icon={Cpu} label="Chain id" value="read from the node" />
+          <Row icon={Shield} label="Approvals" value="passkey + ML-DSA-65, on this device" />
         </CardContent>
       </Card>
 
