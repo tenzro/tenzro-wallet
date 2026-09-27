@@ -10,6 +10,7 @@ import { Geist, Geist_Mono } from 'next/font/google';
 import { Toaster } from 'sonner';
 
 import { Providers } from '@/components/providers';
+import { ServiceWorker } from '@/components/service-worker';
 import './globals.css';
 
 const geistSans = Geist({
@@ -31,7 +32,7 @@ export const metadata: Metadata = {
     'The official wallet for the Tenzro Ledger and Network. Native, EVM, SVM, and Canton — under one TDIP identity, secured by your passkeys, with an agentic stack built in.',
   applicationName: 'Tenzro Wallet',
   authors: [{ name: 'Tenzro' }],
-  metadataBase: new URL('https://wallet.tenzro.xyz'),
+  metadataBase: new URL('https://wallet.tenzro.com'),
   openGraph: {
     title: 'Tenzro Wallet',
     description: 'One wallet. Four surfaces. No seed phrases. Built for the agentic web.',
@@ -40,13 +41,16 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: '#0a0a0c',
-  colorScheme: 'dark',
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#ffffff' },
+    { media: '(prefers-color-scheme: dark)', color: '#000000' },
+  ],
+  colorScheme: 'light dark',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en">
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         <Providers>
           <TooltipProvider delayDuration={150}>
@@ -64,6 +68,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             />
           </TooltipProvider>
         </Providers>
+        <ServiceWorker />
       </body>
     </html>
   );
