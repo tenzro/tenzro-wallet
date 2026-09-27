@@ -4,10 +4,10 @@
  *   1. Welcome — create a wallet with a passkey, or sign in with one
  *   2. Second device — link a phone, laptop or security key (strongly
  *      recommended: one passkey is one lost device away from losing the wallet)
- *   3. Done — identity, account, faucet
+ *   3. Done — identity, account, and how to fund it (by transfer)
  *
  * Every step talks to the node directly (`tenzro_enrollPasskey`,
- * `tenzro_addPasskey`, `tenzro_faucet`); nothing secret is stored.
+ * `tenzro_addPasskey`); nothing secret is stored.
  */
 
 'use client';
@@ -22,7 +22,7 @@ import { Badge, Button, Card, ChainBadge, Input, Logo, Progress, cn } from '@ten
 
 import { LinkDeviceActions } from '@/components/wallet/link-device';
 import { shortAddress } from '@/lib/tenzro/format';
-import { useFaucet, usePlatformPasskey, useWallet } from '@/lib/tenzro/hooks';
+import { usePlatformPasskey, useWallet } from '@/lib/tenzro/hooks';
 
 const steps = ['Passkey', 'Second device', 'Done'] as const;
 type StepIdx = 0 | 1 | 2;
@@ -210,7 +210,6 @@ function SecondDevice({ onContinue }: { onContinue: () => void }) {
 
 function Done({ onContinue }: { onContinue: () => void }) {
   const { wallet } = useWallet();
-  const faucet = useFaucet(wallet?.account);
 
   return (
     <Card variant="raised" className="p-10">
@@ -249,29 +248,12 @@ function Done({ onContinue }: { onContinue: () => void }) {
         </div>
       )}
 
-      {faucet.data && (
-        <div
-          className={cn(
-            'mb-6 rounded-xl border px-4 py-3 text-sm',
-            faucet.data.success
-              ? 'border-success/30 bg-success/10 text-success'
-              : 'border-warning/30 bg-warning/10 text-warning',
-          )}
-        >
-          {faucet.data.message}
-        </div>
-      )}
+      <p className="mb-6 text-sm text-foreground-muted text-center">
+        To fund it, send TNZO to this account from another wallet or from a product you use on
+        Tenzro.
+      </p>
 
       <div className="flex flex-col sm:flex-row gap-3 justify-center">
-        <Button
-          onClick={() => faucet.mutate()}
-          variant="secondary"
-          size="lg"
-          pending={faucet.isPending}
-          disabled={!wallet}
-        >
-          Get TNZO from the faucet
-        </Button>
         <Button
           onClick={onContinue}
           variant="primary"

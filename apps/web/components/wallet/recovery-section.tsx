@@ -1,5 +1,6 @@
 'use client';
 
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Button,
   Card,
@@ -13,7 +14,12 @@ import {
 import { Download, KeyRound } from 'lucide-react';
 import Link from 'next/link';
 import * as React from 'react';
-import { buildRecoveryKit, createRecoveryKey, exportRecoveryKey } from 'tenzro-wallet/custody';
+import {
+  type CredentialRef,
+  buildRecoveryKit,
+  createRecoveryKey,
+  exportRecoveryKey,
+} from 'tenzro-wallet/custody';
 
 import { TENZRO_NETWORK_NAME, TENZRO_RP_ID } from '@/lib/tenzro/config';
 import { useWallet } from '@/lib/tenzro/hooks';
@@ -86,6 +92,7 @@ export function RecoverySection() {
         guardian: {
           ed25519PublicKeyHex: created.key.ed25519PublicKeyHex,
           mlDsaPublicKeyHex: created.key.mlDsaPublicKeyHex,
+          kind: 'recovery_key',
           label: 'Recovery key',
         },
         approver: { id: w.credentialId, transports: w.transports },
@@ -117,6 +124,11 @@ export function RecoverySection() {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-5 text-sm">
+        <PendingRecoveries
+          account={w.account}
+          approver={{ id: w.credentialId, transports: w.transports }}
+        />
+
         <div className="space-y-2">
           <p className="font-medium">Recovery Kit</p>
           <p className="text-foreground-muted">
@@ -179,5 +191,61 @@ export function RecoverySection() {
         </p>
       </CardContent>
     </Card>
+  );
+}
+
+/**
+ * Recoveries started on this account. A recovery adds a new passkey after a
+ * wait; one the owner did not start is cancelled here, with their passkey.
+ */
+function PendingRecoveries({
+  account,
+  approver,
+}: {
+  readonly account: string;
+  readonly approver: CredentialRef;
+}) {
+  const qc = useQueryClient();
+  const pending = useQuery({
+    queryKey: ['tenzro', 'pendingRecoveries', account],
+    queryFn: () => custody().listPendingRecoveries(account),
+    refetchInterval: 30_000,
+  });
+  const cancel = useMutation({
+    mutationFn: (recoveryId: string) => custody().cancelRecovery({ account, recoveryId, approver }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['tenzro', 'pendingRecoveries', account] }),
+  });
+  const open = (pending.data ?? []).filter((r) => !r.finalized && !r.cancelled);
+  if (open.length === 0) return null;
+
+  return (
+    <div className="space-y-2 rounded-xl border border-warning/40 bg-warning/10 p-4">
+      <p className="font-medium">Recovery in progress</p>
+      <p className="text-foreground-muted">
+        Someone started recovering this wallet onto a new device. If it was not you, cancel it now:
+        it cannot complete once cancelled.
+      </p>
+      {open.map((r) => (
+        <div key={r.recovery_id} className="flex flex-wrap items-center justify-between gap-2">
+          <span className="font-mono text-xs text-foreground-subtle">
+            {r.new_credential_id_hex.slice(0, 14)}…
+            {r.ready_at_ms
+              ? ` · completes after ${new Date(r.ready_at_ms).toLocaleString()}`
+              : ' · waiting for approval'}
+          </span>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => cancel.mutate(r.recovery_id)}
+            disabled={cancel.isPending}
+          >
+            {cancel.isPending && cancel.variables === r.recovery_id
+              ? 'Approve with your passkey…'
+              : 'Cancel recovery'}
+          </Button>
+        </div>
+      ))}
+      {cancel.error && <p className="text-danger">{cancel.error.message}</p>}
+    </div>
   );
 }

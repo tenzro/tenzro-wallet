@@ -55,7 +55,7 @@ export function LiveActivityList() {
             Empty
           </Badge>
           <p className="text-sm text-foreground-muted">
-            No transactions yet. Get TNZO from the faucet on the dashboard to see it here.
+            No transactions yet. Transfers to and from this account appear here.
           </p>
         </CardContent>
       </Card>

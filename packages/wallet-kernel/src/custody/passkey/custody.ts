@@ -132,12 +132,43 @@ export interface SessionKeyGrant {
   readonly label?: string;
 }
 
+/**
+ * What a guardian's approval stands for. It sets how long a recovery waits
+ * before it can complete: a recovery key and an email verifier together, the
+ * shortest; a recovery key alone, longer; an email verifier alone, the longest.
+ */
+export type GuardianKind = 'recovery_key' | 'email';
+
 export interface GuardianInput {
   /** Composite key of the guardian identity. */
   readonly ed25519PublicKeyHex: string;
   readonly mlDsaPublicKeyHex: string;
+  readonly kind: GuardianKind;
   readonly label?: string;
   readonly threshold?: number;
+}
+
+/** A recovery waiting on the account, as the node lists it. */
+export interface PendingRecovery {
+  readonly recovery_id: string;
+  /** The passkey the recovery would add. */
+  readonly new_credential_id_hex: string;
+  readonly created_at_ms: number;
+  readonly expires_at_ms: number;
+  /** When it could complete, given its approvals so far; `null` before any. */
+  readonly ready_at_ms: number | null;
+  readonly guardian_signatures_collected: number;
+  readonly finalized: boolean;
+  readonly cancelled: boolean;
+}
+
+/** The custody target for adding a guardian: its keys and its kind. */
+export function guardianTarget(guardian: GuardianInput): Uint8Array {
+  return concatBytes(
+    fromHex(guardian.ed25519PublicKeyHex),
+    fromHex(guardian.mlDsaPublicKeyHex),
+    new Uint8Array([guardian.kind === 'recovery_key' ? 0x01 : 0x02]),
+  );
 }
 
 export interface RecoveryStarted {
@@ -645,7 +676,11 @@ export class PasskeyCustody {
 
   // ── Recovery ──────────────────────────────────────────────────────────
 
-  /** Registers a guardian (another identity's composite Ed25519 + ML-DSA-65 key). */
+  /**
+   * Registers a guardian (a composite Ed25519 + ML-DSA-65 key) of a kind. The
+   * approval names the guardian's keys and kind, so it cannot be spent on a
+   * different guardian.
+   */
   async addGuardian(opts: {
     readonly account: string;
     readonly guardian: GuardianInput;
@@ -654,7 +689,7 @@ export class PasskeyCustody {
     const authorization = await this.#authorize(
       opts.account,
       'add_guardian',
-      new Uint8Array(0),
+      guardianTarget(opts.guardian),
       opts.approver,
     );
     const g = opts.guardian;
@@ -662,6 +697,7 @@ export class PasskeyCustody {
       account_address: opts.account,
       guardian_ed25519_pubkey_hex: g.ed25519PublicKeyHex,
       guardian_ml_dsa_pubkey_hex: g.mlDsaPublicKeyHex,
+      kind: g.kind,
       ...(g.label ? { label: g.label } : {}),
       ...(g.threshold !== undefined ? { threshold: g.threshold } : {}),
       authorization,
@@ -711,6 +747,8 @@ export class PasskeyCustody {
     guardian_signatures_collected: number;
     guardians_required: number;
     quorum_reached: boolean;
+    /** When the recovery can complete; until then any passkey on the account can cancel it. */
+    ready_at_ms: number | null;
   }> {
     return this.rpc.call('tenzro_submitRecoverySignature', {
       recovery_id: opts.recoveryId,
@@ -719,11 +757,43 @@ export class PasskeyCustody {
     });
   }
 
+  /** Completes a recovery once its wait is over. The new passkey joins the existing ones. */
   async finalizeRecovery(recoveryId: string): Promise<{
     account_address: string;
     new_credential_id_hex: string;
   }> {
     return this.rpc.call('tenzro_finalizeRecovery', { recovery_id: recoveryId });
+  }
+
+  /** Recoveries started on the account, so its owner can see and cancel them. */
+  async listPendingRecoveries(account: string): Promise<PendingRecovery[]> {
+    const r = await this.rpc.call<{ pending_recoveries: PendingRecovery[] }>(
+      'tenzro_listPendingRecoveries',
+      { account_address: account },
+    );
+    return r.pending_recoveries ?? [];
+  }
+
+  /**
+   * Cancels a recovery during its wait, approved by a passkey on the account.
+   * This is how an owner who still has a device stops a recovery they did not
+   * start.
+   */
+  async cancelRecovery(opts: {
+    readonly account: string;
+    readonly recoveryId: string;
+    readonly approver: CredentialRef;
+  }): Promise<{ recovery_id: string; cancelled: boolean }> {
+    const authorization = await this.#authorize(
+      opts.account,
+      'cancel_recovery',
+      new TextEncoder().encode(opts.recoveryId),
+      opts.approver,
+    );
+    return this.rpc.call('tenzro_cancelRecovery', {
+      recovery_id: opts.recoveryId,
+      authorization,
+    });
   }
 
   // ── internals ─────────────────────────────────────────────────────────

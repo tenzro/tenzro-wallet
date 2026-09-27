@@ -13,7 +13,7 @@
 
 'use client';
 
-import { ChevronDown, Copy, Droplets, Loader2, RefreshCw } from 'lucide-react';
+import { ChevronDown, Copy, Loader2, RefreshCw } from 'lucide-react';
 import Link from 'next/link';
 import * as React from 'react';
 
@@ -21,7 +21,7 @@ import { Badge, Button, Card, CardContent, ChainBadge, cn } from '@tenzro/ui';
 
 import { TENZRO_NETWORK_NAME, TENZRO_RPC_URL } from '@/lib/tenzro/config';
 import { formatBaseUnits, shortAddress } from '@/lib/tenzro/format';
-import { useFaucet, useTokenBalances, useWallet } from '@/lib/tenzro/hooks';
+import { useTokenBalances, useWallet } from '@/lib/tenzro/hooks';
 
 function tnzoDecimalToBase(decimal: string): string {
   const [whole = '0', frac = ''] = (decimal || '0').split('.');
@@ -72,7 +72,6 @@ function sumProjectionsBaseUnits(b: ReturnType<typeof useTokenBalances>['data'])
 export function LiveNetworkCard() {
   const { wallet, loading } = useWallet();
   const balances = useTokenBalances(wallet?.account);
-  const faucet = useFaucet(wallet?.account);
   const [copied, setCopied] = React.useState(false);
   const [showBreakdown, setShowBreakdown] = React.useState(false);
 
@@ -221,29 +220,16 @@ export function LiveNetworkCard() {
 
         <div className="flex flex-wrap items-center gap-2">
           <Button
-            onClick={() => faucet.mutate()}
+            onClick={copy}
             variant="secondary"
             size="sm"
-            pending={faucet.isPending}
-            leftIcon={<Droplets className="size-3.5" />}
+            leftIcon={<Copy className="size-3.5" />}
           >
-            Faucet
+            {copied ? 'Address copied' : 'Receive'}
           </Button>
           <Button asChild variant="primary" size="sm">
             <Link href="/send">Send TNZO</Link>
           </Button>
-          {faucet.data && (
-            <span
-              className={cn(
-                'text-xs px-2 py-1 rounded-md',
-                faucet.data.success
-                  ? 'text-success bg-success-soft'
-                  : 'text-warning bg-warning-soft',
-              )}
-            >
-              {faucet.data.message}
-            </span>
-          )}
         </div>
       </CardContent>
     </Card>

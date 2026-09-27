@@ -38,7 +38,8 @@ export type CustodyOperation =
   | 'revoke_session_key'
   | 'set_spending_limit'
   | 'add_hardware_signer'
-  | 'add_guardian';
+  | 'add_guardian'
+  | 'cancel_recovery';
 
 export interface CustodyChallenge {
   readonly challenge_id: string;

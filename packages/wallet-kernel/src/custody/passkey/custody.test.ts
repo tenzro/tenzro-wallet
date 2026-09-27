@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest';
 
 import { fromHex, toHex } from './bytes.ts';
 import { ML_DSA_65_PUBLIC_KEY_BYTES, ML_DSA_65_SIGNATURE_BYTES } from './constants.ts';
-import { PasskeyCustody } from './custody.ts';
+import { PasskeyCustody, guardianTarget } from './custody.ts';
 import { deriveCustodyKey, humanDidFromPasskey, verifyCustodySignature } from './derive.ts';
 import { passkeySigningDriver } from './driver.ts';
 import { FakeAuthenticator, MockRpc, challengeDigest } from './fake-authenticator.fixture.ts';
@@ -302,6 +302,50 @@ describe('recovery', () => {
       ML_DSA_65_PUBLIC_KEY_BYTES,
     );
     expect(req?.new_passkey_public_key_hex).toBe(toHex(auth.credentials[0]!.publicKey, true));
+  });
+
+  it('adds a guardian with its kind, approving exactly its keys and kind', async () => {
+    const { rpc, custody, account } = await enrolled();
+    rpc.handlers.tenzro_addGuardian = (() => ({ guardian_count: 1, threshold: 1 })) as (
+      params: never,
+    ) => unknown;
+    const guardian = {
+      ed25519PublicKeyHex: toHex(new Uint8Array(32).fill(1)),
+      mlDsaPublicKeyHex: toHex(new Uint8Array(ML_DSA_65_PUBLIC_KEY_BYTES).fill(2)),
+      kind: 'email' as const,
+    };
+    await custody.addGuardian({
+      account: account.account,
+      guardian,
+      approver: { id: account.credentialId },
+    });
+    const challenge = rpc.paramsOf('tenzro_createCustodyChallenge').at(-1);
+    expect(challenge?.operation).toBe('add_guardian');
+    expect(challenge?.target_hex).toBe(toHex(guardianTarget(guardian), true));
+    expect(fromHex(challenge?.target_hex as string).at(-1)).toBe(0x02);
+    const [added] = rpc.paramsOf('tenzro_addGuardian');
+    expect(added?.kind).toBe('email');
+  });
+
+  it('cancels a recovery with a passkey approval bound to that recovery', async () => {
+    const { rpc, custody, account } = await enrolled();
+    rpc.handlers.tenzro_cancelRecovery = ((p: { recovery_id: string }) => ({
+      recovery_id: p.recovery_id,
+      cancelled: true,
+    })) as (params: never) => unknown;
+    const r = await custody.cancelRecovery({
+      account: account.account,
+      recoveryId: 'abc123',
+      approver: { id: account.credentialId },
+    });
+    expect(r.cancelled).toBe(true);
+    const challenge = rpc.paramsOf('tenzro_createCustodyChallenge').at(-1);
+    expect(challenge?.operation).toBe('cancel_recovery');
+    expect(challenge?.target_hex).toBe(toHex(new TextEncoder().encode('abc123'), true));
+    const [sent] = rpc.paramsOf('tenzro_cancelRecovery');
+    expect((sent?.authorization as { credential_id_hex: string }).credential_id_hex).toBe(
+      `0x${account.credentialId}`,
+    );
   });
 });
 

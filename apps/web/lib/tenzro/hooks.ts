@@ -10,7 +10,6 @@ import { type UseQueryResult, useMutation, useQuery, useQueryClient } from '@tan
 import * as React from 'react';
 
 import type { PasskeyEntryOptions } from 'tenzro-wallet/custody';
-import { requestFaucet } from './faucet';
 import {
   type TokenBalances,
   getBalance,
@@ -133,22 +132,6 @@ export function useBlockNumber() {
     queryKey: ['tenzro', 'blockNumber'],
     queryFn: getBlockNumber,
     refetchInterval: 15_000,
-  });
-}
-
-export function useFaucet(address: string | undefined) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async () => {
-      if (!address) throw new Error('No wallet address');
-      return requestFaucet(address);
-    },
-    onSuccess: (result) => {
-      if (result.success) {
-        qc.invalidateQueries({ queryKey: ['tenzro', 'balance', address] });
-        qc.invalidateQueries({ queryKey: ['tenzro', 'tokenBalance', address] });
-      }
-    },
   });
 }
 
