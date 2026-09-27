@@ -119,24 +119,68 @@ export function userOperationHash(
   );
 }
 
-/** ABI `execute(address to, uint256 value, bytes data)` calldata (selector `0xb61d27f6`). */
-export function encodeExecuteCall(
-  to: string,
-  value: bigint,
-  data: Uint8Array = new Uint8Array(0),
-): Uint8Array {
-  const target = fromHex(to);
-  if (target.length !== 20) throw new Error('execute target must be a 20-byte address');
+/** One call a UserOperation makes. */
+export interface Execution {
+  readonly to: string;
+  readonly value: bigint;
+  readonly data?: Uint8Array;
+}
+
+/** ERC-7579 `execute(bytes32 mode, bytes executionCalldata)`. */
+const EXECUTE_SELECTOR = new Uint8Array([0xe9, 0xae, 0x5c, 0x53]);
+const CALLTYPE_SINGLE = 0x00;
+const CALLTYPE_BATCH = 0x01;
+/** The most calls the network accepts in one batch. */
+export const MAX_BATCH_CALLS = 64;
+const MAX_VALUE = (1n << 128n) - 1n;
+
+function target(to: string): Uint8Array {
+  const t = fromHex(to);
+  if (t.length !== 20) throw new Error('execute target must be a 20-byte address');
+  return t;
+}
+
+function checkValue(value: bigint): void {
+  if (value < 0n || value > MAX_VALUE) throw new Error('execute value must fit in 128 bits');
+}
+
+/** Length-prefixed ABI `bytes`, padded to a 32-byte boundary. */
+function abiBytes(data: Uint8Array): Uint8Array {
   const padded = new Uint8Array(Math.ceil(data.length / 32) * 32);
   padded.set(data);
-  return concatBytes(
-    new Uint8Array([0xb6, 0x1d, 0x27, 0xf6]),
-    addressWord(to),
-    uint256(value),
-    uint256(0x60n),
-    uint256(BigInt(data.length)),
-    padded,
-  );
+  return concatBytes(uint256(BigInt(data.length)), padded);
+}
+
+function execute(callType: number, executionCalldata: Uint8Array): Uint8Array {
+  const mode = new Uint8Array(32);
+  mode[0] = callType; // exec type 0x00: revert on failure
+  return concatBytes(EXECUTE_SELECTOR, mode, uint256(0x40n), abiBytes(executionCalldata));
+}
+
+/** One call: executionCalldata = target (20) || value (32, big-endian) || data. */
+export function encodeExecuteSingle(call: Execution): Uint8Array {
+  checkValue(call.value);
+  return execute(CALLTYPE_SINGLE, concatBytes(target(call.to), uint256(call.value), call.data ?? new Uint8Array(0)));
+}
+
+/**
+ * Several calls, atomically: executionCalldata = abi.encode((address,uint256,bytes)[]).
+ * Every call is checked, and spending limits count the batch's total value.
+ */
+export function encodeExecuteBatch(calls: readonly Execution[]): Uint8Array {
+  if (calls.length === 0) throw new Error('a batch needs at least one call');
+  if (calls.length > MAX_BATCH_CALLS) throw new Error(`a batch holds at most ${MAX_BATCH_CALLS} calls`);
+  const tuples = calls.map((c) => {
+    checkValue(c.value);
+    return concatBytes(addressWord(c.to), uint256(c.value), uint256(0x60n), abiBytes(c.data ?? new Uint8Array(0)));
+  });
+  let offset = 32 * calls.length;
+  const offsets = tuples.map((t) => {
+    const at = uint256(BigInt(offset));
+    offset += t.length;
+    return at;
+  });
+  return execute(CALLTYPE_BATCH, concatBytes(uint256(0x20n), uint256(BigInt(calls.length)), ...offsets, ...tuples));
 }
 
 export interface HybridSignatureEntry {
