@@ -1,108 +1,152 @@
 /**
  * Tenzro Wallet — design tokens.
  *
- * One design language with tenzro.com: monochrome chrome (near-black
- * base + neutral greys + hairline borders) and a single low-chroma
- * slate-blue accent (the site's #8a9bc7) for primary actions and
- * selected state. Status colors appear only on explicit states, with
- * restrained chroma. Chain identity is conveyed by the chain's own logo
- * color in `chain-badge.tsx` — never splashed across the UI chrome.
+ * The defaults are tenzro.com's design language: white / black, neutral greys,
+ * hairline borders and one slate-blue accent, in light and dark. Every
+ * component reads the wallet tokens below, and every wallet token derives from
+ * a small set of `--tz-*` base variables, so an app embedding the wallet can
+ * restyle all of it by overriding those few (in CSS, or with `applyTheme()`).
  *
- * The four "surface-*" colors are mono tonal greys used by the cross-VM
- * route preview to differentiate pointer-op from bridge; they carry no
- * hue, so the chrome reads as monochrome.
+ * Dark mode follows the system unless the page sets `data-theme="light"` or
+ * `data-theme="dark"` on an ancestor.
  */
 
 @import "tailwindcss";
 
+/* ── Base variables: the customisation surface ────────────────────── */
+:root {
+  --tz-background: #ffffff;
+  --tz-foreground: #0a0a0a;
+  --tz-muted: #5f6672;
+  --tz-muted-foreground: #4b5563;
+  --tz-border: #e5e7eb;
+  --tz-border-strong: #d4d4d8;
+  --tz-surface: #fafafa;
+  --tz-accent: #3d4a6b;
+  --tz-accent-hover: #2c3654;
+  --tz-accent-soft: #eef1f8;
+  --tz-accent-foreground: #ffffff;
+  --tz-success: oklch(0.52 0.11 150);
+  --tz-warning: oklch(0.6 0.12 70);
+  --tz-danger: oklch(0.55 0.17 25);
+  --tz-radius: 0.5rem;
+  --tz-font-sans: "Geist", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --tz-font-mono: "Geist Mono", "JetBrains Mono", ui-monospace, monospace;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --tz-background: #000000;
+    --tz-foreground: #ffffff;
+    --tz-muted: #8e8e98;
+    --tz-muted-foreground: #a1a1aa;
+    --tz-border: #232327;
+    --tz-border-strong: #34343a;
+    --tz-surface: #0b0b0d;
+    --tz-accent: #8a9bc7;
+    --tz-accent-hover: #a8b6d6;
+    --tz-accent-soft: #11151f;
+    --tz-accent-foreground: #0a0a0a;
+    --tz-success: oklch(0.74 0.09 145);
+    --tz-warning: oklch(0.78 0.09 75);
+    --tz-danger: oklch(0.66 0.13 25);
+    color-scheme: dark;
+  }
+}
+
+[data-theme="dark"] {
+  --tz-background: #000000;
+  --tz-foreground: #ffffff;
+  --tz-muted: #8e8e98;
+  --tz-muted-foreground: #a1a1aa;
+  --tz-border: #232327;
+  --tz-border-strong: #34343a;
+  --tz-surface: #0b0b0d;
+  --tz-accent: #8a9bc7;
+  --tz-accent-hover: #a8b6d6;
+  --tz-accent-soft: #11151f;
+  --tz-accent-foreground: #0a0a0a;
+  --tz-success: oklch(0.74 0.09 145);
+  --tz-warning: oklch(0.78 0.09 75);
+  --tz-danger: oklch(0.66 0.13 25);
+  color-scheme: dark;
+}
+
+/* ── Wallet tokens, derived from the base variables ───────────────── */
+@theme inline {
+  --color-background: var(--tz-background);
+  --color-background-elevated: var(--tz-surface);
+  --color-surface-1: var(--tz-surface);
+  --color-surface-2: color-mix(in oklab, var(--tz-foreground) 5%, var(--tz-background));
+  --color-surface-3: color-mix(in oklab, var(--tz-foreground) 9%, var(--tz-background));
+  --color-overlay: color-mix(in oklab, var(--tz-background) 70%, transparent);
+
+  --color-border-subtle: color-mix(in oklab, var(--tz-border) 70%, transparent);
+  --color-border-default: var(--tz-border);
+  --color-border-strong: var(--tz-border-strong);
+
+  --color-foreground: var(--tz-foreground);
+  --color-foreground-muted: var(--tz-muted-foreground);
+  --color-foreground-subtle: var(--tz-muted);
+  --color-foreground-disabled: color-mix(in oklab, var(--tz-muted) 55%, var(--tz-background));
+
+  --color-brand: var(--tz-accent);
+  --color-brand-hover: var(--tz-accent-hover);
+  --color-brand-press: var(--tz-accent-hover);
+  --color-brand-soft: var(--tz-accent-soft);
+  --color-brand-glow: color-mix(in oklab, var(--tz-accent) 30%, transparent);
+  --color-brand-foreground: var(--tz-accent-foreground);
+
+  /* Mono tonal greys for the cross-VM route preview; no hue by design. */
+  --color-surface-native: color-mix(in oklab, var(--tz-foreground) 82%, var(--tz-background));
+  --color-surface-native-soft: color-mix(in oklab, var(--tz-foreground) 8%, transparent);
+  --color-surface-native-glow: color-mix(in oklab, var(--tz-foreground) 16%, transparent);
+  --color-surface-evm: color-mix(in oklab, var(--tz-foreground) 66%, var(--tz-background));
+  --color-surface-evm-soft: color-mix(in oklab, var(--tz-foreground) 8%, transparent);
+  --color-surface-evm-glow: color-mix(in oklab, var(--tz-foreground) 16%, transparent);
+  --color-surface-svm: color-mix(in oklab, var(--tz-foreground) 74%, var(--tz-background));
+  --color-surface-svm-soft: color-mix(in oklab, var(--tz-foreground) 8%, transparent);
+  --color-surface-svm-glow: color-mix(in oklab, var(--tz-foreground) 16%, transparent);
+  --color-surface-canton: color-mix(in oklab, var(--tz-foreground) 58%, var(--tz-background));
+  --color-surface-canton-soft: color-mix(in oklab, var(--tz-foreground) 8%, transparent);
+  --color-surface-canton-glow: color-mix(in oklab, var(--tz-foreground) 16%, transparent);
+
+  --color-agent: var(--tz-accent);
+  --color-agent-soft: var(--tz-accent-soft);
+  --color-agent-glow: color-mix(in oklab, var(--tz-accent) 28%, transparent);
+
+  --color-success: var(--tz-success);
+  --color-success-soft: color-mix(in oklab, var(--tz-success) 12%, transparent);
+  --color-warning: var(--tz-warning);
+  --color-warning-soft: color-mix(in oklab, var(--tz-warning) 12%, transparent);
+  --color-danger: var(--tz-danger);
+  --color-danger-soft: color-mix(in oklab, var(--tz-danger) 12%, transparent);
+  --color-info: var(--tz-accent);
+  --color-info-soft: var(--tz-accent-soft);
+
+  --font-sans: var(--tz-font-sans);
+  --font-mono: var(--tz-font-mono);
+  --font-display: var(--tz-font-sans);
+
+  /* Radii scale from one base value. */
+  --radius-xs: calc(var(--tz-radius) * 0.75);
+  --radius-sm: var(--tz-radius);
+  --radius-md: calc(var(--tz-radius) * 1.5);
+  --radius-lg: calc(var(--tz-radius) * 2);
+  --radius-xl: calc(var(--tz-radius) * 2.5);
+  --radius-2xl: calc(var(--tz-radius) * 3);
+  --radius-3xl: calc(var(--tz-radius) * 4);
+  --radius-full: 9999px;
+}
+
 @theme {
-  /* ── Base palette (near-black mono, matched to the site's #000 dark) ─ */
-  --color-background: oklch(0.04 0.002 268);
-  --color-background-elevated: oklch(0.1 0.002 268);
-  --color-surface-1: oklch(0.135 0.002 268);
-  --color-surface-2: oklch(0.17 0.003 268);
-  --color-surface-3: oklch(0.21 0.003 268);
-  --color-overlay: oklch(0.02 0.001 268 / 0.7);
-
-  /* Hairline borders — low-opacity neutrals */
-  --color-border-subtle: oklch(1 0 0 / 0.06);
-  --color-border-default: oklch(1 0 0 / 0.1);
-  --color-border-strong: oklch(1 0 0 / 0.16);
-
-  --color-foreground: oklch(1 0 0);
-  --color-foreground-muted: oklch(0.712 0.013 268);
-  --color-foreground-subtle: oklch(0.552 0.014 268);
-  --color-foreground-disabled: oklch(0.4 0.01 268);
-
-  /* ── Brand — single accent, used sparingly ───────────────────────── */
-  /* Slate-blue, matched to the tenzro.com site accent (#8a9bc7 dark) so
-     the wallet shares one design language with the network site. Low
-     chroma by design — the chrome stays monochrome, accent is a hint. */
-  --color-brand: oklch(0.692 0.068 268);
-  --color-brand-hover: oklch(0.776 0.048 267);
-  --color-brand-press: oklch(0.62 0.07 268);
-  --color-brand-soft: oklch(0.692 0.068 268 / 0.12);
-  --color-brand-glow: oklch(0.692 0.068 268 / 0.32);
-  --color-brand-foreground: oklch(0.13 0.005 268);
-
-  /* ── Surface accents (kernel-internal, used by router preview) ──── */
-  /* Monochrome to match tenzro.com — chains differentiate by tonal
-     lightness only, no hue. The chain's own logo color (in
-     chain-badge.tsx) carries brand identity; the UI chrome stays mono. */
-  --color-surface-native: oklch(0.82 0.005 268);
-  --color-surface-native-soft: oklch(0.82 0.005 268 / 0.1);
-  --color-surface-native-glow: oklch(0.82 0.005 268 / 0.2);
-
-  --color-surface-evm: oklch(0.7 0.005 268);
-  --color-surface-evm-soft: oklch(0.7 0.005 268 / 0.1);
-  --color-surface-evm-glow: oklch(0.7 0.005 268 / 0.2);
-
-  --color-surface-svm: oklch(0.76 0.005 268);
-  --color-surface-svm-soft: oklch(0.76 0.005 268 / 0.1);
-  --color-surface-svm-glow: oklch(0.76 0.005 268 / 0.2);
-
-  --color-surface-canton: oklch(0.64 0.005 268);
-  --color-surface-canton-soft: oklch(0.64 0.005 268 / 0.1);
-  --color-surface-canton-glow: oklch(0.64 0.005 268 / 0.2);
-
-  /* ── Agent-stack accent — folds into the slate-blue brand ────────── */
-  --color-agent: oklch(0.692 0.068 268);
-  --color-agent-soft: oklch(0.692 0.068 268 / 0.12);
-  --color-agent-glow: oklch(0.692 0.068 268 / 0.28);
-
-  /* ── Status — only for explicit states, restrained chroma ────────── */
-  /* The site is monochrome; states stay legible but desaturated so they
-     read as quiet signals, not vivid splashes. */
-  --color-success: oklch(0.74 0.09 145);
-  --color-success-soft: oklch(0.74 0.09 145 / 0.12);
-  --color-warning: oklch(0.78 0.09 75);
-  --color-warning-soft: oklch(0.78 0.09 75 / 0.12);
-  --color-danger: oklch(0.66 0.13 25);
-  --color-danger-soft: oklch(0.66 0.13 25 / 0.12);
-  --color-info: oklch(0.692 0.068 268);
-  --color-info-soft: oklch(0.692 0.068 268 / 0.12);
-
-  /* ── Typography ──────────────────────────────────────────────────── */
-  --font-sans: "Geist", "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "Geist Mono", "JetBrains Mono", ui-monospace, monospace;
-  --font-display: "Geist", "Inter", ui-sans-serif, system-ui, sans-serif;
-
   --text-display-2xl: 4.5rem;
   --text-display-xl: 3.75rem;
   --text-display-lg: 3rem;
   --text-display-md: 2.25rem;
   --text-display-sm: 1.875rem;
   --text-display-xs: 1.5rem;
-
-  /* ── Radii ───────────────────────────────────────────────────────── */
-  --radius-xs: 0.375rem;
-  --radius-sm: 0.5rem;
-  --radius-md: 0.75rem;
-  --radius-lg: 1rem;
-  --radius-xl: 1.25rem;
-  --radius-2xl: 1.5rem;
-  --radius-3xl: 2rem;
-  --radius-full: 9999px;
 
   /* ── Motion ──────────────────────────────────────────────────────── */
   --ease-out-expo: cubic-bezier(0.19, 1, 0.22, 1);
@@ -168,10 +212,6 @@
 
 /* ── Base layer ───────────────────────────────────────────────────── */
 @layer base {
-  :root {
-    color-scheme: dark;
-  }
-
   html,
   body {
     background: var(--color-background);
@@ -196,11 +236,11 @@
     background: transparent;
   }
   ::-webkit-scrollbar-thumb {
-    background: oklch(1 0 0 / 0.08);
+    background: color-mix(in oklab, var(--tz-foreground) 10%, transparent);
     border-radius: 9999px;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: oklch(1 0 0 / 0.14);
+    background: color-mix(in oklab, var(--tz-foreground) 18%, transparent);
   }
 
   .tabular {

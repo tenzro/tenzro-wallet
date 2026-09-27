@@ -36,8 +36,8 @@ const buttonVariants = cva(
     variants: {
       variant: {
         primary: [
-          'bg-brand text-brand-foreground shadow-[0_0_0_1px_rgba(255,255,255,0.06)_inset,0_8px_24px_-8px_var(--color-brand-glow)]',
-          'hover:bg-brand-hover hover:shadow-[0_0_0_1px_rgba(255,255,255,0.08)_inset,0_12px_36px_-8px_var(--color-brand-glow)]',
+          'bg-brand text-brand-foreground',
+          'hover:bg-brand-hover',
         ],
         secondary: [
           'bg-surface-2 text-foreground border border-border-default',
@@ -50,11 +50,11 @@ const buttonVariants = cva(
         ],
         danger: [
           'bg-danger-soft text-danger border border-danger/30',
-          'hover:bg-danger hover:text-white',
+          'hover:bg-danger hover:text-background',
         ],
         agent: [
           'bg-agent-soft text-agent border border-agent/30',
-          'hover:bg-agent hover:text-white',
+          'hover:bg-agent hover:text-brand-foreground',
         ],
         surface: [
           'bg-surface-2 text-foreground border border-border-default',

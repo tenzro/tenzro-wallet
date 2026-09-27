@@ -35,7 +35,7 @@ export const Progress = React.forwardRef<
       style={{ transform: `translateX(-${100 - value}%)` }}
     >
       {showShimmer && (
-        <span className="absolute inset-0 bg-linear-to-r from-transparent via-white/30 to-transparent skeleton" />
+        <span className="absolute inset-0 bg-linear-to-r from-transparent via-foreground/10 to-transparent skeleton" />
       )}
     </ProgressPrimitive.Indicator>
   </ProgressPrimitive.Root>

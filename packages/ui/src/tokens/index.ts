@@ -32,3 +32,5 @@ export const motion = {
 } as const;
 
 export type SurfaceKind = keyof typeof surfaceColor;
+
+export { applyTheme, resetTheme, tenzroTheme, type TenzroTheme, type ThemeMode } from './theme';

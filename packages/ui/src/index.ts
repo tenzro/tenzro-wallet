@@ -25,6 +25,11 @@ export {
   surfaceGlow,
   motion as motionTokens,
   type SurfaceKind,
+  applyTheme,
+  resetTheme,
+  tenzroTheme,
+  type TenzroTheme,
+  type ThemeMode,
 } from './tokens/index';
 
 // Components
