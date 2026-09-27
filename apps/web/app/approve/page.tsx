@@ -19,16 +19,27 @@ import {
   type PopupSendTransaction,
   isPopupRequest,
 } from 'tenzro-wallet';
-import { type OwnershipProof, hexToBytes } from 'tenzro-wallet/custody';
+import { type OwnershipProof, type PasskeyEntryOptions, hexToBytes } from 'tenzro-wallet/custody';
 
+import { LinkDeviceActions } from '@/components/wallet/link-device';
 import { addConnection, isConnected, removeConnection } from '@/lib/tenzro/connections';
 import { TNZO_DECIMALS, formatBaseUnits, shortAddress } from '@/lib/tenzro/format';
-import { useWallet } from '@/lib/tenzro/hooks';
-import { custody, sendTnzo } from '@/lib/tenzro/wallet';
+import { usePlatformPasskey, useWallet } from '@/lib/tenzro/hooks';
+import { type EnteredWallet, custody, sendTnzo } from '@/lib/tenzro/wallet';
 
 interface Pending {
   readonly request: PopupRequest;
   readonly origin: string;
+}
+
+/** The site's one-time challenge for an ownership proof, if it sent one. */
+function connectChallenge(request: PopupRequest): Uint8Array | undefined {
+  const challenge = (request.params as { challenge?: unknown } | undefined)?.challenge;
+  if (challenge === undefined) return undefined;
+  if (typeof challenge !== 'string' || !/^(0x)?([0-9a-fA-F]{2}){16,64}$/.test(challenge)) {
+    throw new Error('The site sent an invalid challenge.');
+  }
+  return hexToBytes(challenge);
 }
 
 function isSend(p: unknown): p is PopupSendTransaction {
@@ -43,6 +54,11 @@ export default function ApprovePage() {
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [noOpener, setNoOpener] = React.useState(false);
+  const platform = usePlatformPasskey();
+  const [phoneChosen, setPhoneChosen] = React.useState(false);
+  const phone = phoneChosen || platform === false;
+  // A wallet created here, held back from the site while a second device is offered.
+  const [created, setCreated] = React.useState<EnteredWallet | null>(null);
 
   const respond = React.useCallback(
     (body: Omit<PopupResponse, 'protocol' | 'type' | 'id'>) => {
@@ -92,14 +108,10 @@ export default function ApprovePage() {
     try {
       const { method, params } = pending.request;
       if (method === 'tenzro_connect') {
-        const challenge = (params as { challenge?: unknown } | undefined)?.challenge;
-        let proof: OwnershipProof | undefined;
-        if (challenge !== undefined) {
-          if (typeof challenge !== 'string' || !/^(0x)?([0-9a-fA-F]{2}){16,64}$/.test(challenge)) {
-            throw new Error('The site sent an invalid challenge.');
-          }
-          proof = await custody().proveOwnership(wallet, hexToBytes(challenge));
-        }
+        const challenge = connectChallenge(pending.request);
+        const proof: OwnershipProof | undefined = challenge
+          ? await custody().proveOwnership(wallet, challenge)
+          : undefined;
         addConnection(pending.origin, wallet.account);
         respond({
           result: { account: wallet.account, did: wallet.did, ...(proof ? { proof } : {}) },
@@ -121,6 +133,38 @@ export default function ApprovePage() {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
+    }
+  }
+
+  /** Answers a connect request with a wallet just entered here: no second approval. */
+  function connectWith(w: EnteredWallet) {
+    if (!pending) return;
+    addConnection(pending.origin, w.account);
+    respond({ result: { account: w.account, did: w.did, ...(w.proof ? { proof: w.proof } : {}) } });
+    window.close();
+  }
+
+  /**
+   * Signing in or creating on a connect request is the consent to connect, so
+   * the approval that opens the wallet also signs the site's challenge.
+   */
+  async function enter(kind: 'sign-in' | 'create') {
+    if (!pending) return;
+    setError(null);
+    try {
+      const isConnect = pending.request.method === 'tenzro_connect';
+      const challenge = isConnect ? connectChallenge(pending.request) : undefined;
+      const opts: PasskeyEntryOptions = {
+        ...(challenge ? { challenge } : {}),
+        ...(phone ? { hints: ['hybrid'] as const } : {}),
+      };
+      const w =
+        kind === 'create' ? await create(name.trim() || 'Tenzro wallet', opts) : await signIn(opts);
+      if (!isConnect) return;
+      if (kind === 'create') setCreated(w);
+      else connectWith(w);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
     }
   }
 
@@ -155,6 +199,22 @@ export default function ApprovePage() {
         </p>
       ) : !pending ? (
         <p className="text-sm text-foreground-muted">Waiting for the site's request…</p>
+      ) : created ? (
+        <Card variant="raised">
+          <CardHeader>
+            <CardTitle>Your wallet is ready</CardTitle>
+            <CardDescription>
+              Add a second device now, so losing this one never locks you out. You can also do it
+              later in Settings.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <LinkDeviceActions onLinked={() => connectWith(created)} />
+            <Button variant="ghost" onClick={() => connectWith(created)}>
+              Later, continue to <span className="font-mono">{new URL(pending.origin).host}</span>
+            </Button>
+          </CardContent>
+        </Card>
       ) : !wallet ? (
         <Card variant="raised">
           <CardHeader>
@@ -164,11 +224,11 @@ export default function ApprovePage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            <Button onClick={() => signIn().catch(() => {})} disabled={loading}>
+            <Button width="full" onClick={() => enter('sign-in')} disabled={loading}>
               Sign in with your passkey
             </Button>
             <p className="text-sm text-foreground-muted">
-              New to Tenzro? Create a wallet with a passkey on this device.
+              New to Tenzro? Create a wallet with a passkey.
             </p>
             <Input
               placeholder="Your name"
@@ -177,13 +237,34 @@ export default function ApprovePage() {
               disabled={loading}
             />
             <Button
+              width="full"
               variant="outline"
-              onClick={() => create(name.trim() || 'Tenzro wallet').catch(() => {})}
+              onClick={() => enter('create')}
               disabled={loading}
             >
               Create a wallet
             </Button>
-            {walletError && <p className="text-sm text-danger">{walletError.message}</p>}
+            {phone ? (
+              <p className="text-sm text-foreground-muted">
+                {platform === false ? 'This device cannot hold a passkey. ' : ''}A QR code will
+                appear: scan it with your phone and approve there.
+              </p>
+            ) : (
+              <button
+                type="button"
+                className="block w-full text-center text-sm text-foreground-muted underline underline-offset-2"
+                onClick={() => setPhoneChosen(true)}
+              >
+                Use a phone instead (QR code)
+              </button>
+            )}
+            {pending.request.method === 'tenzro_connect' && (
+              <p className="text-xs text-foreground-subtle">
+                Signing in connects this site: it will see your address and identity, and cannot
+                move funds without your approval.
+              </p>
+            )}
+            {error && <p className="text-sm text-danger">{error}</p>}
           </CardContent>
         </Card>
       ) : pending.request.method === 'tenzro_disconnect' ? null : (

@@ -130,3 +130,145 @@ describe('addWallet', () => {
     });
   });
 });
+
+/** Counts the approvals a flow asks for, and remembers the options of each. */
+function counted(authenticator: FakeAuthenticator) {
+  const seen: Array<{ kind: 'create' | 'get'; hints?: readonly string[] }> = [];
+  const create = authenticator.create.bind(authenticator);
+  const get = authenticator.get.bind(authenticator);
+  authenticator.create = async (o) => {
+    seen.push({ kind: 'create', ...(o.hints ? { hints: o.hints } : {}) });
+    return create(o);
+  };
+  authenticator.get = async (o) => {
+    seen.push({ kind: 'get', ...(o.hints ? { hints: o.hints } : {}) });
+    return get(o);
+  };
+  return seen;
+}
+
+function provesFor(
+  proof: {
+    credentialIdHex: string;
+    authenticatorDataHex: string;
+    clientDataJsonHex: string;
+    signatureHex: string;
+  },
+  code: Uint8Array,
+  authenticator: FakeAuthenticator,
+) {
+  const clientData = JSON.parse(new TextDecoder().decode(fromHex(proof.clientDataJsonHex)));
+  expect(clientData.challenge).toBe(b64url(code));
+  const candidates = recoverAssertionPublicKeys(
+    fromHex(proof.authenticatorDataHex),
+    fromHex(proof.clientDataJsonHex),
+    fromHex(proof.signatureHex),
+  ).map((xy) => toHex(xy));
+  const cred = authenticator.credential(proof.credentialIdHex);
+  expect(candidates).toContain(toHex(cred?.publicKey ?? new Uint8Array()));
+}
+
+describe('connecting a site while creating or signing in', () => {
+  const code = new Uint8Array(32).fill(9);
+
+  it('creates with three approvals, the PRF read doubling as the proof', async () => {
+    const { custody, authenticator } = setup();
+    authenticator.returnPrfOnCreate = false;
+    const seen = counted(authenticator);
+    const account = await custody.createWallet({ displayName: 'Ada', challenge: code });
+    expect(seen.map((s) => s.kind)).toEqual(['create', 'get', 'get']);
+    expect(account.proof?.account).toBe(account.account);
+    provesFor(account.proof!, code, authenticator);
+  });
+
+  it('creates with three approvals when the PRF came at creation', async () => {
+    const { custody, authenticator } = setup();
+    const seen = counted(authenticator);
+    const account = await custody.createWallet({ displayName: 'Ada', challenge: code });
+    expect(seen.map((s) => s.kind)).toEqual(['create', 'get', 'get']);
+    provesFor(account.proof!, code, authenticator);
+  });
+
+  it('asks no approval for a proof nobody requested', async () => {
+    const { custody, authenticator } = setup();
+    const seen = counted(authenticator);
+    const account = await custody.createWallet({ displayName: 'Ada' });
+    expect(seen.map((s) => s.kind)).toEqual(['create', 'get']);
+    expect(account.proof).toBeUndefined();
+  });
+
+  it('signs in and proves with one approval', async () => {
+    const { custody, authenticator, rpc } = setup();
+    await custody.createWallet({ displayName: 'Ada' });
+    const did = humanDidFromPasskey(authenticator.credentials[0]!.publicKey);
+    rpc.handlers.tenzro_resolveIdentity = (() => ({
+      did,
+      metadata: { smart_account_address: FIRST },
+    })) as (params: never) => unknown;
+    const seen = counted(authenticator);
+    const found = await custody.signIn({ challenge: code });
+    expect(seen).toHaveLength(1);
+    expect(found.proof?.account).toBe(FIRST);
+    provesFor(found.proof!, code, authenticator);
+  });
+
+  it('passes the phone hint to every approval of the flow', async () => {
+    const { custody, authenticator } = setup();
+    authenticator.returnPrfOnCreate = false;
+    const seen = counted(authenticator);
+    await custody.createWallet({ displayName: 'Ada', challenge: code, hints: ['hybrid'] });
+    expect(seen.every((s) => s.hints?.[0] === 'hybrid')).toBe(true);
+  });
+
+  it('refuses a code too short to be single-use before any approval', async () => {
+    const { custody, authenticator } = setup();
+    const seen = counted(authenticator);
+    await expect(custody.signIn({ challenge: new Uint8Array(8) })).rejects.toBeInstanceOf(
+      PasskeyError,
+    );
+    expect(seen).toHaveLength(0);
+  });
+});
+
+describe('linking a phone from the first device', () => {
+  it('asks the phone to create over QR and this device to approve', async () => {
+    const auth = new FakeAuthenticator();
+    const ids: string[] = [];
+    let n = 0;
+    const rpc = new MockRpc({
+      tenzro_createCustodyChallenge: () => {
+        n += 1;
+        return { challenge_id: `c${n}`, challenge_hex: challengeDigest(n), expires_in_secs: 300 };
+      },
+      tenzro_enrollPasskey: (p: { passkey_public_key_hex: string; credential_id_hex: string }) => {
+        ids.push(p.credential_id_hex.replace(/^0x/, ''));
+        return {
+          did: humanDidFromPasskey(fromHex(p.passkey_public_key_hex)),
+          smart_account_address: FIRST,
+        };
+      },
+      tenzro_listPasskeys: () => ({ credential_ids: ids }),
+      tenzro_addPasskey: (p: { new_credential_id_hex: string }) => ({
+        account_address: FIRST,
+        credential_id_hex: p.new_credential_id_hex,
+        credentials_total: 2,
+      }),
+    });
+    const custody = new PasskeyCustody({ rpc, authenticator: auth });
+    const first = await custody.createWallet({ displayName: 'Ada' });
+    auth.preferred = first.credentialId;
+    const seen = counted(auth);
+    await custody.linkDevice({
+      account: FIRST,
+      label: 'Phone',
+      crossPlatform: true,
+      hints: ['hybrid'],
+      approver: { id: first.credentialId },
+    });
+    expect(seen).toEqual([{ kind: 'create', hints: ['hybrid'] }, { kind: 'get' }]);
+    const [added] = rpc.paramsOf('tenzro_addPasskey') as Array<{
+      authorization: { credential_id_hex: string };
+    }>;
+    expect(added?.authorization.credential_id_hex.replace(/^0x/, '')).toBe(first.credentialId);
+  });
+});

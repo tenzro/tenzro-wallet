@@ -32,6 +32,8 @@ import {
   type CredentialRef,
   type PasskeyAuthenticator,
   PasskeyError,
+  type PasskeyHint,
+  type PasskeySignature,
   type PasskeyTier,
 } from './webauthn.ts';
 
@@ -84,6 +86,35 @@ export interface OwnershipProof {
   readonly authenticatorDataHex: string;
   readonly clientDataJsonHex: string;
   readonly signatureHex: string;
+}
+
+/** Options of `createWallet` and `signIn`. */
+export interface PasskeyEntryOptions {
+  /**
+   * A relying party's one-time challenge (16 bytes or more). When given, the
+   * result carries an `OwnershipProof` over it, taken from an approval the flow
+   * asks for anyway where it can, so connecting a site costs no extra prompt.
+   */
+  readonly challenge?: Uint8Array;
+  /** Which authenticator to offer first; `['hybrid']` shows a QR code to use a phone. */
+  readonly hints?: readonly PasskeyHint[];
+}
+
+function checkProofChallenge(challenge: Uint8Array | undefined): void {
+  if (challenge && challenge.length < 16) {
+    throw new PasskeyError('An ownership proof needs a challenge of at least 16 bytes.', 'invalid');
+  }
+}
+
+function ownershipProof(account: string, did: string, signed: PasskeySignature): OwnershipProof {
+  return {
+    account,
+    did,
+    credentialIdHex: toHex(signed.credentialId),
+    authenticatorDataHex: toHex(new Uint8Array(signed.assertion.authenticator_data)),
+    clientDataJsonHex: toHex(new Uint8Array(signed.assertion.client_data_json)),
+    signatureHex: toHex(new Uint8Array(signed.assertion.signature)),
+  };
 }
 
 export interface SessionKeyGrant {
@@ -140,17 +171,33 @@ export class PasskeyCustody {
    * First device: create a passkey, derive the DID from it and the ML-DSA-65
    * key from its PRF output, prove possession of both, and enrol. The node
    * creates the smart account and the human identity.
+   *
+   * Two approvals when the authenticator returns the PRF output at creation,
+   * three when it does not. With `challenge`, the PRF read signs it and doubles
+   * as the ownership proof; only an authenticator that returned the PRF at
+   * creation needs one more approval for the proof.
    */
-  async createWallet(opts: { readonly displayName: string }): Promise<PasskeyAccount> {
+  async createWallet(
+    opts: { readonly displayName: string } & PasskeyEntryOptions,
+  ): Promise<PasskeyAccount & { readonly proof?: OwnershipProof }> {
+    checkProofChallenge(opts.challenge);
+    const hints = opts.hints;
     const created = await this.authenticator.create({
       userId: randomBytes(16),
       userName: opts.displayName,
+      ...(hints ? { hints, crossPlatform: hints.includes('hybrid') } : {}),
     });
     const credential: CredentialRef = {
       id: toHex(created.credentialId),
       transports: created.transports,
     };
-    const prf = created.prf ?? (await this.#prfFor(credential));
+    let proofSignature: PasskeySignature | undefined;
+    let prf = created.prf;
+    if (!prf) {
+      const read = await this.#readPrf(credential, opts.challenge, hints);
+      prf = read.prf;
+      if (opts.challenge) proofSignature = read.signed;
+    }
     const { publicKey: mlDsaPublicKey, secretKey } = deriveCustodyKey(prf);
     secretKey.fill(0);
 
@@ -163,7 +210,12 @@ export class PasskeyCustody {
       'enroll_passkey',
       concatBytes(created.credentialId, mlDsaPublicKey),
     );
-    const { authorization } = await authorizeChallenge(this.authenticator, challenge, [credential]);
+    const { authorization } = await authorizeChallenge(
+      this.authenticator,
+      challenge,
+      [credential],
+      hints ? { hints } : {},
+    );
 
     const enrolled = await this.rpc.call<EnrollPasskeyResult>('tenzro_enrollPasskey', {
       display_name: opts.displayName,
@@ -181,6 +233,13 @@ export class PasskeyCustody {
         'invalid',
       );
     }
+    if (opts.challenge && !proofSignature) {
+      proofSignature = await this.authenticator.get({
+        challenge: opts.challenge,
+        allow: [credential],
+        ...(hints ? { hints } : {}),
+      });
+    }
     return {
       did: enrolled.did,
       account: enrolled.smart_account_address,
@@ -188,6 +247,9 @@ export class PasskeyCustody {
       transports: created.transports,
       tier: created.tier,
       displayName: opts.displayName,
+      ...(proofSignature
+        ? { proof: ownershipProof(enrolled.smart_account_address, enrolled.did, proofSignature) }
+        : {}),
     };
   }
 
@@ -197,23 +259,32 @@ export class PasskeyCustody {
    * Discoverable sign-in on any device. Linked devices carry the 20-byte
    * account address as their user handle; the first passkey of an account is
    * found by recovering its public key from the assertion and resolving the
-   * DID derived from it.
+   * DID derived from it. With `challenge`, that one approval is also the
+   * ownership proof.
    */
-  async signIn(): Promise<PasskeyAccount> {
-    const signed = await this.authenticator.get({ challenge: randomBytes(32) });
+  async signIn(
+    opts: PasskeyEntryOptions = {},
+  ): Promise<PasskeyAccount & { readonly proof?: OwnershipProof }> {
+    checkProofChallenge(opts.challenge);
+    const signed = await this.authenticator.get({
+      challenge: opts.challenge ?? randomBytes(32),
+      ...(opts.hints ? { hints: opts.hints } : {}),
+    });
     const credentialId = toHex(signed.credentialId);
+    const withProof = (a: PasskeyAccount) =>
+      opts.challenge ? { ...a, proof: ownershipProof(a.account, a.did, signed) } : a;
 
     if (signed.userHandle && signed.userHandle.length === 20) {
       const account = toHex(signed.userHandle, true);
       const ids = await this.listCredentialIds(account).catch(() => [] as string[]);
       if (ids.includes(credentialId)) {
         const record = await this.getAccountRecord(account).catch(() => null);
-        return {
+        return withProof({
           did: record?.owner_did ?? '',
           account,
           credentialId,
           transports: [],
-        };
+        });
       }
     }
 
@@ -232,13 +303,13 @@ export class PasskeyCustody {
         .catch(() => null);
       const account = identity?.metadata?.smart_account_address;
       if (identity && account) {
-        return {
+        return withProof({
           did,
           account,
           credentialId,
           transports: [],
           ...(identity.display_name ? { displayName: identity.display_name } : {}),
-        };
+        });
       }
     }
     throw new PasskeyError(
@@ -305,6 +376,11 @@ export class PasskeyCustody {
     readonly account: string;
     readonly label: string;
     readonly crossPlatform?: boolean;
+    /**
+     * Where the new passkey is made: `['hybrid']` shows a QR code so a phone
+     * creates it, `['security-key']` asks for a key, `['client-device']` this device.
+     */
+    readonly hints?: readonly PasskeyHint[];
     /** Passkey that approves. Omit to approve from another device (hybrid). */
     readonly approver?: CredentialRef;
   }): Promise<{ account_address: string; credential_id_hex: string; credentials_total: number }> {
@@ -318,6 +394,7 @@ export class PasskeyCustody {
       userName: opts.label,
       exclude: existing.map((id) => ({ id })),
       ...(opts.crossPlatform ? { crossPlatform: true } : {}),
+      ...(opts.hints ? { hints: opts.hints } : {}),
     });
 
     const challenge = await requestCustodyChallenge(
@@ -375,24 +452,12 @@ export class PasskeyCustody {
 
   /** Signs a relying party's one-time `challenge` with this device's passkey on `account`. */
   async proveOwnership(account: PasskeyAccount, challenge: Uint8Array): Promise<OwnershipProof> {
-    if (challenge.length < 16) {
-      throw new PasskeyError(
-        'An ownership proof needs a challenge of at least 16 bytes.',
-        'invalid',
-      );
-    }
+    checkProofChallenge(challenge);
     const signed = await this.authenticator.get({
       challenge,
       allow: [{ id: account.credentialId, transports: account.transports }],
     });
-    return {
-      account: account.account,
-      did: account.did,
-      credentialIdHex: toHex(signed.credentialId),
-      authenticatorDataHex: toHex(new Uint8Array(signed.assertion.authenticator_data)),
-      clientDataJsonHex: toHex(new Uint8Array(signed.assertion.client_data_json)),
-      signatureHex: toHex(new Uint8Array(signed.assertion.signature)),
-    };
+    return ownershipProof(account.account, account.did, signed);
   }
 
   /**
@@ -666,9 +731,19 @@ export class PasskeyCustody {
 
   /** One extra assertion to read the PRF when the authenticator did not return it at creation. */
   async #prfFor(credential: CredentialRef): Promise<Uint8Array> {
+    return (await this.#readPrf(credential)).prf;
+  }
+
+  /** Reads the PRF with an assertion over `challenge` (random when omitted), and returns both. */
+  async #readPrf(
+    credential: CredentialRef,
+    challenge?: Uint8Array,
+    hints?: readonly PasskeyHint[],
+  ): Promise<{ prf: Uint8Array; signed: PasskeySignature }> {
     const signed = await this.authenticator.get({
-      challenge: randomBytes(32),
+      challenge: challenge ?? randomBytes(32),
       allow: [credential],
+      ...(hints ? { hints } : {}),
     });
     if (!signed.prf) {
       throw new PasskeyError(
@@ -676,6 +751,6 @@ export class PasskeyCustody {
         'no-prf',
       );
     }
-    return signed.prf;
+    return { prf: signed.prf, signed };
   }
 }

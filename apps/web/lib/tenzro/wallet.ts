@@ -10,8 +10,10 @@
 import {
   BrowserPasskeyAuthenticator,
   DEFAULT_USER_OP_GAS,
+  type OwnershipProof,
   type PasskeyAccount,
   PasskeyCustody,
+  type PasskeyEntryOptions,
   encodeExecuteCall,
   hexToBytes,
   parseQuantity,
@@ -25,7 +27,13 @@ import { transport } from './rpc';
 
 const STORAGE_KEY = 'tenzro.wallet.v2';
 
-export type StoredWallet = PasskeyAccount;
+export type StoredWallet = PasskeyAccount & {
+  /** Signed in with a passkey on another device (a phone over QR); this device holds none yet. */
+  readonly onAnotherDevice?: boolean;
+};
+
+/** A wallet just created or signed in to, with the ownership proof a site asked for. */
+export type EnteredWallet = StoredWallet & { readonly proof?: OwnershipProof };
 
 let custodySingleton: PasskeyCustody | null = null;
 
@@ -64,16 +72,27 @@ export function clearStoredWallet(): void {
   }
 }
 
-export async function createWallet(displayName: string): Promise<StoredWallet> {
-  const w = await custody().createWallet({ displayName });
-  saveWallet(w);
-  return w;
+function remember(
+  entered: PasskeyAccount & { readonly proof?: OwnershipProof },
+  opts: PasskeyEntryOptions,
+): EnteredWallet {
+  const { proof, ...account } = entered;
+  const stored: StoredWallet = opts.hints?.includes('hybrid')
+    ? { ...account, onAnotherDevice: true }
+    : account;
+  saveWallet(stored);
+  return proof ? { ...stored, proof } : stored;
 }
 
-export async function signIn(): Promise<StoredWallet> {
-  const w = await custody().signIn();
-  saveWallet(w);
-  return w;
+export async function createWallet(
+  displayName: string,
+  opts: PasskeyEntryOptions = {},
+): Promise<EnteredWallet> {
+  return remember(await custody().createWallet({ displayName, ...opts }), opts);
+}
+
+export async function signIn(opts: PasskeyEntryOptions = {}): Promise<EnteredWallet> {
+  return remember(await custody().signIn(opts), opts);
 }
 
 /**

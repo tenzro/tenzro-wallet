@@ -18,6 +18,7 @@ import {
 } from '@tenzro/ui';
 import { assessReadiness } from 'tenzro-wallet/custody';
 
+import { LinkDeviceActions } from '@/components/wallet/link-device';
 import { RecoverySection } from '@/components/wallet/recovery-section';
 import { TENZRO_NETWORK_NAME, TENZRO_RPC_URL, TENZRO_RP_ID } from '@/lib/tenzro/config';
 import { useChainId, useDeviceActions, useDevices, useWallet } from '@/lib/tenzro/hooks';
@@ -57,7 +58,7 @@ function ChainIdRow() {
 function DevicesCard() {
   const { wallet } = useWallet();
   const devices = useDevices(wallet);
-  const { link, remove } = useDeviceActions(wallet);
+  const { remove } = useDeviceActions(wallet);
   const list = devices.data ?? [];
   const readiness = assessReadiness(list);
 
@@ -121,28 +122,8 @@ function DevicesCard() {
             </Button>
           </div>
         ))}
-        <div className="flex flex-wrap gap-2">
-          <Button
-            variant="secondary"
-            size="sm"
-            leftIcon={<Fingerprint className="size-4" />}
-            pending={link.isPending && !link.variables?.securityKey}
-            onClick={() => link.mutate({ label: 'Linked device' })}
-          >
-            Link a phone or computer
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            pending={link.isPending && !!link.variables?.securityKey}
-            onClick={() => link.mutate({ label: 'Security key', securityKey: true })}
-          >
-            Add a security key
-          </Button>
-        </div>
-        {(link.error || remove.error) && (
-          <p className="text-sm text-danger">{(link.error ?? remove.error)?.message}</p>
-        )}
+        <LinkDeviceActions />
+        {remove.error && <p className="text-sm text-danger">{remove.error.message}</p>}
       </CardContent>
     </Card>
   );

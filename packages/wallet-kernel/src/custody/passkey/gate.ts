@@ -24,6 +24,7 @@ import {
   type CredentialRef,
   type PasskeyAuthenticator,
   PasskeyError,
+  type PasskeyHint,
   type PasskeySignature,
   type WebAuthnAssertionWire,
 } from './webauthn.ts';
@@ -76,6 +77,8 @@ export async function requestCustodyChallenge(
 export interface AuthorizeOptions {
   /** Offer every transport so a passkey on another device can approve (QR). */
   readonly hybrid?: boolean;
+  /** Which authenticator the browser should offer first. */
+  readonly hints?: readonly PasskeyHint[];
 }
 
 /**
@@ -93,6 +96,7 @@ export async function authorizeChallenge(
     challenge: digest,
     allow,
     ...(opts.hybrid ? { hybrid: true } : {}),
+    ...(opts.hints ? { hints: opts.hints } : {}),
   });
   const mlDsaSignature = signWithPrf(signer, digest);
   return {

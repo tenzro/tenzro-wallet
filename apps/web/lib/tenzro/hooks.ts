@@ -9,6 +9,7 @@
 import { type UseQueryResult, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as React from 'react';
 
+import type { PasskeyEntryOptions } from 'tenzro-wallet/custody';
 import { requestFaucet } from './faucet';
 import {
   type TokenBalances,
@@ -19,12 +20,15 @@ import {
   getTransactionHistory,
   listMandates,
 } from './methods';
+
 import {
+  type EnteredWallet,
   type StoredWallet,
   clearStoredWallet,
   createWallet,
   custody,
   getStoredWallet,
+  saveWallet,
   sendTnzo,
   signIn,
 } from './wallet';
@@ -33,8 +37,8 @@ interface UseWalletResult {
   readonly wallet: StoredWallet | null;
   readonly loading: boolean;
   readonly error: Error | null;
-  readonly create: (displayName: string) => Promise<StoredWallet>;
-  readonly signIn: () => Promise<StoredWallet>;
+  readonly create: (displayName: string, opts?: PasskeyEntryOptions) => Promise<EnteredWallet>;
+  readonly signIn: (opts?: PasskeyEntryOptions) => Promise<EnteredWallet>;
   readonly reset: () => void;
 }
 
@@ -49,12 +53,13 @@ export function useWallet(): UseWalletResult {
     setLoading(false);
   }, []);
 
-  const wrap = React.useCallback(async (fn: () => Promise<StoredWallet>) => {
+  const wrap = React.useCallback(async (fn: () => Promise<EnteredWallet>) => {
     setLoading(true);
     setError(null);
     try {
       const w = await fn();
-      setWallet(w);
+      const { proof: _proof, ...stored } = w;
+      setWallet(stored);
       return w;
     } catch (e) {
       const err = e instanceof Error ? e : new Error(String(e));
@@ -66,10 +71,14 @@ export function useWallet(): UseWalletResult {
   }, []);
 
   const create = React.useCallback(
-    (displayName: string) => wrap(() => createWallet(displayName)),
+    (displayName: string, opts?: PasskeyEntryOptions) =>
+      wrap(() => createWallet(displayName, opts)),
     [wrap],
   );
-  const doSignIn = React.useCallback(() => wrap(signIn), [wrap]);
+  const doSignIn = React.useCallback(
+    (opts?: PasskeyEntryOptions) => wrap(() => signIn(opts)),
+    [wrap],
+  );
 
   const reset = React.useCallback(() => {
     clearStoredWallet();
@@ -179,20 +188,68 @@ export function useDevices(wallet: StoredWallet | null) {
   return devices;
 }
 
+/** Which device a link adds: a phone over QR, a security key, or the device in use. */
+export type DeviceToLink = 'phone' | 'security-key' | 'this-device';
+
+/**
+ * Whether this device can hold a passkey itself (a platform authenticator with
+ * user verification). `null` until known. Without one, passkeys come from a
+ * phone over a QR code or a security key.
+ */
+export function usePlatformPasskey(): boolean | null {
+  const [available, setAvailable] = React.useState<boolean | null>(null);
+  React.useEffect(() => {
+    const pkc = (globalThis as { PublicKeyCredential?: typeof PublicKeyCredential })
+      .PublicKeyCredential;
+    if (!pkc?.isUserVerifyingPlatformAuthenticatorAvailable) {
+      setAvailable(false);
+      return;
+    }
+    pkc
+      .isUserVerifyingPlatformAuthenticatorAvailable()
+      .then(setAvailable)
+      .catch(() => setAvailable(false));
+  }, []);
+  return available;
+}
+
 export function useDeviceActions(wallet: StoredWallet | null) {
   const qc = useQueryClient();
   const refresh = () => qc.invalidateQueries({ queryKey: ['tenzro', 'devices', wallet?.account] });
   const approver = wallet ? { id: wallet.credentialId, transports: wallet.transports } : undefined;
   const link = useMutation({
-    mutationFn: async (input: { label: string; securityKey?: boolean }) => {
+    mutationFn: async (input: { label: string; via: DeviceToLink }) => {
       if (!wallet || !approver) throw new Error('Wallet not initialized');
-      return custody().linkDevice({
-        account: wallet.account,
-        label: input.label,
-        // A security key is added from this device and approved here; a new
-        // device approves from this one over a QR code.
-        ...(input.securityKey ? { crossPlatform: true, approver } : {}),
-      });
+      const base = { account: wallet.account, label: input.label };
+      switch (input.via) {
+        // The phone makes its passkey over a QR code; this device approves.
+        case 'phone':
+          return custody().linkDevice({
+            ...base,
+            crossPlatform: true,
+            hints: ['hybrid'],
+            approver,
+          });
+        case 'security-key':
+          return custody().linkDevice({
+            ...base,
+            crossPlatform: true,
+            hints: ['security-key'],
+            approver,
+          });
+        // This device makes its passkey; the device that holds one approves over a QR code.
+        case 'this-device': {
+          const added = await custody().linkDevice({ ...base, hints: ['client-device'] });
+          // From now on this device approves with its own passkey.
+          saveWallet({
+            did: wallet.did,
+            account: wallet.account,
+            credentialId: added.credential_id_hex.replace(/^0x/, ''),
+            transports: ['internal'],
+          });
+          return added;
+        }
+      }
     },
     onSuccess: refresh,
   });

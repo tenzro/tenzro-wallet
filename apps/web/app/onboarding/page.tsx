@@ -20,8 +20,9 @@ import * as React from 'react';
 
 import { Badge, Button, Card, ChainBadge, Input, Logo, Progress, cn } from '@tenzro/ui';
 
+import { LinkDeviceActions } from '@/components/wallet/link-device';
 import { shortAddress } from '@/lib/tenzro/format';
-import { useDeviceActions, useFaucet, useWallet } from '@/lib/tenzro/hooks';
+import { useFaucet, usePlatformPasskey, useWallet } from '@/lib/tenzro/hooks';
 
 const steps = ['Passkey', 'Second device', 'Done'] as const;
 type StepIdx = 0 | 1 | 2;
@@ -70,14 +71,19 @@ export default function OnboardingPage() {
 
 function CreateOrSignIn({ onDone }: { onDone: () => void }) {
   const { create, signIn, loading, error } = useWallet();
+  const platform = usePlatformPasskey();
   const [name, setName] = React.useState('');
   const [pending, setPending] = React.useState<'create' | 'sign-in' | null>(null);
+  const [phoneChosen, setPhoneChosen] = React.useState(false);
+  // Without a passkey on this device, the browser's QR code brings in a phone.
+  const phone = phoneChosen || platform === false;
+  const entry = phone ? { hints: ['hybrid'] as const } : {};
 
   const run = async (kind: 'create' | 'sign-in') => {
     setPending(kind);
     try {
-      if (kind === 'create') await create(name.trim() || 'Tenzro wallet');
-      else await signIn();
+      if (kind === 'create') await create(name.trim() || 'Tenzro wallet', entry);
+      else await signIn(entry);
       onDone();
     } catch {
       // surfaced via `error`
@@ -139,6 +145,20 @@ function CreateOrSignIn({ onDone }: { onDone: () => void }) {
         >
           I already have a Tenzro passkey
         </Button>
+        {phone ? (
+          <p className="text-sm text-foreground-muted">
+            {platform === false ? 'This device cannot hold a passkey. ' : ''}A QR code will appear:
+            scan it with your phone and approve there.
+          </p>
+        ) : (
+          <button
+            type="button"
+            className="block w-full text-center text-sm text-foreground-muted underline underline-offset-2"
+            onClick={() => setPhoneChosen(true)}
+          >
+            Use a phone instead (QR code)
+          </button>
+        )}
         {error && <p className="text-sm text-danger">{error.message}</p>}
       </div>
     </Card>
@@ -146,10 +166,8 @@ function CreateOrSignIn({ onDone }: { onDone: () => void }) {
 }
 
 function SecondDevice({ onContinue }: { onContinue: () => void }) {
-  const { wallet } = useWallet();
-  const { link } = useDeviceActions(wallet);
   const [label, setLabel] = React.useState('');
-  const done = link.isSuccess;
+  const [done, setDone] = React.useState(false);
 
   return (
     <Card variant="raised" className="p-10">
@@ -159,9 +177,9 @@ function SecondDevice({ onContinue }: { onContinue: () => void }) {
       <h2 className="text-2xl font-semibold tracking-tight mb-2">Add a second device</h2>
       <p className="text-foreground-muted mb-6">
         A passkey that stays on one device cannot be copied, which is what makes it safe, and also
-        why losing that device would lose the wallet. Link a phone, another computer or a security
-        key. Until then this wallet can receive but not send. Synced passkeys count as a lower tier
-        and are never the only protection.
+        why losing that device would lose the wallet. Add your phone or a security key: any linked
+        device can open and approve for this wallet. Until then this wallet can receive but not
+        send. Synced passkeys count as a lower tier and are never the only protection.
       </p>
       <div className="space-y-3">
         <Input
@@ -169,33 +187,7 @@ function SecondDevice({ onContinue }: { onContinue: () => void }) {
           value={label}
           onChange={(e) => setLabel(e.target.value)}
         />
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <Button
-            variant="primary"
-            size="md"
-            pending={link.isPending && !link.variables?.securityKey}
-            success={done}
-            disabled={!wallet || done}
-            onClick={() => link.mutate({ label: label.trim() || 'Second device' })}
-          >
-            Link a phone or computer
-          </Button>
-          <Button
-            variant="secondary"
-            size="md"
-            pending={link.isPending && !!link.variables?.securityKey}
-            disabled={!wallet || done}
-            onClick={() =>
-              link.mutate({ label: label.trim() || 'Security key', securityKey: true })
-            }
-          >
-            Add a security key
-          </Button>
-        </div>
-        <p className="text-xs text-foreground-subtle">
-          Linking a phone shows a QR code: scan it and approve with the passkey on this device.
-        </p>
-        {link.error && <p className="text-sm text-danger">{link.error.message}</p>}
+        <LinkDeviceActions label={label} onLinked={() => setDone(true)} />
       </div>
       <div className="mt-8 flex items-center justify-between gap-3">
         <Button variant="ghost" size="md" onClick={onContinue}>

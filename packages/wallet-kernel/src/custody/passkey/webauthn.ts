@@ -61,7 +61,12 @@ export interface CreatePasskeyOptions {
   readonly exclude?: readonly CredentialRef[];
   /** Ask for a roaming authenticator (security key, or a phone over hybrid). */
   readonly crossPlatform?: boolean;
+  /** Which authenticator the browser should offer first; `['hybrid']` opens the QR code for a phone. */
+  readonly hints?: readonly PasskeyHint[];
 }
+
+/** WebAuthn `hints`: the authenticator the browser should offer first. */
+export type PasskeyHint = 'hybrid' | 'security-key' | 'client-device';
 
 export interface GetPasskeyOptions {
   /** Raw bytes the authenticator signs as the WebAuthn challenge. */
@@ -70,6 +75,8 @@ export interface GetPasskeyOptions {
   readonly allow?: readonly CredentialRef[];
   /** Offer every transport, including a phone over hybrid (QR). */
   readonly hybrid?: boolean;
+  /** Which authenticator the browser should offer first; `['hybrid']` opens the QR code for a phone. */
+  readonly hints?: readonly PasskeyHint[];
 }
 
 export interface PasskeyAuthenticator {
@@ -250,6 +257,7 @@ export class BrowserPasskeyAuthenticator implements PasskeyAuthenticator {
           excludeCredentials: descriptors(opts.exclude, false),
           attestation: 'none',
           timeout: this.#timeout,
+          ...(opts.hints?.length ? { hints: [...opts.hints] } : {}),
           extensions: {
             prf: { eval: { first: toArrayBuffer(custodyPrfSalt()) } },
             credProps: true,
@@ -284,8 +292,12 @@ export class BrowserPasskeyAuthenticator implements PasskeyAuthenticator {
           rpId: this.rpId,
           challenge: toArrayBuffer(opts.challenge),
           userVerification: 'required',
-          allowCredentials: descriptors(opts.allow, opts.hybrid ?? false),
+          allowCredentials: descriptors(
+            opts.allow,
+            opts.hybrid ?? opts.hints?.includes('hybrid') ?? false,
+          ),
           timeout: this.#timeout,
+          ...(opts.hints?.length ? { hints: [...opts.hints] } : {}),
           extensions: {
             prf: { eval: { first: toArrayBuffer(custodyPrfSalt()) } },
           } as AuthenticationExtensionsClientInputs,
