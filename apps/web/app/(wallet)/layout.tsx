@@ -1,7 +1,7 @@
 import { Sidebar } from '@/components/layout/sidebar';
 import { Topbar } from '@/components/layout/topbar';
 
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+export default function WalletLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-dvh">
       <Sidebar />

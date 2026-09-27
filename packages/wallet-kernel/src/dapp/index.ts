@@ -25,6 +25,30 @@ export type {
   Eip6963AnnouncementInput,
 } from './eip6963.ts';
 
+export {
+  POPUP_ERRORS,
+  POPUP_METHODS,
+  POPUP_PROTOCOL,
+  DEFAULT_WALLET_URL,
+  PopupProviderError,
+  canUsePasskeysDirectly,
+  createPopupProvider,
+  isPopupReady,
+  isPopupRequest,
+  isPopupResponse,
+} from './popup.ts';
+export type {
+  PopupConnection,
+  PopupHost,
+  PopupMethod,
+  PopupProviderOptions,
+  PopupReady,
+  PopupRequest,
+  PopupResponse,
+  PopupSendTransaction,
+  PopupWindow,
+} from './popup.ts';
+
 // SDK-supplied consume-side helpers — see `tenzro-sdk/dist/eip6963.d.ts`
 // and `tenzro-sdk/dist/rpc.d.ts`. The kernel re-exports rather than
 // re-implements so the SDK stays the single source of truth for the

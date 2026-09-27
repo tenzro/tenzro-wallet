@@ -5,7 +5,7 @@
  * exact for any integer base-unit count.
  */
 
-const TNZO_DECIMALS = 18;
+export const TNZO_DECIMALS = 18;
 
 export function hexToBigInt(hex: string): bigint {
   if (!hex || hex === '0x') return 0n;
