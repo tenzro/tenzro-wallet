@@ -100,7 +100,10 @@ export function applyTheme(
 ): void {
   if (typeof document === 'undefined') return;
   const el = opts.target ?? document.documentElement;
-  for (const [key, value] of Object.entries(overrides) as [keyof TenzroTheme, string | undefined][]) {
+  for (const [key, value] of Object.entries(overrides) as [
+    keyof TenzroTheme,
+    string | undefined,
+  ][]) {
     if (value !== undefined) el.style.setProperty(VARIABLE[key], value);
   }
   if (opts.mode === 'light' || opts.mode === 'dark') el.setAttribute('data-theme', opts.mode);
