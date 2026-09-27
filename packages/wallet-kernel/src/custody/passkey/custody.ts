@@ -414,19 +414,48 @@ export class PasskeyCustody {
     readonly hints?: readonly PasskeyHint[];
     /** Passkey that approves. Omit to approve from another device (hybrid). */
     readonly approver?: CredentialRef;
-  }): Promise<{ account_address: string; credential_id_hex: string; credentials_total: number }> {
+  }): Promise<{
+    account_address: string;
+    credential_id_hex: string;
+    credentials_total: number;
+    /** The device already held one of the account's passkeys (synced, for example): nothing was added. */
+    already_linked?: boolean;
+  }> {
     const existing = await this.listCredentialIds(opts.account);
     if (existing.length === 0) {
       throw new PasskeyError('This account has no enrolled passkey.', 'not-found');
     }
     const accountBytes = fromHex(opts.account);
-    const created = await this.authenticator.create({
-      userId: accountBytes.slice(-20),
-      userName: opts.label,
-      exclude: existing.map((id) => ({ id })),
-      ...(opts.crossPlatform ? { crossPlatform: true } : {}),
-      ...(opts.hints ? { hints: opts.hints } : {}),
-    });
+    let created: Awaited<ReturnType<PasskeyAuthenticator['create']>>;
+    try {
+      created = await this.authenticator.create({
+        userId: accountBytes.slice(-20),
+        userName: opts.label,
+        exclude: existing.map((id) => ({ id })),
+        ...(opts.crossPlatform ? { crossPlatform: true } : {}),
+        ...(opts.hints ? { hints: opts.hints } : {}),
+      });
+    } catch (err) {
+      // The device already holds one of this account's passkeys, typically
+      // synced through its credential manager. It can already approve, so tie
+      // to that passkey instead of failing: it signs, and nothing new is made.
+      if (!(err instanceof PasskeyError) || err.kind !== 'already-enrolled') throw err;
+      const signed = await this.authenticator.get({
+        challenge: randomBytes(32),
+        allow: existing.map((id) => ({ id })),
+        ...(opts.hints ? { hints: opts.hints, hybrid: opts.hints.includes('hybrid') } : {}),
+      });
+      const held = toHex(signed.credentialId);
+      if (!existing.includes(held)) {
+        throw new PasskeyError('That device answered with a passkey from another account.', 'invalid');
+      }
+      return {
+        account_address: opts.account,
+        credential_id_hex: `0x${held}`,
+        credentials_total: existing.length,
+        already_linked: true,
+      };
+    }
     // The new device's post-quantum leg, derived from its own PRF. The node
     // records it with the credential and never mints it.
     const newCredential: CredentialRef = {

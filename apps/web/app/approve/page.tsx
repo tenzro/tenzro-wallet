@@ -297,8 +297,11 @@ export default function ApprovePage() {
             <LinkDeviceActions
               label={deviceName}
               onLinked={(linked) => {
-                respond({ result: { credentialsTotal: linked.credentials_total } });
-                window.close();
+                respond({
+                  result: { credentialsTotal: linked.credentials_total, alreadyLinked: linked.already_linked === true },
+                });
+                // A device that already held the passkey gets the explanation before the window closes.
+                if (!linked.already_linked) window.close();
               }}
             />
             <Button variant="ghost" onClick={decline}>

@@ -11,6 +11,7 @@ import { sha256 } from '@noble/hashes/sha2.js';
 
 import { concatBytes, fromHex, toHex, toNumberArray, utf8 } from './bytes.ts';
 import { custodyPrfSalt } from './derive.ts';
+import { PasskeyError } from './webauthn.ts';
 import type {
   CreatePasskeyOptions,
   CreatedPasskey,
@@ -42,6 +43,12 @@ export class FakeAuthenticator implements PasskeyAuthenticator {
   preferred: string | undefined;
   returnPrfOnCreate = true;
   tier: PasskeyTier = 'device-bound';
+  /**
+   * Behave as a device that already holds the account's passkeys (synced
+   * through its credential manager): create() refuses when one of them is
+   * excluded, as a browser does with InvalidStateError.
+   */
+  syncsExisting = false;
   #counter = 0;
 
   constructor(rpId = 'tenzro.com') {
@@ -49,6 +56,9 @@ export class FakeAuthenticator implements PasskeyAuthenticator {
   }
 
   async create(opts: CreatePasskeyOptions): Promise<CreatedPasskey> {
+    if (this.syncsExisting && (opts.exclude ?? []).some((c) => this.credentials.some((h) => toHex(h.id) === c.id))) {
+      throw new PasskeyError('This authenticator already holds a passkey for this account.', 'already-enrolled');
+    }
     this.#counter += 1;
     const seed = sha256(utf8(`fake-credential-${this.#counter}`));
     const secretKey = p256.utils.randomSecretKey(concatBytes(seed, sha256(seed)).slice(0, 48));

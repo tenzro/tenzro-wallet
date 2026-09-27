@@ -170,6 +170,20 @@ describe('createWallet', () => {
 });
 
 describe('linkDevice', () => {
+  it('ties to the passkey a device already holds (synced) instead of failing', async () => {
+    const { auth, rpc, custody, account } = await enrolled();
+    const first = auth.credentials[0]!;
+    auth.syncsExisting = true;
+    auth.preferred = toHex(first.id);
+
+    const res = await custody.linkDevice({ account: account.account, label: 'iPhone', hints: ['hybrid'] });
+    expect(res.already_linked).toBe(true);
+    expect(res.credential_id_hex).toBe(toHex(first.id, true));
+    expect(res.credentials_total).toBe(1);
+    expect(auth.credentials).toHaveLength(1);
+    expect(rpc.paramsOf('tenzro_addPasskey')).toHaveLength(0);
+  });
+
   it('creates the new passkey first and binds its P-256 key as the add_passkey target', async () => {
     const { auth, rpc, custody, account } = await enrolled();
     const first = auth.credentials[0]!;
