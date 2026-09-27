@@ -111,7 +111,9 @@ export default function SendPage() {
             <p className="text-xs text-warning">{route.reason}</p>
           )}
           {route.kind === 'tenzro' && (
-            <p className="text-xs text-foreground-muted">Transfer on Tenzro · approved with your passkey</p>
+            <p className="text-xs text-foreground-muted">
+              Transfer on Tenzro · approved with your passkey
+            </p>
           )}
           {route.kind === 'external' && (
             <p className="text-xs text-foreground-muted">
