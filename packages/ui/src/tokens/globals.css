@@ -13,6 +13,10 @@
 
 @import "tailwindcss";
 
+/* The components' own classes. This file ships as dist/styles.css, so the
+   path covers src/ in the repo and dist/ once installed. */
+@source "../";
+
 /* ── Base variables: the customisation surface ────────────────────── */
 :root {
   --tz-background: #ffffff;
