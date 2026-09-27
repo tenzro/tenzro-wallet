@@ -61,6 +61,21 @@ function DevicesCard() {
   const { remove } = useDeviceActions(wallet);
   const list = devices.data ?? [];
   const readiness = assessReadiness(list);
+  // Passkeys in the same password manager share a root: number the providers
+  // so the list shows which ones fall together. The network records only an
+  // identifier, not a name, so they are numbered, not named.
+  const providers = new Map<string, number>();
+  for (const d of list) {
+    if (d.tier === 'synced' && d.aaguid && !providers.has(d.aaguid)) providers.set(d.aaguid, providers.size + 1);
+  }
+  const where = (d: (typeof list)[number]): string | null =>
+    d.tier === 'synced'
+      ? d.aaguid && providers.size > 1
+        ? `Syncs across your devices · password manager ${providers.get(d.aaguid)}`
+        : 'Syncs across your devices'
+      : d.tier === 'device-bound'
+        ? 'On one device or security key only'
+        : null;
 
   if (!wallet) {
     return (
@@ -82,7 +97,7 @@ function DevicesCard() {
             <CardDescription>{readiness.guidance}</CardDescription>
           </div>
           <Badge variant={readiness.ready ? 'success' : 'warning'} size="sm" dot>
-            {list.length} {list.length === 1 ? 'device' : 'devices'}
+            {readiness.independentRoots} independent {readiness.independentRoots === 1 ? 'root' : 'roots'}
           </Badge>
         </div>
       </CardHeader>
@@ -102,12 +117,8 @@ function DevicesCard() {
                     This device
                   </Badge>
                 )}
-                {d.tier === 'synced' && (
-                  <Badge variant="warning" size="xs">
-                    Synced
-                  </Badge>
-                )}
               </div>
+              {where(d) && <span className="block text-xs text-foreground-muted">{where(d)}</span>}
               <span className="text-xs text-foreground-subtle font-mono">
                 {d.credentialIdHex.slice(0, 18)}…
               </span>

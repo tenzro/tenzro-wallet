@@ -62,6 +62,11 @@ export interface AccountRecordCredential {
   readonly p256_public_key_hex?: string;
   readonly ml_dsa_public_key_hex?: string;
   readonly label?: string | null;
+  /** The passkey's provider, from its registration (16 bytes hex). */
+  readonly aaguid?: string | null;
+  /** Whether the passkey can sync (WebAuthn BE flag at registration). */
+  readonly backup_eligible?: boolean | null;
+  readonly backup_state?: boolean | null;
 }
 
 export interface AccountRecord {
@@ -387,16 +392,25 @@ export class PasskeyCustody {
       this.listCredentialIds(account.account),
       this.getAccountRecord(account.account).catch(() => null),
     ]);
-    const labels = new Map(
-      (record?.credentials ?? []).map((c) => [stripped(c.credential_id_hex), c.label ?? undefined]),
-    );
+    const recorded = new Map((record?.credentials ?? []).map((c) => [stripped(c.credential_id_hex), c]));
     return ids.map((id) => {
-      const label = labels.get(id);
+      const r = recorded.get(id);
       const thisDevice = id === stripped(account.credentialId);
+      // The network's record of the passkey's sync state wins; this device's
+      // own knowledge fills in where the record has none.
+      const tier: PasskeyTier | undefined =
+        typeof r?.backup_eligible === 'boolean'
+          ? r.backup_eligible
+            ? 'synced'
+            : 'device-bound'
+          : thisDevice
+            ? account.tier
+            : undefined;
       return {
         credentialIdHex: `0x${id}`,
-        ...(label ? { label } : {}),
-        ...(thisDevice && account.tier ? { tier: account.tier } : {}),
+        ...(r?.label ? { label: r.label } : {}),
+        ...(tier ? { tier } : {}),
+        ...(r?.aaguid ? { aaguid: stripped(r.aaguid) } : {}),
         thisDevice,
       };
     });
