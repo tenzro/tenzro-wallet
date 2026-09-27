@@ -148,6 +148,23 @@ describe('popup requests with params', () => {
       result: { account: '0xb', did: 'd', salt: 2 },
     });
     await expect(add).resolves.toEqual({ account: '0xb', did: 'd', salt: 2 });
+
+    const h = fakeHost();
+    const link = createPopupProvider({ host: h.host }).request({
+      method: 'tenzro_linkDevice',
+      params: { label: 'Phone' },
+    });
+    h.emit({ protocol: POPUP_PROTOCOL, type: 'ready' });
+    const l = h.sent[0] as PopupRequest;
+    expect(l.method).toBe('tenzro_linkDevice');
+    expect(l.params).toEqual({ label: 'Phone' });
+    h.emit({
+      protocol: POPUP_PROTOCOL,
+      type: 'response',
+      id: l.id,
+      result: { credentialsTotal: 2 },
+    });
+    await expect(link).resolves.toEqual({ credentialsTotal: 2 });
   });
 });
 

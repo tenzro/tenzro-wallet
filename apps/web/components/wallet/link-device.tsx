@@ -16,7 +16,8 @@ export function LinkDeviceActions({
 }: {
   /** Name recorded for the new device; a default fits each kind. */
   readonly label?: string;
-  readonly onLinked?: () => void;
+  /** Called with the network's answer once the device is on the account. */
+  readonly onLinked?: (linked: { readonly credentials_total: number }) => void;
 }) {
   const { wallet } = useWallet();
   const { link } = useDeviceActions(wallet);
@@ -24,7 +25,10 @@ export function LinkDeviceActions({
   const main: DeviceToLink = here ? 'this-device' : 'phone';
   const busy = (via: DeviceToLink) => link.isPending && link.variables?.via === via;
   const run = (via: DeviceToLink, fallback: string) =>
-    link.mutate({ label: label?.trim() || fallback, via }, { onSuccess: () => onLinked?.() });
+    link.mutate(
+      { label: label?.trim() || fallback, via },
+      { onSuccess: (linked) => onLinked?.(linked) },
+    );
 
   return (
     <div className="space-y-3">

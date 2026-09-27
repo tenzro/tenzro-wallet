@@ -23,6 +23,7 @@ export type PopupMethod =
   | 'tenzro_connect'
   | 'tenzro_sendTransaction'
   | 'tenzro_addWallet'
+  | 'tenzro_linkDevice'
   | 'tenzro_disconnect';
 
 export interface PopupRequest {
@@ -74,6 +75,19 @@ export interface PopupAddedWallet {
   readonly salt: number;
 }
 
+/**
+ * Params of `tenzro_linkDevice`: a suggested name for the new device, which the
+ * person can change. The wallet shows a QR code so a phone can make its passkey.
+ */
+export interface PopupLinkDevice {
+  readonly label?: string;
+}
+
+/** Result of `tenzro_linkDevice`: how many passkeys the account now has. */
+export interface PopupLinkedDevice {
+  readonly credentialsTotal: number;
+}
+
 /** Params of `tenzro_sendTransaction`: a TNZO transfer, value in base units (decimal string). */
 export interface PopupSendTransaction {
   readonly to: string;
@@ -84,6 +98,7 @@ export const POPUP_METHODS: readonly PopupMethod[] = [
   'tenzro_connect',
   'tenzro_sendTransaction',
   'tenzro_addWallet',
+  'tenzro_linkDevice',
   'tenzro_disconnect',
 ];
 

@@ -59,6 +59,7 @@ export default function ApprovePage() {
   const phone = phoneChosen || platform === false;
   // A wallet created here, held back from the site while a second device is offered.
   const [created, setCreated] = React.useState<EnteredWallet | null>(null);
+  const [deviceName, setDeviceName] = React.useState('');
 
   const respond = React.useCallback(
     (body: Omit<PopupResponse, 'protocol' | 'type' | 'id'>) => {
@@ -176,8 +177,16 @@ export default function ApprovePage() {
   const connected = pending && wallet ? isConnected(pending.origin, wallet.account) : false;
   const needsConnection =
     (pending?.request.method === 'tenzro_sendTransaction' ||
-      pending?.request.method === 'tenzro_addWallet') &&
+      pending?.request.method === 'tenzro_addWallet' ||
+      pending?.request.method === 'tenzro_linkDevice') &&
     !connected;
+
+  // The site may suggest a name for the new device; the person can change it.
+  React.useEffect(() => {
+    if (pending?.request.method !== 'tenzro_linkDevice') return;
+    const label = (pending.request.params as { label?: unknown } | undefined)?.label;
+    if (typeof label === 'string') setDeviceName(label.slice(0, 40));
+  }, [pending]);
 
   React.useEffect(() => {
     if (needsConnection && pending) {
@@ -267,7 +276,37 @@ export default function ApprovePage() {
             {error && <p className="text-sm text-danger">{error}</p>}
           </CardContent>
         </Card>
-      ) : pending.request.method === 'tenzro_disconnect' ? null : (
+      ) : pending.request.method === 'tenzro_disconnect' ? null : pending.request.method ===
+        'tenzro_linkDevice' ? (
+        <Card variant="raised">
+          <CardHeader>
+            <CardTitle>Add a device</CardTitle>
+            <CardDescription>
+              <span className="font-mono">{pending.origin}</span> asks you to add a device to your
+              wallet <span className="font-mono">{shortAddress(wallet.account)}</span>. Any linked
+              device can open and approve for it.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Input
+              placeholder="Device name, e.g. Phone"
+              maxLength={40}
+              value={deviceName}
+              onChange={(e) => setDeviceName(e.target.value)}
+            />
+            <LinkDeviceActions
+              label={deviceName}
+              onLinked={(linked) => {
+                respond({ result: { credentialsTotal: linked.credentials_total } });
+                window.close();
+              }}
+            />
+            <Button variant="ghost" onClick={decline}>
+              Cancel
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
         <Card variant="raised">
           <CardHeader>
             <CardTitle>
