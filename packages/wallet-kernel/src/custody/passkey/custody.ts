@@ -98,6 +98,8 @@ export interface PasskeyEntryOptions {
   readonly challenge?: Uint8Array;
   /** Which authenticator to offer first; `['hybrid']` shows a QR code to use a phone. */
   readonly hints?: readonly PasskeyHint[];
+  /** Ask only this device, silently when it holds no passkey (see GetPasskeyOptions.immediate). */
+  readonly immediate?: boolean;
 }
 
 function checkProofChallenge(challenge: Uint8Array | undefined): void {
@@ -210,8 +212,20 @@ export class PasskeyCustody {
    */
   async createWallet(
     opts: { readonly displayName: string } & PasskeyEntryOptions,
-  ): Promise<PasskeyAccount & { readonly proof?: OwnershipProof }> {
+  ): Promise<PasskeyAccount & { readonly proof?: OwnershipProof; readonly existing?: boolean }> {
     checkProofChallenge(opts.challenge);
+    // One person, one Tenzro identity: the same passkey always opens the same
+    // wallet. Where the browser can ask this device silently, a Tenzro passkey
+    // already on it opens its wallet instead of a new one being made. With
+    // nothing on the device the request is refused at once, with no dialog.
+    if (await this.authenticator.supportsImmediateGet?.()) {
+      try {
+        const found = await this.signIn({ ...opts, immediate: true });
+        if (found.account) return { ...found, existing: true };
+      } catch (err) {
+        if (!(err instanceof PasskeyError) || (err.kind !== 'cancelled' && err.kind !== 'not-found')) throw err;
+      }
+    }
     const hints = opts.hints;
     const created = await this.authenticator.create({
       userId: randomBytes(16),
@@ -300,6 +314,7 @@ export class PasskeyCustody {
     const signed = await this.authenticator.get({
       challenge: opts.challenge ?? randomBytes(32),
       ...(opts.hints ? { hints: opts.hints } : {}),
+      ...(opts.immediate ? { immediate: true } : {}),
     });
     const credentialId = toHex(signed.credentialId);
     const withProof = (a: PasskeyAccount) =>

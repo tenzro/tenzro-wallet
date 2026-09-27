@@ -162,7 +162,9 @@ export default function ApprovePage() {
       const w =
         kind === 'create' ? await create(name.trim() || 'Tenzro wallet', opts) : await signIn(opts);
       if (!isConnect) return;
-      if (kind === 'create') setCreated(w);
+      // Creating on a device that already held a Tenzro passkey opened that
+      // wallet instead: connect it as a sign-in would.
+      if (kind === 'create' && !('existing' in w && w.existing)) setCreated(w);
       else connectWith(w);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));

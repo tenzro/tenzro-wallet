@@ -49,6 +49,12 @@ export class FakeAuthenticator implements PasskeyAuthenticator {
    * excluded, as a browser does with InvalidStateError.
    */
   syncsExisting = false;
+  /** Report `immediateGet` support, as a browser that can ask silently does. */
+  immediateGet = false;
+
+  async supportsImmediateGet(): Promise<boolean> {
+    return this.immediateGet;
+  }
   #counter = 0;
 
   constructor(rpId = 'tenzro.com') {

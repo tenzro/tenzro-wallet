@@ -84,11 +84,17 @@ function remember(
   return proof ? { ...stored, proof } : stored;
 }
 
+/**
+ * Creates a wallet, or opens the one this device's Tenzro passkey already
+ * holds (`existing`): the same passkey never gets a second identity.
+ */
 export async function createWallet(
   displayName: string,
   opts: PasskeyEntryOptions = {},
-): Promise<EnteredWallet> {
-  return remember(await custody().createWallet({ displayName, ...opts }), opts);
+): Promise<EnteredWallet & { readonly existing?: boolean }> {
+  const { existing, ...made } = await custody().createWallet({ displayName, ...opts });
+  const w = remember(made, opts);
+  return existing ? { ...w, existing: true } : w;
 }
 
 export async function signIn(opts: PasskeyEntryOptions = {}): Promise<EnteredWallet> {

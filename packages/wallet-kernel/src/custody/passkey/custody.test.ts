@@ -169,6 +169,37 @@ describe('createWallet', () => {
   });
 });
 
+describe('createWallet on a device that already has a Tenzro passkey', () => {
+  it('opens the existing wallet instead of making a second identity', async () => {
+    const auth = new FakeAuthenticator();
+    const { rpc } = nodeMock({
+      // Only the DID derived from the enrolled passkey resolves, so a wrongly
+      // recovered key would find nothing.
+      tenzro_resolveIdentity: (p: { did: string }) =>
+        auth.credentials[0] && p.did === humanDidFromPasskey(auth.credentials[0].publicKey)
+          ? { did: p.did, metadata: { smart_account_address: ACCOUNT } }
+          : null,
+    });
+    const custody = new PasskeyCustody({ rpc, authenticator: auth });
+    const account = await custody.createWallet({ displayName: 'Ada' });
+    auth.immediateGet = true;
+    const again = await custody.createWallet({ displayName: 'Ada again' });
+    expect(again.existing).toBe(true);
+    expect(again.account).toBe(account.account);
+    expect(auth.credentials).toHaveLength(1);
+    expect(rpc.paramsOf('tenzro_enrollPasskey')).toHaveLength(1);
+  });
+
+  it('creates as before where the browser cannot ask silently', async () => {
+    const { auth, rpc, custody } = await enrolled();
+    auth.immediateGet = false;
+    const fresh = await custody.createWallet({ displayName: 'Second' });
+    expect(fresh.existing).toBeUndefined();
+    expect(auth.credentials).toHaveLength(2);
+    expect(rpc.paramsOf('tenzro_enrollPasskey')).toHaveLength(2);
+  });
+});
+
 describe('linkDevice', () => {
   it('ties to the passkey a device already holds (synced) instead of failing', async () => {
     const { auth, rpc, custody, account } = await enrolled();

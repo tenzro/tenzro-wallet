@@ -77,12 +77,20 @@ export interface GetPasskeyOptions {
   readonly hybrid?: boolean;
   /** Which authenticator the browser should offer first; `['hybrid']` opens the QR code for a phone. */
   readonly hints?: readonly PasskeyHint[];
+  /**
+   * Ask without a dialog when no passkey is on this device: the request is
+   * refused at once instead of offering a phone or security key. Only where
+   * `immediateGet` is supported.
+   */
+  readonly immediate?: boolean;
 }
 
 export interface PasskeyAuthenticator {
   readonly rpId: string;
   create(opts: CreatePasskeyOptions): Promise<CreatedPasskey>;
   get(opts: GetPasskeyOptions): Promise<PasskeySignature>;
+  /** Whether `get({ immediate: true })` can ask without showing a dialog when there is nothing to find. */
+  supportsImmediateGet?(): Promise<boolean>;
 }
 
 export type PasskeyErrorKind =
@@ -284,10 +292,21 @@ export class BrowserPasskeyAuthenticator implements PasskeyAuthenticator {
     };
   }
 
+  async supportsImmediateGet(): Promise<boolean> {
+    try {
+      const pkc = (globalThis as { PublicKeyCredential?: { getClientCapabilities?: () => Promise<Record<string, boolean>> } })
+        .PublicKeyCredential;
+      return (await pkc?.getClientCapabilities?.())?.immediateGet === true;
+    } catch {
+      return false;
+    }
+  }
+
   async get(opts: GetPasskeyOptions): Promise<PasskeySignature> {
     let cred: PublicKeyCredential;
     try {
       cred = (await this.#container().get({
+        ...(opts.immediate ? ({ uiMode: 'immediate' } as Record<string, unknown>) : {}),
         publicKey: {
           rpId: this.rpId,
           challenge: toArrayBuffer(opts.challenge),
