@@ -15,12 +15,11 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-  Separator,
-  Switch,
 } from '@tenzro/ui';
 import { assessReadiness } from 'tenzro-wallet/custody';
 
-import { TENZRO_NETWORK_NAME, TENZRO_RP_ID, TENZRO_RPC_URL } from '@/lib/tenzro/config';
+import { RecoverySection } from '@/components/wallet/recovery-section';
+import { TENZRO_NETWORK_NAME, TENZRO_RPC_URL, TENZRO_RP_ID } from '@/lib/tenzro/config';
 import { useChainId, useDeviceActions, useDevices, useWallet } from '@/lib/tenzro/hooks';
 
 export default function SettingsPage() {
@@ -33,23 +32,7 @@ export default function SettingsPage() {
 
       <DevicesCard />
 
-      <Card variant="raised">
-        <CardHeader>
-          <CardTitle>Recovery</CardTitle>
-          <CardDescription>If you lose every device</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-2 text-sm text-foreground-muted">
-          <p>
-            Your first line of recovery is another linked device: any enrolled passkey can approve
-            and can remove a lost one.
-          </p>
-          <p>
-            Guardians are people or organisations you trust. A recovery starts from a new device,
-            runs for a waiting period that any of your existing passkeys can cancel, and completes
-            when your guardians approve.
-          </p>
-        </CardContent>
-      </Card>
+      <RecoverySection />
 
       <Card variant="raised">
         <CardHeader>
@@ -60,32 +43,6 @@ export default function SettingsPage() {
           <Row icon={Globe} label="RPC" value={TENZRO_RPC_URL} />
           <ChainIdRow />
           <Row icon={Shield} label="Passkey domain" value={TENZRO_RP_ID} />
-        </CardContent>
-      </Card>
-
-      <Card variant="raised">
-        <CardHeader>
-          <CardTitle>Agent defaults</CardTitle>
-          <CardDescription>What new agents inherit unless you change them</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <RowSwitch
-            label="Require TEE attestation"
-            description="Only use services whose enclave attestation verifies"
-            defaultChecked
-          />
-          <Separator />
-          <RowSwitch
-            label="Show ERC-8004 reputation inline"
-            description="Surface reputation on the agent's first request"
-            defaultChecked
-          />
-          <Separator />
-          <RowSwitch
-            label="Cap session keys at 30 days"
-            description="Agent session keys expire after 30 days unless renewed"
-            defaultChecked
-          />
         </CardContent>
       </Card>
     </div>
@@ -205,26 +162,6 @@ function Row({
       <Icon className="size-4 text-foreground-muted" />
       <span className="text-sm text-foreground-muted">{label}</span>
       <span className="ml-auto text-sm tabular">{value}</span>
-    </div>
-  );
-}
-
-function RowSwitch({
-  label,
-  description,
-  defaultChecked,
-}: {
-  label: string;
-  description: string;
-  defaultChecked?: boolean;
-}) {
-  return (
-    <div className="flex items-start justify-between gap-4">
-      <div>
-        <h3 className="text-sm font-medium">{label}</h3>
-        <p className="text-xs text-foreground-muted mt-0.5">{description}</p>
-      </div>
-      <Switch {...(defaultChecked !== undefined ? { defaultChecked } : {})} />
     </div>
   );
 }

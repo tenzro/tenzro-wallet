@@ -527,6 +527,26 @@ export class PasskeyCustody {
     return { ...started, credentialId: credential.id };
   }
 
+  /**
+   * Submits one guardian's approval of a recovery: `signature` is the composite
+   * signature over the recovery's `recovery_op_hash_hex` (see `RecoveryKey`).
+   */
+  async submitRecoverySignature(opts: {
+    readonly recoveryId: string;
+    readonly guardianIndex: number;
+    readonly signatureHex: string;
+  }): Promise<{
+    guardian_signatures_collected: number;
+    guardians_required: number;
+    quorum_reached: boolean;
+  }> {
+    return this.rpc.call('tenzro_submitRecoverySignature', {
+      recovery_id: opts.recoveryId,
+      guardian_index: opts.guardianIndex,
+      composite_signature_hex: opts.signatureHex,
+    });
+  }
+
   async finalizeRecovery(recoveryId: string): Promise<{
     account_address: string;
     new_credential_id_hex: string;
