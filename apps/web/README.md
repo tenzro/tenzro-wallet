@@ -30,7 +30,6 @@ components/
   wallet/             # ActivityRow + page-specific compositions
   providers.tsx       # TanStack Query
 lib/
-  mock-data.ts        # demo data driving the UI
 ```
 
 The shared design system lives in `packages/ui` (`@tenzro/ui`) — surface badges, agent mandate cards, balance hero, and cross-VM route preview are all imported from there.

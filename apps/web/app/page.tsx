@@ -130,7 +130,7 @@ export default function LandingPage() {
               <Link href="/onboarding">Create your wallet</Link>
             </Button>
             <Button asChild variant="secondary" size="xl">
-              <Link href="/dashboard">Try the demo</Link>
+              <Link href="/dashboard">Open your wallet</Link>
             </Button>
           </div>
 
@@ -172,8 +172,8 @@ export default function LandingPage() {
           </h2>
           <p className="text-lg text-foreground-muted max-w-2xl">
             One TDIP identity, twelve chains. Tenzro-internal value moves through the cross-VM
-            precompile, with no LP. External chains sit behind the canonical bridge router
-            with vendor attribution at signing time.
+            precompile, with no LP. External chains sit behind the canonical bridge router with
+            vendor attribution at signing time.
           </p>
         </div>
 

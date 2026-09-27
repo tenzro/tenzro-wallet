@@ -1,7 +1,6 @@
 /**
- * Live activity list — real `tenzro_getTransactionHistory` for the
- * onboarded wallet. Designed to sit above the mock multi-VM feed so
- * the user can see "this is what's actually on-chain" at a glance.
+ * The wallet's transactions, from `tenzro_getTransactionHistory` on the
+ * connected node.
  */
 
 'use client';
@@ -56,8 +55,7 @@ export function LiveActivityList() {
             Empty
           </Badge>
           <p className="text-sm text-foreground-muted">
-            No transactions yet. Get TNZO from the faucet on the dashboard to
-            see it here.
+            No transactions yet. Get TNZO from the faucet on the dashboard to see it here.
           </p>
         </CardContent>
       </Card>

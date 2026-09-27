@@ -65,3 +65,27 @@ export function getUserOperationReceipt(
 ): Promise<{ success: boolean; userOpHash: string } | null> {
   return rpcCall('eth_getUserOperationReceipt', [hash]);
 }
+
+/** An AP2 mandate: an agent allowed to pay on this account's behalf, within limits. */
+export interface Mandate {
+  readonly mandate_id: string;
+  readonly controller_did: string;
+  readonly agent_did: string;
+  readonly merchant_did?: string | null;
+  readonly description?: string | null;
+  readonly max_amount: string;
+  readonly total_amount: string;
+  readonly asset?: string | null;
+  readonly chain?: string | null;
+  readonly expires_at?: number | null;
+  readonly delegation_enforced?: boolean;
+  readonly validated_at_ms?: number | null;
+}
+
+/** Mandates this identity has issued to agents. */
+export async function listMandates(controllerDid: string): Promise<Mandate[]> {
+  const r = await rpcCall<{ mandates?: Mandate[] }>('tenzro_listMandates', {
+    controller_did: controllerDid,
+  });
+  return r.mandates ?? [];
+}

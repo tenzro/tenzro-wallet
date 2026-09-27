@@ -17,6 +17,7 @@ import {
   getChainId,
   getTokenBalance,
   getTransactionHistory,
+  listMandates,
 } from './methods';
 import {
   type StoredWallet,
@@ -203,4 +204,14 @@ export function useDeviceActions(wallet: StoredWallet | null) {
     onSuccess: refresh,
   });
   return { link, remove };
+}
+
+/** Mandates this identity has issued to agents. */
+export function useMandates(did: string | undefined) {
+  return useQuery({
+    queryKey: ['tenzro', 'mandates', did],
+    queryFn: () => listMandates(did as string),
+    enabled: !!did,
+    refetchInterval: 30_000,
+  });
 }
