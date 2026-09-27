@@ -14,7 +14,7 @@ import {
   type PasskeyAccount,
   PasskeyCustody,
   type PasskeyEntryOptions,
-  encodeExecuteCall,
+  encodeExecuteSingle,
   hexToBytes,
   parseQuantity,
   passkeySigningDriver,
@@ -125,7 +125,7 @@ export async function sendTnzo(
   const op = {
     sender: wallet.account,
     nonce: parseQuantity(account.nonce),
-    callData: encodeExecuteCall(to, valueWei),
+    callData: encodeExecuteSingle({ to, value: valueWei }),
     ...DEFAULT_USER_OP_GAS,
     maxFeePerGas: gasPrice,
     maxPriorityFeePerGas: gasPrice,

@@ -18,7 +18,7 @@ import { fromHex, toHex } from '../custody/passkey/bytes.ts';
 import {
   DEFAULT_USER_OP_GAS,
   type UserOperation,
-  encodeExecuteCall,
+  encodeExecuteSingle,
   userOperationHash,
   userOperationToJson,
 } from '../custody/passkey/userop.ts';
@@ -95,7 +95,7 @@ export function tenzroNativeSurface(deps: TenzroNativeDeps): SurfaceModule {
       const userOp: UserOperation = {
         sender: fromKey.address,
         nonce,
-        callData: encodeExecuteCall(toAddress, intent.amount),
+        callData: encodeExecuteSingle({ to: toAddress, value: intent.amount }),
         callGasLimit: gas.callGasLimit,
         verificationGasLimit: gas.verificationGasLimit,
         preVerificationGas: gas.preVerificationGas,
