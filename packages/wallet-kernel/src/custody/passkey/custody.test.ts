@@ -194,7 +194,11 @@ describe('linkDevice', () => {
       'label',
       'new_credential_id_hex',
       'new_passkey_public_key_hex',
+      'new_pq_verifying_key_hex',
     ]);
+    expect(fromHex(add?.new_pq_verifying_key_hex as string).length).toBe(
+      ML_DSA_65_PUBLIC_KEY_BYTES,
+    );
     expect(add?.new_passkey_public_key_hex).toBe(toHex(second.publicKey, true));
     const authz = add?.authorization as { credential_id_hex: string };
     expect(authz.credential_id_hex).toBe(toHex(first.id, true));

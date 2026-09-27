@@ -396,6 +396,15 @@ export class PasskeyCustody {
       ...(opts.crossPlatform ? { crossPlatform: true } : {}),
       ...(opts.hints ? { hints: opts.hints } : {}),
     });
+    // The new device's post-quantum leg, derived from its own PRF. The node
+    // records it with the credential and never mints it.
+    const newCredential: CredentialRef = {
+      id: toHex(created.credentialId),
+      transports: created.transports,
+    };
+    const newPrf = created.prf ?? (await this.#readPrf(newCredential, undefined, opts.hints)).prf;
+    const { publicKey: newMlDsaPublicKey, secretKey: newSecret } = deriveCustodyKey(newPrf);
+    newSecret.fill(0);
 
     const challenge = await requestCustodyChallenge(
       this.rpc,
@@ -415,6 +424,7 @@ export class PasskeyCustody {
       account_address: opts.account,
       new_passkey_public_key_hex: toHex(created.publicKey, true),
       new_credential_id_hex: toHex(created.credentialId, true),
+      new_pq_verifying_key_hex: toHex(newMlDsaPublicKey, true),
       label: opts.label,
       authorization,
     });
