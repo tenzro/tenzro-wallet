@@ -112,7 +112,7 @@ describe('tenzroNativeSurface (passkey account)', () => {
     );
   });
 
-  it('submits execute(to, value) calldata with the signature bundle', async () => {
+  it('submits ERC-7579 execute calldata with the signature bundle', async () => {
     const amount = 5n * 10n ** 18n;
     const { identity, intent } = await sendIntent('native-3', amount);
     const { port, log } = fakePort();
@@ -132,9 +132,12 @@ describe('tenzroNativeSurface (passkey account)', () => {
     expect(op.nonce).toBe('0x2a');
     expect(op.signature).toBe('0x010203');
     const callData = fromHex(op.callData ?? '');
-    expect(toHex(callData.slice(0, 4))).toBe('b61d27f6');
-    expect(toHex(callData.slice(16, 36), true)).toBe(RECIPIENT);
-    expect(BigInt(toHex(callData.slice(36, 68), true))).toBe(amount);
+    // ERC-7579 execute(bytes32 mode, bytes executionCalldata), single call:
+    // selector, mode (call type 0x00), offset, length, then target || value.
+    expect(toHex(callData.slice(0, 4))).toBe('e9ae5c53');
+    expect(callData[4]).toBe(0x00);
+    expect(toHex(callData.slice(100, 120), true)).toBe(RECIPIENT);
+    expect(BigInt(toHex(callData.slice(120, 152), true))).toBe(amount);
   });
 
   it('refuses a send to the account itself', async () => {
@@ -182,7 +185,7 @@ describe('tenzroNativeSurface (passkey account)', () => {
     await surface.submit(await surface.sign(prepared, { approvedAt: Date.now() }));
     expect(lookups).toEqual([them.did]);
     const callData = fromHex(log.sent[0]?.op.callData ?? '');
-    expect(toHex(callData.slice(16, 36), true)).toBe(RECIPIENT);
+    expect(toHex(callData.slice(100, 120), true)).toBe(RECIPIENT);
   });
 
   it('refuses a remote TDIP recipient when no identity port is wired', async () => {
