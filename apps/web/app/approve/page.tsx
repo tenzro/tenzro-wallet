@@ -7,6 +7,7 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  Input,
   Logo,
 } from '@tenzro/ui';
 import * as React from 'react';
@@ -18,11 +19,12 @@ import {
   type PopupSendTransaction,
   isPopupRequest,
 } from 'tenzro-wallet';
+import { type OwnershipProof, hexToBytes } from 'tenzro-wallet/custody';
 
 import { addConnection, isConnected, removeConnection } from '@/lib/tenzro/connections';
 import { TNZO_DECIMALS, formatBaseUnits, shortAddress } from '@/lib/tenzro/format';
 import { useWallet } from '@/lib/tenzro/hooks';
-import { sendTnzo } from '@/lib/tenzro/wallet';
+import { custody, sendTnzo } from '@/lib/tenzro/wallet';
 
 interface Pending {
   readonly request: PopupRequest;
@@ -35,7 +37,8 @@ function isSend(p: unknown): p is PopupSendTransaction {
 }
 
 export default function ApprovePage() {
-  const { wallet, signIn, loading, error: walletError } = useWallet();
+  const { wallet, signIn, create, loading, error: walletError } = useWallet();
+  const [name, setName] = React.useState('');
   const [pending, setPending] = React.useState<Pending | null>(null);
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -89,8 +92,25 @@ export default function ApprovePage() {
     try {
       const { method, params } = pending.request;
       if (method === 'tenzro_connect') {
+        const challenge = (params as { challenge?: unknown } | undefined)?.challenge;
+        let proof: OwnershipProof | undefined;
+        if (challenge !== undefined) {
+          if (typeof challenge !== 'string' || !/^(0x)?([0-9a-fA-F]{2}){16,64}$/.test(challenge)) {
+            throw new Error('The site sent an invalid challenge.');
+          }
+          proof = await custody().proveOwnership(wallet, hexToBytes(challenge));
+        }
         addConnection(pending.origin, wallet.account);
-        respond({ result: { account: wallet.account, did: wallet.did } });
+        respond({
+          result: { account: wallet.account, did: wallet.did, ...(proof ? { proof } : {}) },
+        });
+      } else if (method === 'tenzro_addWallet') {
+        const salt = (params as { salt?: unknown } | undefined)?.salt;
+        if (typeof salt !== 'number' || !Number.isInteger(salt) || salt < 1) {
+          throw new Error('The site asked for an invalid wallet.');
+        }
+        const added = await custody().addWallet(wallet, { salt });
+        respond({ result: { account: added.account, did: added.did, salt } });
       } else if (method === 'tenzro_sendTransaction') {
         if (!isSend(params)) throw new Error('The site sent an invalid transaction.');
         const { userOpHash } = await sendTnzo(wallet, params.to, BigInt(params.value));
@@ -110,7 +130,10 @@ export default function ApprovePage() {
   }
 
   const connected = pending && wallet ? isConnected(pending.origin, wallet.account) : false;
-  const needsConnection = pending?.request.method === 'tenzro_sendTransaction' && !connected;
+  const needsConnection =
+    (pending?.request.method === 'tenzro_sendTransaction' ||
+      pending?.request.method === 'tenzro_addWallet') &&
+    !connected;
 
   React.useEffect(() => {
     if (needsConnection && pending) {
@@ -135,7 +158,7 @@ export default function ApprovePage() {
       ) : !wallet ? (
         <Card variant="raised">
           <CardHeader>
-            <CardTitle>Sign in to continue</CardTitle>
+            <CardTitle>Your Tenzro wallet</CardTitle>
             <CardDescription>
               <span className="font-mono">{pending.origin}</span> wants to use your Tenzro wallet.
             </CardDescription>
@@ -143,6 +166,22 @@ export default function ApprovePage() {
           <CardContent className="space-y-3">
             <Button onClick={() => signIn().catch(() => {})} disabled={loading}>
               Sign in with your passkey
+            </Button>
+            <p className="text-sm text-foreground-muted">
+              New to Tenzro? Create a wallet with a passkey on this device.
+            </p>
+            <Input
+              placeholder="Your name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              disabled={loading}
+            />
+            <Button
+              variant="outline"
+              onClick={() => create(name.trim() || 'Tenzro wallet').catch(() => {})}
+              disabled={loading}
+            >
+              Create a wallet
             </Button>
             {walletError && <p className="text-sm text-danger">{walletError.message}</p>}
           </CardContent>
@@ -153,7 +192,9 @@ export default function ApprovePage() {
             <CardTitle>
               {pending.request.method === 'tenzro_connect'
                 ? 'Connect to this site?'
-                : 'Approve this payment?'}
+                : pending.request.method === 'tenzro_addWallet'
+                  ? 'Add a wallet?'
+                  : 'Approve this payment?'}
             </CardTitle>
             <CardDescription>
               <span className="font-mono">{pending.origin}</span>
@@ -165,6 +206,12 @@ export default function ApprovePage() {
                 The site will see your address{' '}
                 <span className="font-mono">{shortAddress(wallet.account)}</span> and your identity,
                 and may ask you to approve payments. It cannot move funds without your approval.
+              </p>
+            ) : pending.request.method === 'tenzro_addWallet' ? (
+              <p className="text-foreground-muted">
+                Creates another wallet under your identity{' '}
+                <span className="font-mono">{wallet.did}</span>, approved with your passkey. The
+                site learns the new wallet's address.
               </p>
             ) : isSend(pending.request.params) ? (
               <div className="space-y-1">

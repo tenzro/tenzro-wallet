@@ -13,11 +13,17 @@
 
 import type { EIP1193Provider } from 'tenzro-sdk';
 
+import type { OwnershipProof } from '../custody/passkey/custody.ts';
+
 export const POPUP_PROTOCOL = 'tenzro-wallet/popup/v1';
 export const DEFAULT_WALLET_URL = 'https://wallet.tenzro.com';
 
 /** Methods the wallet window serves. */
-export type PopupMethod = 'tenzro_connect' | 'tenzro_sendTransaction' | 'tenzro_disconnect';
+export type PopupMethod =
+  | 'tenzro_connect'
+  | 'tenzro_sendTransaction'
+  | 'tenzro_addWallet'
+  | 'tenzro_disconnect';
 
 export interface PopupRequest {
   readonly protocol: typeof POPUP_PROTOCOL;
@@ -40,10 +46,32 @@ export interface PopupReady {
   readonly type: 'ready';
 }
 
+/**
+ * Params of `tenzro_connect`. Pass a one-time `challenge` (hex, 16 to 64 bytes)
+ * to receive an ownership proof: the site's server then verifies it with the
+ * credential's P-256 key from the account record on the node.
+ */
+export interface PopupConnectParams {
+  readonly challenge?: string;
+}
+
 /** Result of `tenzro_connect`. */
 export interface PopupConnection {
   readonly account: string;
   readonly did: string;
+  readonly proof?: OwnershipProof;
+}
+
+/** Params of `tenzro_addWallet`: which further wallet (1 or more) to create under the identity. */
+export interface PopupAddWallet {
+  readonly salt: number;
+}
+
+/** Result of `tenzro_addWallet`. */
+export interface PopupAddedWallet {
+  readonly account: string;
+  readonly did: string;
+  readonly salt: number;
 }
 
 /** Params of `tenzro_sendTransaction`: a TNZO transfer, value in base units (decimal string). */
@@ -55,6 +83,7 @@ export interface PopupSendTransaction {
 export const POPUP_METHODS: readonly PopupMethod[] = [
   'tenzro_connect',
   'tenzro_sendTransaction',
+  'tenzro_addWallet',
   'tenzro_disconnect',
 ];
 

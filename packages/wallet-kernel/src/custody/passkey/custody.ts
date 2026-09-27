@@ -71,6 +71,21 @@ export interface AccountRecord {
 
 export type SecondFactorPolicy = 'single_credential' | 'two_credentials';
 
+/**
+ * A passkey's signature over a relying party's one-time code, proving this
+ * device holds a passkey on `account`. The relying party verifies it with the
+ * credential's P-256 key from the account record on the node (not a key taken
+ * from this object), and checks the origin and RP ID in the signed data.
+ */
+export interface OwnershipProof {
+  readonly account: string;
+  readonly did: string;
+  readonly credentialIdHex: string;
+  readonly authenticatorDataHex: string;
+  readonly clientDataJsonHex: string;
+  readonly signatureHex: string;
+}
+
 export interface SessionKeyGrant {
   /** 32-byte Ed25519 public key of the session key, held by the agent's device. */
   readonly sessionPublicKeyHex: string;
@@ -356,6 +371,88 @@ export class PasskeyCustody {
       credential_id_hex: `0x${target}`,
       authorization,
     });
+  }
+
+  /** Signs a relying party's one-time `challenge` with this device's passkey on `account`. */
+  async proveOwnership(account: PasskeyAccount, challenge: Uint8Array): Promise<OwnershipProof> {
+    if (challenge.length < 16) {
+      throw new PasskeyError(
+        'An ownership proof needs a challenge of at least 16 bytes.',
+        'invalid',
+      );
+    }
+    const signed = await this.authenticator.get({
+      challenge,
+      allow: [{ id: account.credentialId, transports: account.transports }],
+    });
+    return {
+      account: account.account,
+      did: account.did,
+      credentialIdHex: toHex(signed.credentialId),
+      authenticatorDataHex: toHex(new Uint8Array(signed.assertion.authenticator_data)),
+      clientDataJsonHex: toHex(new Uint8Array(signed.assertion.client_data_json)),
+      signatureHex: toHex(new Uint8Array(signed.assertion.signature)),
+    };
+  }
+
+  /**
+   * Another wallet under the same identity: the identity's first passkey is
+   * enrolled again with `salt`, which the node turns into a new account. It has
+   * to run where that passkey is available (a synced passkey counts): a linked
+   * device's passkey opens the same account but would derive another identity.
+   */
+  async addWallet(
+    account: PasskeyAccount,
+    opts: { readonly salt: number },
+  ): Promise<PasskeyAccount & { readonly salt: number }> {
+    if (!Number.isInteger(opts.salt) || opts.salt < 1) {
+      throw new PasskeyError('A further wallet needs a salt of 1 or more.', 'invalid');
+    }
+    const record = await this.getAccountRecord(account.account);
+    const root = record?.credentials?.find(
+      (c) =>
+        c.p256_public_key_hex &&
+        humanDidFromPasskey(fromHex(c.p256_public_key_hex)) === account.did,
+    );
+    if (!root?.p256_public_key_hex) {
+      throw new PasskeyError(
+        "The network does not list this identity's first passkey on the account.",
+        'not-found',
+      );
+    }
+    const credential: CredentialRef = { id: stripped(root.credential_id_hex) };
+    const prf = await this.#prfFor(credential);
+    const { publicKey: mlDsaPublicKey, secretKey } = deriveCustodyKey(prf);
+    secretKey.fill(0);
+
+    const xyHex = `0x${stripped(root.p256_public_key_hex)}`;
+    const credentialId = fromHex(root.credential_id_hex);
+    const challenge = await requestCustodyChallenge(
+      this.rpc,
+      xyHex,
+      'enroll_passkey',
+      concatBytes(credentialId, mlDsaPublicKey),
+    );
+    const { authorization } = await authorizeChallenge(this.authenticator, challenge, [credential]);
+    const enrolled = await this.rpc.call<EnrollPasskeyResult>('tenzro_enrollPasskey', {
+      passkey_public_key_hex: xyHex,
+      credential_id_hex: toHex(credentialId, true),
+      ml_dsa_public_key_hex: toHex(mlDsaPublicKey, true),
+      salt: opts.salt,
+      authorization,
+    });
+    if (enrolled.did !== account.did) {
+      throw new PasskeyError(
+        'The node returned an identity that does not match this passkey.',
+        'invalid',
+      );
+    }
+    return {
+      ...account,
+      account: enrolled.smart_account_address,
+      credentialId: credential.id,
+      salt: opts.salt,
+    };
   }
 
   // ── Policy and limits ─────────────────────────────────────────────────

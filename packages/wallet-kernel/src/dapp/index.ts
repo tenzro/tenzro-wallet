@@ -38,6 +38,9 @@ export {
   isPopupResponse,
 } from './popup.ts';
 export type {
+  PopupAddWallet,
+  PopupAddedWallet,
+  PopupConnectParams,
   PopupConnection,
   PopupHost,
   PopupMethod,

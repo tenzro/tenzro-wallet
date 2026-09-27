@@ -114,6 +114,43 @@ describe('popup provider', () => {
   });
 });
 
+describe('popup requests with params', () => {
+  it('carries a connect challenge and an add-wallet salt to the wallet unchanged', async () => {
+    const f = fakeHost();
+    const connect = createPopupProvider({ host: f.host }).request({
+      method: 'tenzro_connect',
+      params: { challenge: 'ab'.repeat(32) },
+    });
+    f.emit({ protocol: POPUP_PROTOCOL, type: 'ready' });
+    const c = f.sent[0] as PopupRequest;
+    expect(c.params).toEqual({ challenge: 'ab'.repeat(32) });
+    f.emit({
+      protocol: POPUP_PROTOCOL,
+      type: 'response',
+      id: c.id,
+      result: { account: '0xa', did: 'd' },
+    });
+    await connect;
+
+    const g = fakeHost();
+    const add = createPopupProvider({ host: g.host }).request({
+      method: 'tenzro_addWallet',
+      params: { salt: 2 },
+    });
+    g.emit({ protocol: POPUP_PROTOCOL, type: 'ready' });
+    const r = g.sent[0] as PopupRequest;
+    expect(r.method).toBe('tenzro_addWallet');
+    expect(r.params).toEqual({ salt: 2 });
+    g.emit({
+      protocol: POPUP_PROTOCOL,
+      type: 'response',
+      id: r.id,
+      result: { account: '0xb', did: 'd', salt: 2 },
+    });
+    await expect(add).resolves.toEqual({ account: '0xb', did: 'd', salt: 2 });
+  });
+});
+
 describe('canUsePasskeysDirectly', () => {
   it('allows the RP ID and its subdomains only', () => {
     expect(canUsePasskeysDirectly('tenzro.com', 'tenzro.com')).toBe(true);
