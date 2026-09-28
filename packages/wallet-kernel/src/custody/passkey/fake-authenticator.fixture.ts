@@ -49,6 +49,9 @@ export class FakeAuthenticator implements PasskeyAuthenticator {
    * excluded, as a browser does with InvalidStateError.
    */
   syncsExisting = false;
+  /** The AAGUID this authenticator reports at registration. */
+  aaguid: Uint8Array = new Uint8Array(16).fill(0xea);
+
   /** Report `immediateGet` support, as a browser that can ask silently does. */
   immediateGet = false;
 
@@ -84,6 +87,7 @@ export class FakeAuthenticator implements PasskeyAuthenticator {
       publicKey: cred.publicKey,
       transports: ['internal'],
       tier: cred.tier,
+      authenticatorData: this.#registration(cred),
       ...(this.returnPrfOnCreate ? { prf: this.#prf(cred) } : {}),
     };
   }
@@ -120,6 +124,29 @@ export class FakeAuthenticator implements PasskeyAuthenticator {
       prf: this.#prf(cred),
       userHandle: cred.userId,
     };
+  }
+
+  /**
+   * Registration authenticatorData as an authenticator writes it: rpIdHash,
+   * flags (UP, UV, AT, and BE/BS when synced), counter, then the attested
+   * credential: AAGUID, credential id and its COSE ES256 key.
+   */
+  #registration(cred: FakeCredential): Uint8Array {
+    const flags = 0x01 | 0x04 | 0x40 | (cred.tier === 'synced' ? 0x08 | 0x10 : 0);
+    const cose = concatBytes(
+      new Uint8Array([0xa5, 0x01, 0x02, 0x03, 0x26, 0x20, 0x01, 0x21, 0x58, 0x20]),
+      cred.publicKey.slice(0, 32),
+      new Uint8Array([0x22, 0x58, 0x20]),
+      cred.publicKey.slice(32),
+    );
+    return concatBytes(
+      sha256(utf8(this.rpId)),
+      new Uint8Array([flags, 0, 0, 0, 0]),
+      this.aaguid,
+      new Uint8Array([cred.id.length >> 8, cred.id.length & 0xff]),
+      cred.id,
+      cose,
+    );
   }
 
   credential(idHex: string): FakeCredential | undefined {

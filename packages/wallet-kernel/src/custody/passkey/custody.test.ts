@@ -104,6 +104,7 @@ describe('createWallet', () => {
       'display_name',
       'ml_dsa_public_key_hex',
       'passkey_public_key_hex',
+      'registration_authenticator_data_hex',
       'salt',
     ]);
     expect(enroll?.passkey_public_key_hex).toBe(toHex(cred.publicKey, true));
@@ -238,9 +239,17 @@ describe('linkDevice', () => {
       'authorization',
       'label',
       'new_credential_id_hex',
+      'new_credential_proof',
       'new_passkey_public_key_hex',
       'new_pq_verifying_key_hex',
+      'new_registration_authenticator_data_hex',
     ]);
+    // The new passkey signed the same challenge the approver did.
+    const proof = add?.new_credential_proof as { assertion: { client_data_json: number[] } };
+    const auth2 = add?.authorization as { assertion: { client_data_json: number[] } };
+    const challengeOf = (a: { client_data_json: number[] }) =>
+      JSON.parse(new TextDecoder().decode(new Uint8Array(a.client_data_json))).challenge;
+    expect(challengeOf(proof.assertion)).toBe(challengeOf(auth2.assertion));
     expect(fromHex(add?.new_pq_verifying_key_hex as string).length).toBe(
       ML_DSA_65_PUBLIC_KEY_BYTES,
     );

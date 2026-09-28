@@ -271,6 +271,7 @@ export class PasskeyCustody {
       display_name: opts.displayName,
       passkey_public_key_hex: xyHex,
       credential_id_hex: toHex(created.credentialId, true),
+      registration_authenticator_data_hex: toHex(created.authenticatorData, true),
       ml_dsa_public_key_hex: toHex(mlDsaPublicKey, true),
       salt: 0,
       authorization,
@@ -508,14 +509,24 @@ export class PasskeyCustody {
     if (stripped(authorization.credential_id_hex) === toHex(created.credentialId)) {
       throw new PasskeyError('The new passkey cannot approve its own addition.', 'invalid');
     }
+    // The new passkey signs the same challenge: its signed flags prove what its
+    // registration says about syncing, which the network checks before adding it.
+    const own = await authorizeChallenge(this.authenticator, challenge, [newCredential], {
+      ...(opts.hints ? { hints: opts.hints, hybrid: opts.hints.includes('hybrid') } : {}),
+    });
 
     return this.rpc.call('tenzro_addPasskey', {
       account_address: opts.account,
       new_passkey_public_key_hex: toHex(created.publicKey, true),
       new_credential_id_hex: toHex(created.credentialId, true),
       new_pq_verifying_key_hex: toHex(newMlDsaPublicKey, true),
+      new_registration_authenticator_data_hex: toHex(created.authenticatorData, true),
       label: opts.label,
       authorization,
+      new_credential_proof: {
+        assertion: own.authorization.assertion,
+        ml_dsa_signature_hex: own.authorization.ml_dsa_signature_hex,
+      },
     });
   }
 

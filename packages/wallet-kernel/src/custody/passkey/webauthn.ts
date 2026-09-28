@@ -44,6 +44,12 @@ export interface CreatedPasskey {
   readonly tier: PasskeyTier;
   /** PRF output, when the authenticator returned it at creation. */
   readonly prf?: Uint8Array;
+  /**
+   * The registration's authenticatorData: the relying party, the flags (sync
+   * state), the AAGUID and the credential. The network records where the key
+   * lives from it.
+   */
+  readonly authenticatorData: Uint8Array;
 }
 
 export interface PasskeySignature {
@@ -281,13 +287,15 @@ export class BrowserPasskeyAuthenticator implements PasskeyAuthenticator {
     }
     const spki = res.getPublicKey();
     if (!spki) throw new PasskeyError('The passkey has no readable public key.', 'unsupported');
-    const tier = checkAuthenticatorFlags(asBytes(res.getAuthenticatorData()));
+    const authenticatorData = asBytes(res.getAuthenticatorData());
+    const tier = checkAuthenticatorFlags(authenticatorData);
     const prf = prfResult(cred);
     return {
       credentialId: asBytes(cred.rawId),
       publicKey: normalizeP256PublicKey(asBytes(spki)),
       transports: res.getTransports?.() ?? [],
       tier,
+      authenticatorData,
       ...(prf ? { prf } : {}),
     };
   }
