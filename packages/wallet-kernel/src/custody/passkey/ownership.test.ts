@@ -265,7 +265,13 @@ describe('linking a phone from the first device', () => {
       hints: ['hybrid'],
       approver: { id: first.credentialId },
     });
-    expect(seen).toEqual([{ kind: 'create', hints: ['hybrid'] }, { kind: 'get' }]);
+    // Create on the phone, this device approves, then the phone signs its own
+    // addition so the network can check what it claims about syncing.
+    expect(seen).toEqual([
+      { kind: 'create', hints: ['hybrid'] },
+      { kind: 'get' },
+      { kind: 'get', hints: ['hybrid'] },
+    ]);
     const [added] = rpc.paramsOf('tenzro_addPasskey') as Array<{
       authorization: { credential_id_hex: string };
       new_pq_verifying_key_hex: string;
@@ -319,8 +325,11 @@ describe('linking a phone from the first device', () => {
       hints: ['hybrid'],
       approver: { id: first.credentialId },
     });
-    expect(seen.map((s) => s.kind)).toEqual(['create', 'get', 'get']);
+    // PRF read on the new device, approval here, then the new device signs its
+    // own addition.
+    expect(seen.map((s) => s.kind)).toEqual(['create', 'get', 'get', 'get']);
     expect(allowSeen[0]).toEqual([toHex(auth.credentials[1]!.id)]);
     expect(allowSeen[1]).toEqual([first.credentialId]);
+    expect(allowSeen[2]).toEqual([toHex(auth.credentials[1]!.id)]);
   });
 });
