@@ -36,7 +36,7 @@
     "@noble/curves": "^2.4.0",
     "@noble/hashes": "^2.4.0",
     "@noble/post-quantum": "^0.7.1",
-    "tenzro-sdk": "^0.4.10"
+    "tenzro-sdk": "file:../../../harness-sdk/sdk/tenzro-ts-sdk"
   },
   "devDependencies": {
     "@types/node": "22.10.5",

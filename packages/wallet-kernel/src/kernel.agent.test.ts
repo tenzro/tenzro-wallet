@@ -216,42 +216,6 @@ describe('WalletKernel agent-ports bundle', () => {
     expect(() => unwired.agent.htlcEscrow()).toThrow(/agent port "htlcEscrow" not configured/);
   });
 
-  it('erc7802 accessor mirrors the agent-port pattern', async () => {
-    const identity = await testIdentity({ uuid: 'kernel-agent-erc7802' });
-    const stubErc7802 = {
-      crosschainMint: async () => ({
-        txHash: '0xmint',
-        token: '0xabc',
-        recipient: '0xdef',
-        amount: '1000',
-        sourceChain: 'optimism',
-        status: 'finalized',
-      }),
-      crosschainBurn: async () => ({
-        txHash: '0xburn',
-        token: '0xabc',
-        from: '0xfee',
-        amount: '1000',
-        targetChain: 'tenzro',
-        status: 'finalized',
-      }),
-      getCrossChainSupply: async () => ({
-        token: '0xabc',
-        totalSupply: '1000',
-        chainSupplies: { tenzro: '1000' },
-      }),
-    };
-    const wired = new WalletKernel({
-      identity,
-      surfaces: noSurfaces,
-      agentPorts: { erc7802: stubErc7802 },
-    });
-    expect(wired.agent.erc7802()).toBe(stubErc7802);
-
-    const unwired = new WalletKernel({ identity, surfaces: noSurfaces });
-    expect(() => unwired.agent.erc7802()).toThrow(/agent port "erc7802" not configured/);
-  });
-
   it('bridge.adapters() returns registered adapters; bridge.get() looks up by id', async () => {
     const identity = await testIdentity({ uuid: 'kernel-bridge-1' });
     const stub = (id: 'lifi' | 'ccip' | 'layerzero') => ({

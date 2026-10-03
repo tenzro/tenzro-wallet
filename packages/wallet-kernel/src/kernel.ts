@@ -10,7 +10,6 @@ import type {
   AgentPaymentPort,
   Ap2Port,
   AuthApprovalPort,
-  Erc7802Port,
   Erc8004Port,
   EscrowPort,
   HtlcEscrowPort,
@@ -66,8 +65,6 @@ export interface AgentPortsBundle {
   readonly acp?: AcpPort;
   /** HTLC cross-chain escrow (v2 — DESIGN.md §11.7). SDK adapter pending. */
   readonly htlcEscrow?: HtlcEscrowPort;
-  /** ERC-7802 SuperchainERC20 cross-chain mint/burn calldata encoder. */
-  readonly erc7802?: Erc7802Port;
 }
 
 export interface WalletKernelOptions {
@@ -137,7 +134,6 @@ export class WalletKernel {
     paymentRails: (): PaymentRailsPort => this.#requireAgent('paymentRails'),
     acp: (): AcpPort => this.#requireAgent('acp'),
     htlcEscrow: (): HtlcEscrowPort => this.#requireAgent('htlcEscrow'),
-    erc7802: (): Erc7802Port => this.#requireAgent('erc7802'),
   } as const;
 
   #requireAgent<K extends keyof AgentPortsBundle>(key: K): NonNullable<AgentPortsBundle[K]> {

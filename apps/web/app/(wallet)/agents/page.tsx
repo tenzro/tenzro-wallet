@@ -1,28 +1,19 @@
 'use client';
 
-import { AgentMandateCard, CHAINS, type ChainId, EmptyState } from '@tenzro/ui';
+import { AgentMandateCard, EmptyState } from '@tenzro/ui';
 import { Bot } from 'lucide-react';
 
 import { SignedOut } from '@/components/wallet/signed-out';
-import { useMandates, useWallet } from '@/lib/tenzro/hooks';
-import type { Mandate } from '@/lib/tenzro/methods';
-
-function chainOf(m: Mandate): ChainId {
-  const c = (m.chain ?? '').toLowerCase();
-  return c in CHAINS ? (c as ChainId) : 'tenzro';
-}
-
-function stateOf(m: Mandate): 'active' | 'expired' {
-  return m.expires_at && m.expires_at * 1000 < Date.now() ? 'expired' : 'active';
-}
+import { formatBaseUnits } from '@/lib/tenzro/format';
+import { useDelegatedAgents, useWallet } from '@/lib/tenzro/hooks';
 
 export default function AgentsPage() {
   const { wallet } = useWallet();
-  const mandates = useMandates(wallet?.did);
+  const agents = useDelegatedAgents(wallet?.did);
 
   if (!wallet) return <SignedOut what="the agents you have authorised" />;
 
-  const list = mandates.data ?? [];
+  const list = agents.data ?? [];
   return (
     <div className="space-y-6">
       <div>
@@ -31,29 +22,32 @@ export default function AgentsPage() {
           Agents you have allowed to pay on your behalf, and the limits you set for each.
         </p>
       </div>
-      {mandates.isLoading ? (
+      {agents.isLoading ? (
         <p className="text-sm text-foreground-muted">Loading…</p>
-      ) : mandates.error ? (
-        <p className="text-sm text-danger">Could not read mandates: {String(mandates.error)}</p>
+      ) : agents.error ? (
+        <p className="text-sm text-danger">Could not read your agents: {String(agents.error)}</p>
       ) : list.length === 0 ? (
         <EmptyState
           icon={Bot}
           title="No agents authorised"
-          description="When you let an agent spend on your behalf, its mandate and limits appear here."
+          description="When you let an agent spend on your behalf, its terms and limits appear here."
         />
       ) : (
         <div className="grid gap-3 md:grid-cols-2">
-          {list.map((m) => (
+          {list.map((a) => (
             <AgentMandateCard
-              key={m.mandate_id}
+              key={a.agent_did}
               kind="payment"
-              agentName={m.agent_did.split(':').pop()?.slice(0, 12) ?? m.agent_did}
-              agentDid={m.agent_did}
-              summary={m.description ?? 'Payments within the limit below'}
-              cap={{ amount: m.max_amount, currency: m.asset ?? 'TNZO' }}
-              expiresAt={m.expires_at ? m.expires_at * 1000 : undefined}
-              chain={chainOf(m)}
-              state={stateOf(m)}
+              agentName={a.agent_did.split(':').pop()?.slice(0, 12) ?? a.agent_did}
+              agentDid={a.agent_did}
+              summary={`Spent today: ${formatBaseUnits(a.current_daily_spend, 18)} TNZO`}
+              cap={
+                a.max_daily_spend === null
+                  ? undefined
+                  : { amount: formatBaseUnits(a.max_daily_spend, 18), currency: 'TNZO', window: 'day' }
+              }
+              chain="tenzro"
+              state="active"
             />
           ))}
         </div>

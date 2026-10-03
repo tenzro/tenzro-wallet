@@ -11,8 +11,8 @@
  * "svm"` filters and the per-VM `svm_wtnzo` field on `tenzro_getTokenBalance`.
  * That's the contract this test pins.
  *
- * What it checks (read-only — `tenzro_crossVmTransfer` and signed flows are
- * exercised through the full wallet stack elsewhere):
+ * What it checks (read-only; signed flows are exercised through the full
+ * wallet stack elsewhere):
  *   1. `tenzro_listTokens` with no filter — confirms the unified token
  *      registry is live and the canonical `TNZO` entry is present. Mock leg
  *      historically returned an empty list or omitted the canonical token.

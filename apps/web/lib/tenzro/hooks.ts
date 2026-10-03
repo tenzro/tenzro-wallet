@@ -17,7 +17,7 @@ import {
   getChainId,
   getTokenBalance,
   getTransactionHistory,
-  listMandates,
+  listDelegatedAgents,
 } from './methods';
 
 import {
@@ -246,11 +246,11 @@ export function useDeviceActions(wallet: StoredWallet | null) {
   return { link, remove };
 }
 
-/** Mandates this identity has issued to agents. */
-export function useMandates(did: string | undefined) {
+/** Agents this identity controls, with their daily limits. */
+export function useDelegatedAgents(did: string | undefined) {
   return useQuery({
-    queryKey: ['tenzro', 'mandates', did],
-    queryFn: () => listMandates(did as string),
+    queryKey: ['tenzro', 'delegated-agents', did],
+    queryFn: () => listDelegatedAgents(did as string),
     enabled: !!did,
     refetchInterval: 30_000,
   });

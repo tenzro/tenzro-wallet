@@ -17,13 +17,13 @@ import { LiveActivityList } from '@/components/wallet/live-activity-list';
 import { LiveNetworkCard } from '@/components/wallet/live-network-card';
 import { SignedOut } from '@/components/wallet/signed-out';
 import { formatBaseUnits, shortAddress } from '@/lib/tenzro/format';
-import { useDevices, useMandates, useTokenBalances, useWallet } from '@/lib/tenzro/hooks';
+import { useDelegatedAgents, useDevices, useTokenBalances, useWallet } from '@/lib/tenzro/hooks';
 
 export default function DashboardPage() {
   const { wallet } = useWallet();
   const balances = useTokenBalances(wallet?.account);
   const devices = useDevices(wallet);
-  const mandates = useMandates(wallet?.did);
+  const agents = useDelegatedAgents(wallet?.did);
   const [copied, setCopied] = React.useState(false);
 
   if (!wallet) return <SignedOut what="your balance and activity" />;
@@ -74,7 +74,7 @@ export default function DashboardPage() {
         />
         <KeyStat
           label="Agents authorised"
-          value={mandates.data ? String(mandates.data.length) : '…'}
+          value={agents.data ? String(agents.data.length) : '…'}
           icon={Bot}
           accent="agent"
         />

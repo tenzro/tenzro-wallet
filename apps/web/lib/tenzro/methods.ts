@@ -67,25 +67,41 @@ export function getUserOperationReceipt(
 }
 
 /** An AP2 mandate: an agent allowed to pay on this account's behalf, within limits. */
-export interface Mandate {
-  readonly mandate_id: string;
-  readonly controller_did: string;
+/** An agent this identity controls, with the daily limit its terms set. */
+export interface DelegatedAgent {
   readonly agent_did: string;
-  readonly merchant_did?: string | null;
-  readonly description?: string | null;
-  readonly max_amount: string;
-  readonly total_amount: string;
-  readonly asset?: string | null;
-  readonly chain?: string | null;
-  readonly expires_at?: number | null;
-  readonly delegation_enforced?: boolean;
-  readonly validated_at_ms?: number | null;
+  /** Base units; null when the terms set no daily limit. */
+  readonly max_daily_spend: string | null;
+  /** Base units spent today. */
+  readonly current_daily_spend: string;
 }
 
-/** Mandates this identity has issued to agents. */
-export async function listMandates(controllerDid: string): Promise<Mandate[]> {
-  const r = await rpcCall<{ mandates?: Mandate[] }>('tenzro_listMandates', {
-    controller_did: controllerDid,
+/**
+ * Agents this identity controls: the controlled DIDs on its identity record,
+ * each with the spend its on-chain terms allow today. A controlled machine
+ * that is not an agent has no terms (the node answers null) and is left out.
+ */
+export async function listDelegatedAgents(controllerDid: string): Promise<DelegatedAgent[]> {
+  const res = await rpcCall<{
+    record?: { identity_data?: { Human?: { controlled_machines?: string[] } } };
+  }>('tenzro_resolveIdentity', { did: controllerDid, include_record: true });
+  const dids = res.record?.identity_data?.Human?.controlled_machines ?? [];
+  const spends = await Promise.allSettled(
+    dids.map((did) =>
+      rpcCall<{ max_daily_spend?: string | null; current_daily_spend?: string } | null>(
+        'tenzro_getAgentDailySpend',
+        { agent_did: did },
+      ),
+    ),
+  );
+  const out: DelegatedAgent[] = [];
+  spends.forEach((r, i) => {
+    if (r.status !== 'fulfilled' || r.value === null) return;
+    out.push({
+      agent_did: dids[i] as string,
+      max_daily_spend: r.value.max_daily_spend ?? null,
+      current_daily_spend: r.value.current_daily_spend ?? '0',
+    });
   });
-  return r.mandates ?? [];
+  return out;
 }
