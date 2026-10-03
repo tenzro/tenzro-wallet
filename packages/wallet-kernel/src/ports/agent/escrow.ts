@@ -10,11 +10,9 @@
  * Vault address is deterministic from `escrow_id`; only the original
  * payer can release or refund. Six release modes, all enforced VM-side.
  *
- * The wallet wraps the SDK's `SettlementClient`, which owns the
- * CreateEscrow/ReleaseEscrow/RefundEscrow encoding. Note: the SDK submits the operation itself with `tenzro_signAndSendTransaction`, which
- * signs with a key the node holds for the caller's session. A passkey account
- * has no such key: from a passkey account these operations must be sent as
- * UserOperations the passkey signs (not wired yet).
+ * Writes are CreateEscrow/ReleaseEscrow/RefundEscrow typed transactions the
+ * holder signs (`TypedTxClient.send`); the signer's account is the payer.
+ * Reads go through the SDK's `SettlementClient`.
  */
 
 export type EscrowReleaseMode =
@@ -26,29 +24,49 @@ export type EscrowReleaseMode =
   | 'custom';
 
 export interface CreateEscrowRequest {
-  /** Payer address (the holder's account address). */
-  readonly payer: string;
-  /** Recipient on successful release. */
+  /** Recipient account on successful release (32-byte hex). */
   readonly payee: string;
   /** Amount to lock (smallest unit; 1 TNZO = 10^18 wei). */
   readonly amount: bigint;
-  /** Asset id, e.g. "TNZO" or a token contract address. */
+  /** Asset id, e.g. "TNZO". */
   readonly asset: string;
+  /** USD price of the amount in micro-units; required for an asset other than TNZO. */
+  readonly usdE6?: bigint;
   /** Unix-ms expiry. After this, refund unlocks (with appropriate mode). */
   readonly expiresAt: bigint;
   readonly releaseMode: EscrowReleaseMode;
+  /** The condition text, required when `releaseMode` is `custom`. */
+  readonly customCondition?: string;
+}
+
+/** A signature over a service proof, by one of the escrow's parties. */
+export interface ServiceProofSignature {
+  /** Signer account (32-byte hex). */
+  readonly signer: string;
+  /** Signature bytes (hex). */
+  readonly signature: string;
+  /** The signer's role as the network names it, e.g. "Provider". */
+  readonly role: string;
+}
+
+/** Proof of service a release carries. */
+export interface ServiceProof {
+  /** Proof type as the network names it, e.g. "Cryptographic". */
+  readonly proofType: string;
+  /** Proof bytes (hex). */
+  readonly proofData: string;
+  readonly signatures?: readonly ServiceProofSignature[];
+  /** Attestation bytes (hex). */
+  readonly attestation?: string;
 }
 
 export interface ReleaseEscrowRequest {
-  readonly payer: string;
   /** 32-byte escrow id (hex with or without `0x`). */
   readonly escrowId: string;
-  /** Optional proof bytes (mode-specific). Hex with or without `0x`. */
-  readonly proof?: string;
+  readonly proof: ServiceProof;
 }
 
 export interface RefundEscrowRequest {
-  readonly payer: string;
   readonly escrowId: string;
 }
 

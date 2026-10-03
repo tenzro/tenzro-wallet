@@ -2,18 +2,14 @@
  * AgentBondSdkAdapter — wraps `BondClient` so the kernel can drive the
  * Agent-Swarm Spec 9 bond primitive without owning the typed-tx encoding.
  *
- * Wire:
- *   post     → BondClient.postAgentBond(controller, agentDid, controllerDid, amount)
- *   increase → BondClient.increaseAgentBond(controller, agentDid, amount)
- *   withdraw → BondClient.withdrawAgentBond(controller, agentDid)
- *   get      → BondClient.getAgentBond(bondId)
- *   list     → BondClient.listAgentBondsByController(controllerDid)
- *
- * The SDK submits each call itself (see `agent-bond.ts` for what that
- * means for passkey accounts); we forward verbatim.
+ * Writes are typed transactions the controller signs:
+ *   post     → PostAgentBond { agent_did, controller_did, amount }
+ *   increase → IncreaseAgentBond { agent_did, amount }
+ *   withdraw → WithdrawAgentBond { agent_did }
+ * Reads: BondClient.getAgentBond(bondId), listAgentBondsByController(controllerDid).
  */
 
-import type { BondClient } from 'tenzro-sdk';
+import type { BondClient, HybridSigner } from 'tenzro-sdk';
 import type {
   AgentBondPort,
   AgentBondRecord,
@@ -22,6 +18,7 @@ import type {
   PostAgentBondRequest,
   WithdrawAgentBondRequest,
 } from '../agent-bond.ts';
+import { type TypedTxSender, txHash, u128 } from './typed-tx.ts';
 
 /**
  * Slice of `BondClient` the adapter relies on, anchored to the SDK via
@@ -29,9 +26,6 @@ import type {
  */
 export type BondClientLike = Pick<
   BondClient,
-  | 'postAgentBond'
-  | 'increaseAgentBond'
-  | 'withdrawAgentBond'
   | 'getAgentBond'
   | 'listAgentBondsByController'
 >;
@@ -57,18 +51,41 @@ interface RawAgentBond {
 }
 
 export class AgentBondSdkAdapter implements AgentBondPort {
-  constructor(private readonly client: BondClientLike) {}
+  constructor(
+    private readonly client: BondClientLike,
+    private readonly tx: TypedTxSender,
+    private readonly signer: HybridSigner,
+  ) {}
 
-  post(req: PostAgentBondRequest): Promise<string> {
-    return this.client.postAgentBond(req.controller, req.agentDid, req.controllerDid, req.amount);
+  async post(req: PostAgentBondRequest): Promise<string> {
+    return txHash(
+      await this.tx.send(this.signer, {
+        kind: 'PostAgentBond',
+        fields: {
+          agent_did: req.agentDid,
+          controller_did: req.controllerDid,
+          amount: u128(req.amount, 'amount'),
+        },
+      }),
+    );
   }
 
-  increase(req: IncreaseAgentBondRequest): Promise<string> {
-    return this.client.increaseAgentBond(req.controller, req.agentDid, req.amount);
+  async increase(req: IncreaseAgentBondRequest): Promise<string> {
+    return txHash(
+      await this.tx.send(this.signer, {
+        kind: 'IncreaseAgentBond',
+        fields: { agent_did: req.agentDid, amount: u128(req.amount, 'amount') },
+      }),
+    );
   }
 
-  withdraw(req: WithdrawAgentBondRequest): Promise<string> {
-    return this.client.withdrawAgentBond(req.controller, req.agentDid);
+  async withdraw(req: WithdrawAgentBondRequest): Promise<string> {
+    return txHash(
+      await this.tx.send(this.signer, {
+        kind: 'WithdrawAgentBond',
+        fields: { agent_did: req.agentDid },
+      }),
+    );
   }
 
   async get(bondId: string): Promise<AgentBondRecord | null> {

@@ -15,11 +15,9 @@
  *   • IncreaseAgentBond selector 0x01000021, ~60k gas
  *   • WithdrawAgentBond selector 0x01000022, ~50k gas
  *
- * The wallet wraps the SDK's `BondClient`, which owns the typed-tx
- * encoding. Note: the SDK submits the operation itself with `tenzro_signAndSendTransaction`, which
- * signs with a key the node holds for the caller's session. A passkey account
- * has no such key: from a passkey account these operations must be sent as
- * UserOperations the passkey signs (not wired yet).
+ * Writes are PostAgentBond/IncreaseAgentBond/WithdrawAgentBond typed
+ * transactions the controller signs (`TypedTxClient.send`); the signer's
+ * account is the controller wallet. Reads go through the SDK's `BondClient`.
  */
 
 export type AgentBondStatus = 'active' | 'cooldown' | 'withdrawn' | 'slashed';
@@ -50,8 +48,6 @@ export interface AgentBondRecord {
 }
 
 export interface PostAgentBondRequest {
-  /** Controller wallet address (signer / `tx.from`). */
-  readonly controller: string;
   /** DID of the agent being bonded. */
   readonly agentDid: string;
   /** DID of the controller posting the bond. */
@@ -61,13 +57,11 @@ export interface PostAgentBondRequest {
 }
 
 export interface IncreaseAgentBondRequest {
-  readonly controller: string;
   readonly agentDid: string;
   readonly amount: bigint;
 }
 
 export interface WithdrawAgentBondRequest {
-  readonly controller: string;
   readonly agentDid: string;
 }
 

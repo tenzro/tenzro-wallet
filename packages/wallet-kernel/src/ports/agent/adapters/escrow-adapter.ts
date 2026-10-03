@@ -1,20 +1,14 @@
 /**
- * EscrowSdkAdapter — wraps `SettlementClient` so the kernel can drive the
- * native escrow primitive without owning the tx-shape encoding.
+ * EscrowSdkAdapter — the native escrow primitive for the kernel.
  *
- * Wire:
- *   create  → SettlementClient.createEscrow(payer, payee, amount, asset,
- *               expiresAt, releaseMode)
- *   release → SettlementClient.releaseEscrow(payer, escrowId, proof?)
- *   refund  → SettlementClient.refundEscrow(payer, escrowId)
- *   get     → SettlementClient.getEscrow(escrowId)
- *
- * The SDK already maps the release-mode enum string ('timeout' /
- * 'provider' / 'consumer' / 'both' / 'verifier' / 'custom') to the
- * `release_conditions` JSON the VM expects, so we just forward.
+ * Writes are typed transactions the holder signs:
+ *   create  → CreateEscrow { payee, amount, asset_id, usd_e6, expires_at, release_conditions }
+ *   release → ReleaseEscrow { escrow_id, proof }
+ *   refund  → RefundEscrow { escrow_id }
+ * Reads go through `SettlementClient` (getEscrow, listEscrowsByPayer/Payee).
  */
 
-import type { SettlementClient } from 'tenzro-sdk';
+import type { HybridSigner, SettlementClient } from 'tenzro-sdk';
 import type {
   CreateEscrowRequest,
   EscrowPort,
@@ -22,20 +16,17 @@ import type {
   EscrowReleaseMode,
   RefundEscrowRequest,
   ReleaseEscrowRequest,
+  ServiceProof,
 } from '../escrow.ts';
+import { type TypedTxSender, bytes, bytes32, txHash, u128 } from './typed-tx.ts';
 
 /**
- * Slice of `SettlementClient` the adapter relies on, anchored to the SDK
+ * Slice of `SettlementClient` the adapter reads with, anchored to the SDK
  * via `Pick<>` so a method-rename in `tenzro-sdk` breaks the build.
  */
 export type EscrowClientLike = Pick<
   SettlementClient,
-  | 'createEscrow'
-  | 'releaseEscrow'
-  | 'refundEscrow'
-  | 'getEscrow'
-  | 'listEscrowsByPayer'
-  | 'listEscrowsByPayee'
+  'getEscrow' | 'listEscrowsByPayer' | 'listEscrowsByPayee'
 >;
 
 interface RawEscrow {
@@ -52,26 +43,75 @@ interface RawEscrow {
   status?: string;
 }
 
-export class EscrowSdkAdapter implements EscrowPort {
-  constructor(private readonly client: EscrowClientLike) {}
+const CONDITIONS: Record<Exclude<EscrowReleaseMode, 'custom'>, string> = {
+  timeout: 'Timeout',
+  provider: 'ProviderSignature',
+  consumer: 'ConsumerSignature',
+  both: 'BothSignatures',
+  verifier: 'VerifierSignature',
+};
 
-  create(req: CreateEscrowRequest): Promise<string> {
-    return this.client.createEscrow(
-      req.payer,
-      req.payee,
-      req.amount,
-      req.asset,
-      req.expiresAt,
-      req.releaseMode,
+function releaseConditions(req: CreateEscrowRequest): unknown {
+  if (req.releaseMode !== 'custom') return CONDITIONS[req.releaseMode];
+  if (!req.customCondition) throw new Error('a custom release needs customCondition');
+  return { Custom: { condition: req.customCondition } };
+}
+
+function serviceProof(p: ServiceProof): unknown {
+  return {
+    proof_type: p.proofType,
+    proof_data: bytes(p.proofData, 'proof data'),
+    signatures: (p.signatures ?? []).map((s) => ({
+      signer: bytes32(s.signer, 'proof signer'),
+      signature: bytes(s.signature, 'proof signature'),
+      role: s.role,
+    })),
+    attestation: p.attestation === undefined ? null : bytes(p.attestation, 'attestation'),
+  };
+}
+
+export class EscrowSdkAdapter implements EscrowPort {
+  constructor(
+    private readonly client: EscrowClientLike,
+    private readonly tx: TypedTxSender,
+    private readonly signer: HybridSigner,
+  ) {}
+
+  async create(req: CreateEscrowRequest): Promise<string> {
+    if (req.asset !== 'TNZO' && req.usdE6 === undefined) {
+      throw new Error(`an escrow in ${req.asset} needs its USD price (usdE6)`);
+    }
+    return txHash(
+      await this.tx.send(this.signer, {
+        kind: 'CreateEscrow',
+        fields: {
+          payee: bytes32(req.payee, 'payee'),
+          amount: u128(req.amount, 'amount'),
+          asset_id: req.asset,
+          usd_e6: Number(req.usdE6 ?? 0n),
+          expires_at: Number(req.expiresAt),
+          release_conditions: releaseConditions(req),
+        },
+      }),
     );
   }
 
-  release(req: ReleaseEscrowRequest): Promise<string> {
-    return this.client.releaseEscrow(req.payer, req.escrowId, req.proof);
+  async release(req: ReleaseEscrowRequest): Promise<string> {
+    return txHash(
+      await this.tx.send(this.signer, {
+        kind: 'ReleaseEscrow',
+        fields: { escrow_id: bytes32(req.escrowId, 'escrow id'), proof: serviceProof(req.proof) },
+      }),
+    );
   }
 
-  refund(req: RefundEscrowRequest): Promise<string> {
-    return this.client.refundEscrow(req.payer, req.escrowId);
+  async refund(req: RefundEscrowRequest): Promise<string> {
+    return txHash(
+      await this.tx.send(this.signer, {
+        kind: 'RefundEscrow',
+        fields: { escrow_id: bytes32(req.escrowId, 'escrow id') },
+      }),
+    );
   }
 
   async get(escrowId: string): Promise<EscrowRecord | null> {
