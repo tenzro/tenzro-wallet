@@ -1,65 +1,32 @@
 /**
- * Agent-payments ports — AP2 (FIDO Alliance v0.2), ERC-8004 (mainnet
- * Jan 29 2026), Tenzro spending-policy/agent-payment, and nanopayment
- * channels. Each port is a thin facade over a `tenzro-sdk` client; the
- * SDK is the single source of protocol truth.
+ * Agent ports: payments, approvals, attestation, escrow, bonds and fees.
+ * Each port is a thin facade over a `tenzro-sdk` client; the SDK is the
+ * single source of protocol truth.
  */
-
-// AP2
-export type {
-  Ap2Port,
-  Ap2Vdc,
-  Ap2Session,
-  Ap2SessionStatus,
-  Ap2Authorization,
-  Ap2AuthorizationStatus,
-  Ap2MandateVerification,
-  Ap2MandatePairValidation,
-  Ap2PaymentReceipt,
-  Ap2CancelResult,
-  CreateSessionRequest,
-} from './ap2.ts';
-export { Ap2SdkAdapter } from './adapters/ap2-adapter.ts';
-export type { Ap2ClientLike } from './adapters/ap2-adapter.ts';
-
-// ERC-8004
-export type {
-  Erc8004Port,
-  Erc8004AgentIdHex,
-  Erc8004DerivedAgentId,
-  Erc8004Calldata,
-  Erc8004Agent,
-} from './erc8004.ts';
-export { Erc8004SdkAdapter } from './adapters/erc8004-adapter.ts';
-export type { Erc8004ClientLike } from './adapters/erc8004-adapter.ts';
 
 // Agent payments
 export type {
   AgentPaymentPort,
-  AgentSpendingPolicy,
-  SetPolicyRequest,
-  SetPolicyResult,
-  PayForServiceRequest,
-  AgentPaymentReceipt,
+  AgentTermsChallenge,
+  AgentTermsUpdated,
   DailySpend,
-  AgentTransactionRecord,
+  UpdateAgentTermsRequest,
 } from './agent-payment.ts';
-export { AgentPaymentSdkAdapter } from './adapters/agent-payment-adapter.ts';
-export type { AgentPaymentClientLike } from './adapters/agent-payment-adapter.ts';
-
-// Nanopayment
 export type {
-  NanopaymentPort,
-  NanoChannel,
-  NanoChannelStatus,
-  OpenChannelRequest,
-  SendNanopaymentRequest,
-  NanopaymentReceipt,
-  BatchSettlement,
-  CloseChannelResult,
-} from './nanopayment.ts';
-export { NanopaymentSdkAdapter } from './adapters/nanopayment-adapter.ts';
-export type { NanopaymentClientLike } from './adapters/nanopayment-adapter.ts';
+  AgentTermsWire,
+  AssetLimitTerms,
+  ContractTerms,
+  GovernanceTerms,
+  RemoteLimitTerms,
+  ServingNodeTerms,
+  TermsScope,
+} from './agent-terms.ts';
+export { agentTermsTarget } from './agent-terms.ts';
+export { AgentPaymentSdkAdapter, checkCompletedTerms } from './adapters/agent-payment-adapter.ts';
+export type {
+  AgentPaymentClientLike,
+  AgentTermsClientLike,
+} from './adapters/agent-payment-adapter.ts';
 
 // HITL approval queue
 export type {
@@ -81,19 +48,6 @@ export type {
 } from './tee-attestation.ts';
 export { TeeAttestationSdkAdapter } from './adapters/tee-attestation-adapter.ts';
 export type { TeeClientLike } from './adapters/tee-attestation-adapter.ts';
-
-// Session keys (delegated agent scopes, AP2/Mastercard/x402 substrate)
-export type {
-  SessionKeyPort,
-  SessionScope,
-  CreateSessionRequest as CreateSessionKeyRequest,
-  CreatedSession,
-  ActiveSession,
-  RevokeSessionRequest,
-  RevokeSessionResult,
-} from './session-key.ts';
-export { SessionKeySdkAdapter } from './adapters/session-key-adapter.ts';
-export type { SessionKeyClientLike } from './adapters/session-key-adapter.ts';
 
 // Native escrow primitive
 export type {
@@ -145,40 +99,6 @@ export type {
 export { AgentBondSdkAdapter } from './adapters/agent-bond-adapter.ts';
 export type { BondClientLike } from './adapters/agent-bond-adapter.ts';
 
-// Insurance pool — claims against bonded agents.
-export type {
-  InsurancePort,
-  InsuranceClaimRecord,
-  ClaimStatus,
-  FileInsuranceClaimRequest,
-} from './insurance.ts';
-export { InsuranceSdkAdapter } from './adapters/insurance-adapter.ts';
-export type { InsuranceClientLike } from './adapters/insurance-adapter.ts';
-
-// Lifecycle — agent state machine + Spec 1 KillSwitch receipts.
-export type {
-  LifecyclePort,
-  AgentLifecycleRecord,
-  AgentState,
-  KillSwitchAction,
-  KillSwitchReceiptRecord,
-} from './lifecycle.ts';
-export { LifecycleSdkAdapter } from './adapters/lifecycle-adapter.ts';
-export type { LifecycleClientLike } from './adapters/lifecycle-adapter.ts';
-
-// Principal-chain (Spec 5) — frozen-at-write delegation receipts.
-export type {
-  PrincipalChainPort,
-  PrincipalChainRecord,
-  PrincipalChainSummaryRecord,
-  ControllerActivitySummaryRecord,
-  PrincipalLink,
-  PrincipalRole,
-  IdentityType,
-} from './principal-chain.ts';
-export { PrincipalChainSdkAdapter } from './adapters/principal-chain-adapter.ts';
-export type { PrincipalChainClientLike } from './adapters/principal-chain-adapter.ts';
-
 // Fee estimator (EIP-1559) — gas / tip / fee-history reads + suggestFees().
 export type {
   FeeEstimatorPort,
@@ -188,26 +108,3 @@ export type {
 } from './fee-estimator.ts';
 export { FeeEstimatorSdkAdapter } from './adapters/fee-estimator-adapter.ts';
 export type { FeeEstimatorClientLike } from './adapters/fee-estimator-adapter.ts';
-
-// Payment rails (MPP / x402 / AP2 / Visa TAP / Mastercard) — settlement only.
-// Visa TAP credential signing + Mastercard token issuance + ACP buyer-side
-// flow are SDK gaps tracked in DESIGN.md §11; the wallet wraps them when
-// the SDK exposes them.
-export type {
-  PaymentRailsPort,
-  PaymentReceipt as PaymentRailReceipt,
-  PaymentChallenge,
-  CreateChallengeRequest,
-  PayMppRequest,
-  PayX402Request,
-  PayAp2Request,
-  PayVisaTapRequest,
-  PayMastercardRequest,
-  SignVisaTapRequest,
-  VisaTapSignedRequest,
-  IssueMastercardTokenRequest,
-  MastercardToken,
-  MastercardTokenKind,
-} from './payment-rails.ts';
-export { PaymentRailsSdkAdapter } from './adapters/payment-rails-adapter.ts';
-export type { PaymentClientLike } from './adapters/payment-rails-adapter.ts';

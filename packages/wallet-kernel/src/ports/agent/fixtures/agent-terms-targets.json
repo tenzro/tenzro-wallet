@@ -1,0 +1,788 @@
+{
+ "source": "sdk/fixtures/agent_terms/vectors.json terms; targets from tenzro-types AgentTerms::target(None | Some(false) | Some(true))",
+ "cases": [
+  {
+   "name": "within terms",
+   "terms": {
+    "controller_did": "did:tenzro:human:controller",
+    "agent_name": "example",
+    "delegation_scope": {
+     "max_transaction_value": "1000",
+     "max_daily_spend": "5000",
+     "allowed_operations": [
+      "transfer",
+      "pay",
+      "create_escrow",
+      "refund_escrow",
+      "remote_grant",
+      "governance.vote",
+      "governance.veto_signal",
+      "settlement_plan",
+      "inference"
+     ],
+     "allowed_payment_protocols": [],
+     "allowed_chains": [
+      "tenzro",
+      "eip155:8453"
+     ],
+     "allowed_models": [],
+     "allowed_counterparties": [],
+     "max_hourly_spend": null,
+     "max_actions_per_hour": null,
+     "max_actions_per_day": null,
+     "allowed_hours_utc": null,
+     "step_up_above": null,
+     "step_up_new_counterparty": false,
+     "tainted_value_limit": null,
+     "remote_grant_ttl_ms": null,
+     "remote_limits": [],
+     "cosign_above": null,
+     "asset_limits": [],
+     "min_contract_assurance": 0,
+     "allowed_contracts": [],
+     "governance": null
+    },
+    "capabilities": [],
+    "serving_nodes": [
+     {
+      "machine_did": "did:tenzro:machine:serving-a",
+      "operator_did": "did:tenzro:human:operator",
+      "dpop_public_key": "",
+      "dpop_jkt": "",
+      "key_certification": "",
+      "sealing_public_key": ""
+     }
+    ],
+    "min_distinct_operators": 1,
+    "expires_at_ms": null,
+    "trifecta_exception": false,
+    "auto_approve": null,
+    "credentials": []
+   },
+   "target": {
+    "delegate": "f09e64e8cea3c60721532919ee8c69d065ad86fcaa3c0998af6257f6f0e5956f",
+    "update": "f825129919b81499c18d1eb9ca8c4dc0184e2acbc23d3ce8ae7cebf749adb6df",
+    "update_rotate": "e505bf33ab812108dd6efff69ca3488175f96e16fe094ae98d2534eddba95272"
+   }
+  },
+  {
+   "name": "hourly limit",
+   "terms": {
+    "controller_did": "did:tenzro:human:controller",
+    "agent_name": "example",
+    "delegation_scope": {
+     "max_transaction_value": "1000",
+     "max_daily_spend": "5000",
+     "allowed_operations": [
+      "transfer",
+      "pay",
+      "create_escrow",
+      "refund_escrow",
+      "remote_grant",
+      "governance.vote",
+      "governance.veto_signal",
+      "settlement_plan",
+      "inference"
+     ],
+     "allowed_payment_protocols": [],
+     "allowed_chains": [
+      "tenzro",
+      "eip155:8453"
+     ],
+     "allowed_models": [],
+     "allowed_counterparties": [],
+     "max_hourly_spend": "300",
+     "max_actions_per_hour": 5,
+     "max_actions_per_day": 20,
+     "allowed_hours_utc": null,
+     "step_up_above": null,
+     "step_up_new_counterparty": false,
+     "tainted_value_limit": null,
+     "remote_grant_ttl_ms": null,
+     "remote_limits": [],
+     "cosign_above": null,
+     "asset_limits": [],
+     "min_contract_assurance": 0,
+     "allowed_contracts": [],
+     "governance": null
+    },
+    "capabilities": [],
+    "serving_nodes": [
+     {
+      "machine_did": "did:tenzro:machine:serving-a",
+      "operator_did": "did:tenzro:human:operator",
+      "dpop_public_key": "",
+      "dpop_jkt": "",
+      "key_certification": "",
+      "sealing_public_key": ""
+     }
+    ],
+    "min_distinct_operators": 1,
+    "expires_at_ms": null,
+    "trifecta_exception": false,
+    "auto_approve": null,
+    "credentials": []
+   },
+   "target": {
+    "delegate": "2d99fe4fd1c8822e78a3563526a0c54a99aa1efe408c8e496538d52e108a453d",
+    "update": "6dd2f7cac8a613861add63f852e488885421c1146104e28bcbc475a6a0ec2dc0",
+    "update_rotate": "1930e44906962548914f6a317710df4dfe170d019fc1512e0348d985ee49b313"
+   }
+  },
+  {
+   "name": "hours window wraps midnight (inside)",
+   "terms": {
+    "controller_did": "did:tenzro:human:controller",
+    "agent_name": "example",
+    "delegation_scope": {
+     "max_transaction_value": "1000",
+     "max_daily_spend": "5000",
+     "allowed_operations": [
+      "transfer",
+      "pay",
+      "create_escrow",
+      "refund_escrow",
+      "remote_grant",
+      "governance.vote",
+      "governance.veto_signal",
+      "settlement_plan",
+      "inference"
+     ],
+     "allowed_payment_protocols": [],
+     "allowed_chains": [
+      "tenzro",
+      "eip155:8453"
+     ],
+     "allowed_models": [],
+     "allowed_counterparties": [],
+     "max_hourly_spend": null,
+     "max_actions_per_hour": null,
+     "max_actions_per_day": null,
+     "allowed_hours_utc": [
+      22,
+      6
+     ],
+     "step_up_above": null,
+     "step_up_new_counterparty": false,
+     "tainted_value_limit": null,
+     "remote_grant_ttl_ms": null,
+     "remote_limits": [],
+     "cosign_above": null,
+     "asset_limits": [],
+     "min_contract_assurance": 0,
+     "allowed_contracts": [],
+     "governance": null
+    },
+    "capabilities": [],
+    "serving_nodes": [
+     {
+      "machine_did": "did:tenzro:machine:serving-a",
+      "operator_did": "did:tenzro:human:operator",
+      "dpop_public_key": "",
+      "dpop_jkt": "",
+      "key_certification": "",
+      "sealing_public_key": ""
+     }
+    ],
+    "min_distinct_operators": 1,
+    "expires_at_ms": null,
+    "trifecta_exception": false,
+    "auto_approve": null,
+    "credentials": []
+   },
+   "target": {
+    "delegate": "6c46f51e09efe681ca650fcf79424b5bfa373913535a96bd21a877e4f9ec86eb",
+    "update": "da6a5dccc13617860c0ae940206936b7cd9ce4360118ab1fa9d6bcb7870e02aa",
+    "update_rotate": "cf75a6273828f3656e4a4b7b4f67d9c3843f90689890c4a111ab6f27eb2312ee"
+   }
+  },
+  {
+   "name": "expired terms",
+   "terms": {
+    "controller_did": "did:tenzro:human:controller",
+    "agent_name": "example",
+    "delegation_scope": {
+     "max_transaction_value": "1000",
+     "max_daily_spend": "5000",
+     "allowed_operations": [
+      "transfer",
+      "pay",
+      "create_escrow",
+      "refund_escrow",
+      "remote_grant",
+      "governance.vote",
+      "governance.veto_signal",
+      "settlement_plan",
+      "inference"
+     ],
+     "allowed_payment_protocols": [],
+     "allowed_chains": [
+      "tenzro",
+      "eip155:8453"
+     ],
+     "allowed_models": [],
+     "allowed_counterparties": [],
+     "max_hourly_spend": null,
+     "max_actions_per_hour": null,
+     "max_actions_per_day": null,
+     "allowed_hours_utc": null,
+     "step_up_above": null,
+     "step_up_new_counterparty": false,
+     "tainted_value_limit": null,
+     "remote_grant_ttl_ms": null,
+     "remote_limits": [],
+     "cosign_above": null,
+     "asset_limits": [],
+     "min_contract_assurance": 0,
+     "allowed_contracts": [],
+     "governance": null
+    },
+    "capabilities": [],
+    "serving_nodes": [
+     {
+      "machine_did": "did:tenzro:machine:serving-a",
+      "operator_did": "did:tenzro:human:operator",
+      "dpop_public_key": "",
+      "dpop_jkt": "",
+      "key_certification": "",
+      "sealing_public_key": ""
+     }
+    ],
+    "min_distinct_operators": 1,
+    "expires_at_ms": 1700000000000,
+    "trifecta_exception": false,
+    "auto_approve": null,
+    "credentials": []
+   },
+   "target": {
+    "delegate": "4a7838beb2c61ea5c37006138b577b07b7c75c67afbeec0f71dbfdf7aa0fb1b6",
+    "update": "b47e4ecc653a34dc6c23a1628d65a684ba6676dc51af70c556d32ffbf4ebd60e",
+    "update_rotate": "cce835e68d661dc9335ce9665bddfa452ba45b5fbbdae7618a28efea33c9eaa0"
+   }
+  },
+  {
+   "name": "listed counterparty, other case and prefix",
+   "terms": {
+    "controller_did": "did:tenzro:human:controller",
+    "agent_name": "example",
+    "delegation_scope": {
+     "max_transaction_value": "1000",
+     "max_daily_spend": "5000",
+     "allowed_operations": [
+      "transfer",
+      "pay",
+      "create_escrow",
+      "refund_escrow",
+      "remote_grant",
+      "governance.vote",
+      "governance.veto_signal",
+      "settlement_plan",
+      "inference"
+     ],
+     "allowed_payment_protocols": [],
+     "allowed_chains": [
+      "tenzro",
+      "eip155:8453"
+     ],
+     "allowed_models": [],
+     "allowed_counterparties": [
+      "0xABABABABABABABABABABABABABABABABABABABAB"
+     ],
+     "max_hourly_spend": null,
+     "max_actions_per_hour": null,
+     "max_actions_per_day": null,
+     "allowed_hours_utc": null,
+     "step_up_above": null,
+     "step_up_new_counterparty": false,
+     "tainted_value_limit": null,
+     "remote_grant_ttl_ms": null,
+     "remote_limits": [],
+     "cosign_above": null,
+     "asset_limits": [],
+     "min_contract_assurance": 0,
+     "allowed_contracts": [],
+     "governance": null
+    },
+    "capabilities": [],
+    "serving_nodes": [
+     {
+      "machine_did": "did:tenzro:machine:serving-a",
+      "operator_did": "did:tenzro:human:operator",
+      "dpop_public_key": "",
+      "dpop_jkt": "",
+      "key_certification": "",
+      "sealing_public_key": ""
+     }
+    ],
+    "min_distinct_operators": 1,
+    "expires_at_ms": null,
+    "trifecta_exception": false,
+    "auto_approve": null,
+    "credentials": []
+   },
+   "target": {
+    "delegate": "f7d6075c23f92d42249fed80e559855f12ddf3517151930ae798e02b65e2be5a",
+    "update": "b5dec99dc60412f38643e566b7d3b9c40521beb126257bb5eee20c68d91d25ee",
+    "update_rotate": "d9e56917cf5234725223b667c9b8250dae23955b5a7684d2f610898935f13f9c"
+   }
+  },
+  {
+   "name": "model not listed",
+   "terms": {
+    "controller_did": "did:tenzro:human:controller",
+    "agent_name": "example",
+    "delegation_scope": {
+     "max_transaction_value": "1000",
+     "max_daily_spend": "5000",
+     "allowed_operations": [
+      "transfer",
+      "pay",
+      "create_escrow",
+      "refund_escrow",
+      "remote_grant",
+      "governance.vote",
+      "governance.veto_signal",
+      "settlement_plan",
+      "inference"
+     ],
+     "allowed_payment_protocols": [],
+     "allowed_chains": [
+      "tenzro",
+      "eip155:8453"
+     ],
+     "allowed_models": [
+      "qwen3.5-4b"
+     ],
+     "allowed_counterparties": [],
+     "max_hourly_spend": null,
+     "max_actions_per_hour": null,
+     "max_actions_per_day": null,
+     "allowed_hours_utc": null,
+     "step_up_above": null,
+     "step_up_new_counterparty": false,
+     "tainted_value_limit": null,
+     "remote_grant_ttl_ms": null,
+     "remote_limits": [],
+     "cosign_above": null,
+     "asset_limits": [],
+     "min_contract_assurance": 0,
+     "allowed_contracts": [],
+     "governance": null
+    },
+    "capabilities": [],
+    "serving_nodes": [
+     {
+      "machine_did": "did:tenzro:machine:serving-a",
+      "operator_did": "did:tenzro:human:operator",
+      "dpop_public_key": "",
+      "dpop_jkt": "",
+      "key_certification": "",
+      "sealing_public_key": ""
+     }
+    ],
+    "min_distinct_operators": 1,
+    "expires_at_ms": null,
+    "trifecta_exception": false,
+    "auto_approve": null,
+    "credentials": []
+   },
+   "target": {
+    "delegate": "e299c7f0600dfd0659cf2242155a933d09a2186a90903b32923b8fb391173b84",
+    "update": "237e2c8d13b64b841fb9e99314dda6dc5d2f7ad29a089407c14569eeb040b950",
+    "update_rotate": "4d79219c7861d8c1a81783f589260950e4ff62c549a73bf1cd725219ae3783e6"
+   }
+  },
+  {
+   "name": "payment protocol not listed",
+   "terms": {
+    "controller_did": "did:tenzro:human:controller",
+    "agent_name": "example",
+    "delegation_scope": {
+     "max_transaction_value": "1000",
+     "max_daily_spend": "5000",
+     "allowed_operations": [
+      "transfer",
+      "pay",
+      "create_escrow",
+      "refund_escrow",
+      "remote_grant",
+      "governance.vote",
+      "governance.veto_signal",
+      "settlement_plan",
+      "inference"
+     ],
+     "allowed_payment_protocols": [
+      "mpp"
+     ],
+     "allowed_chains": [
+      "tenzro",
+      "eip155:8453"
+     ],
+     "allowed_models": [],
+     "allowed_counterparties": [],
+     "max_hourly_spend": null,
+     "max_actions_per_hour": null,
+     "max_actions_per_day": null,
+     "allowed_hours_utc": null,
+     "step_up_above": null,
+     "step_up_new_counterparty": false,
+     "tainted_value_limit": null,
+     "remote_grant_ttl_ms": null,
+     "remote_limits": [],
+     "cosign_above": null,
+     "asset_limits": [],
+     "min_contract_assurance": 0,
+     "allowed_contracts": [],
+     "governance": null
+    },
+    "capabilities": [],
+    "serving_nodes": [
+     {
+      "machine_did": "did:tenzro:machine:serving-a",
+      "operator_did": "did:tenzro:human:operator",
+      "dpop_public_key": "",
+      "dpop_jkt": "",
+      "key_certification": "",
+      "sealing_public_key": ""
+     }
+    ],
+    "min_distinct_operators": 1,
+    "expires_at_ms": null,
+    "trifecta_exception": false,
+    "auto_approve": null,
+    "credentials": []
+   },
+   "target": {
+    "delegate": "677af54ffb2f370750c0c598f89fafafa90b1c4fe0824fe8f452904e08d5b2db",
+    "update": "1325ef92c1defcf7d7f5dcf8383b812bddb87399eeb74fd67550a12f74e66697",
+    "update_rotate": "62aca2eef71596f91b8e08cc3314616b990a337c6635c3bcafe3a4e35395fcaf"
+   }
+  },
+  {
+   "name": "step-up above threshold",
+   "terms": {
+    "controller_did": "did:tenzro:human:controller",
+    "agent_name": "example",
+    "delegation_scope": {
+     "max_transaction_value": "1000",
+     "max_daily_spend": "5000",
+     "allowed_operations": [
+      "transfer",
+      "pay",
+      "create_escrow",
+      "refund_escrow",
+      "remote_grant",
+      "governance.vote",
+      "governance.veto_signal",
+      "settlement_plan",
+      "inference"
+     ],
+     "allowed_payment_protocols": [],
+     "allowed_chains": [
+      "tenzro",
+      "eip155:8453"
+     ],
+     "allowed_models": [],
+     "allowed_counterparties": [],
+     "max_hourly_spend": null,
+     "max_actions_per_hour": null,
+     "max_actions_per_day": null,
+     "allowed_hours_utc": null,
+     "step_up_above": "500",
+     "step_up_new_counterparty": true,
+     "tainted_value_limit": null,
+     "remote_grant_ttl_ms": null,
+     "remote_limits": [],
+     "cosign_above": null,
+     "asset_limits": [],
+     "min_contract_assurance": 0,
+     "allowed_contracts": [],
+     "governance": null
+    },
+    "capabilities": [],
+    "serving_nodes": [
+     {
+      "machine_did": "did:tenzro:machine:serving-a",
+      "operator_did": "did:tenzro:human:operator",
+      "dpop_public_key": "",
+      "dpop_jkt": "",
+      "key_certification": "",
+      "sealing_public_key": ""
+     }
+    ],
+    "min_distinct_operators": 1,
+    "expires_at_ms": null,
+    "trifecta_exception": false,
+    "auto_approve": null,
+    "credentials": []
+   },
+   "target": {
+    "delegate": "064b82719f289b12c466cc28e0207049c45f7bc98921012dc704baf4b29fb1c6",
+    "update": "ca84dbd257bd63a8e53a55ccdba19ef1842faddf3d213c7e9d5e7b1bd5ac75be",
+    "update_rotate": "bf84e8ee345f572012ac1b2940e76660b9d6cc3b8eb64663ae94571ba425d593"
+   }
+  },
+  {
+   "name": "tainted over limit",
+   "terms": {
+    "controller_did": "did:tenzro:human:controller",
+    "agent_name": "example",
+    "delegation_scope": {
+     "max_transaction_value": "1000",
+     "max_daily_spend": "5000",
+     "allowed_operations": [
+      "transfer",
+      "pay",
+      "create_escrow",
+      "refund_escrow",
+      "remote_grant",
+      "governance.vote",
+      "governance.veto_signal",
+      "settlement_plan",
+      "inference"
+     ],
+     "allowed_payment_protocols": [],
+     "allowed_chains": [
+      "tenzro",
+      "eip155:8453"
+     ],
+     "allowed_models": [],
+     "allowed_counterparties": [],
+     "max_hourly_spend": null,
+     "max_actions_per_hour": null,
+     "max_actions_per_day": null,
+     "allowed_hours_utc": null,
+     "step_up_above": null,
+     "step_up_new_counterparty": false,
+     "tainted_value_limit": "50",
+     "remote_grant_ttl_ms": null,
+     "remote_limits": [],
+     "cosign_above": null,
+     "asset_limits": [],
+     "min_contract_assurance": 0,
+     "allowed_contracts": [],
+     "governance": null
+    },
+    "capabilities": [],
+    "serving_nodes": [
+     {
+      "machine_did": "did:tenzro:machine:serving-a",
+      "operator_did": "did:tenzro:human:operator",
+      "dpop_public_key": "",
+      "dpop_jkt": "",
+      "key_certification": "",
+      "sealing_public_key": ""
+     }
+    ],
+    "min_distinct_operators": 1,
+    "expires_at_ms": null,
+    "trifecta_exception": false,
+    "auto_approve": null,
+    "credentials": []
+   },
+   "target": {
+    "delegate": "d9a434e42a65a4c672e1fa31948f8ef32be8536d460fd30cf0f07736fd0f9f36",
+    "update": "08d1a89efa67a930b1fcf25b05e36dd16de1bf4c7cf7838205b39efaace36cd5",
+    "update_rotate": "cbd40cba1c1fe71d6f23d269401364e9c739a53924167b4b3ce7dd3f58b5fef4"
+   }
+  },
+  {
+   "name": "non-canonical limit",
+   "terms": {
+    "controller_did": "did:tenzro:human:controller",
+    "agent_name": "example",
+    "delegation_scope": {
+     "max_transaction_value": "01000",
+     "max_daily_spend": "5000",
+     "allowed_operations": [
+      "transfer",
+      "pay",
+      "create_escrow",
+      "refund_escrow",
+      "remote_grant",
+      "governance.vote",
+      "governance.veto_signal",
+      "settlement_plan",
+      "inference"
+     ],
+     "allowed_payment_protocols": [],
+     "allowed_chains": [
+      "tenzro",
+      "eip155:8453"
+     ],
+     "allowed_models": [],
+     "allowed_counterparties": [],
+     "max_hourly_spend": null,
+     "max_actions_per_hour": null,
+     "max_actions_per_day": null,
+     "allowed_hours_utc": null,
+     "step_up_above": null,
+     "step_up_new_counterparty": false,
+     "tainted_value_limit": null,
+     "remote_grant_ttl_ms": null,
+     "remote_limits": [],
+     "cosign_above": null,
+     "asset_limits": [],
+     "min_contract_assurance": 0,
+     "allowed_contracts": [],
+     "governance": null
+    },
+    "capabilities": [],
+    "serving_nodes": [
+     {
+      "machine_did": "did:tenzro:machine:serving-a",
+      "operator_did": "did:tenzro:human:operator",
+      "dpop_public_key": "",
+      "dpop_jkt": "",
+      "key_certification": "",
+      "sealing_public_key": ""
+     }
+    ],
+    "min_distinct_operators": 1,
+    "expires_at_ms": null,
+    "trifecta_exception": false,
+    "auto_approve": null,
+    "credentials": []
+   },
+   "target": {
+    "delegate": "3391d252787ecb01ead843bf910ed880041e1b5a4e9525729f65a705d888fa5b",
+    "update": "dd3bc52e9ee95366d96c4d9147d997e79d4c0efc5c8a3ecaf513e2cb62a7f2b6",
+    "update_rotate": "5910945b871b71232c4f0dc4d401d12fc677fcc7e0463bab90210b54c0c05138"
+   }
+  },
+  {
+   "name": "asset within limits",
+   "terms": {
+    "controller_did": "did:tenzro:human:controller",
+    "agent_name": "example",
+    "delegation_scope": {
+     "max_transaction_value": "1000",
+     "max_daily_spend": "5000",
+     "allowed_operations": [
+      "transfer",
+      "pay",
+      "create_escrow",
+      "refund_escrow",
+      "remote_grant",
+      "governance.vote",
+      "governance.veto_signal",
+      "settlement_plan",
+      "inference"
+     ],
+     "allowed_payment_protocols": [],
+     "allowed_chains": [
+      "tenzro",
+      "eip155:8453"
+     ],
+     "allowed_models": [],
+     "allowed_counterparties": [],
+     "max_hourly_spend": null,
+     "max_actions_per_hour": null,
+     "max_actions_per_day": null,
+     "allowed_hours_utc": null,
+     "step_up_above": null,
+     "step_up_new_counterparty": false,
+     "tainted_value_limit": null,
+     "remote_grant_ttl_ms": null,
+     "remote_limits": [],
+     "cosign_above": null,
+     "asset_limits": [
+      {
+       "asset": "usdc",
+       "max_per_tx": "300",
+       "max_per_day": "1000"
+      }
+     ],
+     "min_contract_assurance": 0,
+     "allowed_contracts": [],
+     "governance": null
+    },
+    "capabilities": [],
+    "serving_nodes": [
+     {
+      "machine_did": "did:tenzro:machine:serving-a",
+      "operator_did": "did:tenzro:human:operator",
+      "dpop_public_key": "",
+      "dpop_jkt": "",
+      "key_certification": "",
+      "sealing_public_key": ""
+     }
+    ],
+    "min_distinct_operators": 1,
+    "expires_at_ms": null,
+    "trifecta_exception": false,
+    "auto_approve": null,
+    "credentials": []
+   },
+   "target": {
+    "delegate": "7a6fb6f89c9ed45be3aef907da413caeaaf728a7244633662f47bca9a53f359d",
+    "update": "26754623707127efd83a156455167ffdbedf7cabfa43341a63b0086ab229e8a4",
+    "update_rotate": "69a3d71c75cc19ebac13269ce64ac7c383ff002153fd73e6c10770a0c932f427"
+   }
+  },
+  {
+   "name": "amount beyond 2^53 at the limit",
+   "terms": {
+    "controller_did": "did:tenzro:human:controller",
+    "agent_name": "example",
+    "delegation_scope": {
+     "max_transaction_value": "18446744073709551615",
+     "max_daily_spend": null,
+     "allowed_operations": [
+      "transfer",
+      "pay",
+      "create_escrow",
+      "refund_escrow",
+      "remote_grant",
+      "governance.vote",
+      "governance.veto_signal",
+      "settlement_plan",
+      "inference"
+     ],
+     "allowed_payment_protocols": [],
+     "allowed_chains": [
+      "tenzro",
+      "eip155:8453"
+     ],
+     "allowed_models": [],
+     "allowed_counterparties": [],
+     "max_hourly_spend": null,
+     "max_actions_per_hour": null,
+     "max_actions_per_day": null,
+     "allowed_hours_utc": null,
+     "step_up_above": null,
+     "step_up_new_counterparty": false,
+     "tainted_value_limit": null,
+     "remote_grant_ttl_ms": null,
+     "remote_limits": [],
+     "cosign_above": null,
+     "asset_limits": [],
+     "min_contract_assurance": 0,
+     "allowed_contracts": [],
+     "governance": null
+    },
+    "capabilities": [],
+    "serving_nodes": [
+     {
+      "machine_did": "did:tenzro:machine:serving-a",
+      "operator_did": "did:tenzro:human:operator",
+      "dpop_public_key": "",
+      "dpop_jkt": "",
+      "key_certification": "",
+      "sealing_public_key": ""
+     }
+    ],
+    "min_distinct_operators": 1,
+    "expires_at_ms": null,
+    "trifecta_exception": false,
+    "auto_approve": null,
+    "credentials": []
+   },
+   "target": {
+    "delegate": "b38b13f3fe6e966beed732d54b8725531b287592c6bc5c324fa8b3024a5dcaf5",
+    "update": "a82196be323904e11ca0481bc22025c3c2c9732559c12d616da82d6d713f3a70",
+    "update_rotate": "daa2dc4cf0c65e5ad8430bb5b9158e1d3eb5f51812ad7d03a04138e98ebe864a"
+   }
+  }
+ ]
+}

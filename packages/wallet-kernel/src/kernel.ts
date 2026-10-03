@@ -8,17 +8,11 @@ import { type PolicyContext, enforcePolicy } from './consent/index.ts';
 import type {
   AcpPort,
   AgentPaymentPort,
-  Ap2Port,
   AuthApprovalPort,
-  Erc8004Port,
   EscrowPort,
   HtlcEscrowPort,
-  NanopaymentPort,
-  PaymentRailsPort,
-  SessionKeyPort,
   TeeAttestationPort,
 } from './ports/agent/index.ts';
-import type { BridgeAdapterId, BridgeRoutePort } from './ports/bridge/index.ts';
 import { selectRoute } from './router/index.ts';
 import type { UnifiedBalance } from './types/asset.ts';
 import type { Consent, SpendingPolicy } from './types/consent.ts';
@@ -47,20 +41,13 @@ import type { SurfaceName } from './types/surface.ts';
  * setup flows), etc.
  */
 export interface AgentPortsBundle {
-  readonly ap2?: Ap2Port;
-  readonly erc8004?: Erc8004Port;
   readonly agentPayment?: AgentPaymentPort;
-  readonly nanopayment?: NanopaymentPort;
   /** Human-in-the-loop pending-approvals queue (auth engine). */
   readonly authApproval?: AuthApprovalPort;
   /** TEE attestation verification for services that run in a provider's enclave. */
   readonly teeAttestation?: TeeAttestationPort;
-  /** Scoped delegations (substrate for AP2 / Mastercard / x402 caps). */
-  readonly sessionKey?: SessionKeyPort;
   /** Native escrow primitive (CreateEscrow/Release/Refund). */
   readonly escrow?: EscrowPort;
-  /** Payment rails (MPP / x402 / AP2 / Visa TAP / Mastercard) settlement. */
-  readonly paymentRails?: PaymentRailsPort;
   /** OpenAI ACP (Agentic Commerce Protocol) buyer-side. SDK adapter pending. */
   readonly acp?: AcpPort;
   /** HTLC cross-chain escrow (v2 — DESIGN.md §11.7). SDK adapter pending. */
@@ -75,13 +62,8 @@ export interface WalletKernelOptions {
   readonly delegationScope?: SpendingPolicy;
   /** Per-session policy, set when a session is opened. */
   readonly sessionPolicy?: SpendingPolicy;
-  /** Optional agent-payment ports (AP2, ERC-8004, agent-payment, nano).
-   *  When omitted, `kernel.agent.<port>` accessors throw. */
+  /** Optional agent ports. When omitted, `kernel.agent.<port>` accessors throw. */
   readonly agentPorts?: AgentPortsBundle;
-  /** Optional bridge router adapters (LI.FI / CCIP / LayerZero), keyed by
-   *  `adapterId`. Consumers query each for a quote and pick the winner;
-   *  the kernel never picks for them. Empty by default; M8 work. */
-  readonly bridgeAdapters?: ReadonlyArray<BridgeRoutePort>;
 }
 
 export class WalletKernel {
@@ -91,7 +73,6 @@ export class WalletKernel {
   readonly #delegationScope: SpendingPolicy | undefined;
   readonly #sessionPolicy: SpendingPolicy | undefined;
   readonly #agentPorts: AgentPortsBundle;
-  readonly #bridgeAdapters: ReadonlyMap<BridgeAdapterId, BridgeRoutePort>;
   #spentToday = 0n;
 
   constructor(opts: WalletKernelOptions) {
@@ -101,37 +82,17 @@ export class WalletKernel {
     this.#delegationScope = opts.delegationScope;
     this.#sessionPolicy = opts.sessionPolicy;
     this.#agentPorts = opts.agentPorts ?? {};
-    this.#bridgeAdapters = new Map((opts.bridgeAdapters ?? []).map((a) => [a.adapterId, a]));
   }
 
   /**
-   * Bridge router accessors. Consumers fan out across all registered
-   * adapters for `quote()` (cheapest/fastest pick is theirs to make),
-   * then call `build()`/`track()` on the chosen adapter.
-   */
-  readonly bridge = {
-    /** All registered adapters, in registration order. */
-    adapters: (): readonly BridgeRoutePort[] => Array.from(this.#bridgeAdapters.values()),
-    /** Look up a single adapter by `adapterId`. */
-    get: (id: BridgeAdapterId): BridgeRoutePort | undefined => this.#bridgeAdapters.get(id),
-  } as const;
-
-  /**
-   * Agent-payment ports — AP2 (mandate verification + session lifecycle),
-   * ERC-8004 (agent registry calldata), agent-payment (spending policy +
-   * payForService), nanopayment (per-token streaming channels). Each
-   * accessor throws if the port wasn't configured at construction time.
+   * Agent ports. Each accessor throws if the port wasn't configured at
+   * construction time.
    */
   readonly agent = {
-    ap2: (): Ap2Port => this.#requireAgent('ap2'),
-    erc8004: (): Erc8004Port => this.#requireAgent('erc8004'),
     agentPayment: (): AgentPaymentPort => this.#requireAgent('agentPayment'),
-    nanopayment: (): NanopaymentPort => this.#requireAgent('nanopayment'),
     authApproval: (): AuthApprovalPort => this.#requireAgent('authApproval'),
     teeAttestation: (): TeeAttestationPort => this.#requireAgent('teeAttestation'),
-    sessionKey: (): SessionKeyPort => this.#requireAgent('sessionKey'),
     escrow: (): EscrowPort => this.#requireAgent('escrow'),
-    paymentRails: (): PaymentRailsPort => this.#requireAgent('paymentRails'),
     acp: (): AcpPort => this.#requireAgent('acp'),
     htlcEscrow: (): HtlcEscrowPort => this.#requireAgent('htlcEscrow'),
   } as const;

@@ -1,153 +1,132 @@
 /**
- * AgentPaymentSdkAdapter — wraps the SDK's `AgentPaymentClient`.
+ * AgentPaymentSdkAdapter: `AgentPaymentClient.getDailySpend` for the spend and
+ * `AuthClient.updateAgentTerms` for limits.
  *
- * snake_case + decimal-string ↔ camelCase + bigint shape mapping. The
- * authoritative spending policy lives at the node and is enforced there;
- * the wallet just originates the call.
+ * Before the passkey signs a terms change, the adapter checks that the terms
+ * the node completed are the ones requested: the node may only fill in the
+ * serving nodes' certified keys. Equal custody targets, with the completed
+ * serving nodes substituted into the request, prove nothing else moved.
  */
 
-import type { AgentPaymentClient } from 'tenzro-sdk';
+import type { AgentPaymentClient, AuthClient } from 'tenzro-sdk';
+import { toHex } from '../../../custody/passkey/bytes.ts';
+import type { CustodyAuthorization } from '../../../custody/passkey/gate.ts';
 import type {
   AgentPaymentPort,
-  AgentPaymentReceipt,
-  AgentSpendingPolicy,
-  AgentTransactionRecord,
+  AgentTermsUpdated,
   DailySpend,
-  PayForServiceRequest,
-  SetPolicyRequest,
-  SetPolicyResult,
+  UpdateAgentTermsRequest,
 } from '../agent-payment.ts';
-
-interface RawSpendingPolicy {
-  agent_did: string;
-  max_per_transaction: string;
-  max_daily_spend: string;
-  allowed_services: string[];
-  active: boolean;
-}
-
-interface RawAgentPaymentReceipt {
-  receipt_id: string;
-  agent_did: string;
-  provider: string;
-  amount: string;
-  service_type: string;
-  tx_hash: string;
-}
+import { type AgentTermsWire, agentTermsTarget } from '../agent-terms.ts';
 
 interface RawDailySpend {
   agent_did: string;
-  total_spent: string;
-  daily_limit: string;
-  remaining: string;
-  transaction_count: number;
+  current_daily_spend: string;
+  max_daily_spend: string | null;
+  remaining: string | null;
 }
 
-interface RawAgentTransaction {
-  tx_id: string;
+interface RawChallenge {
+  challenge_id: string;
+  challenge_hex: string;
+  account_address: string;
+  expires_in_secs: number;
+  delegation?: Record<string, unknown>;
+}
+
+interface RawTermsUpdate {
   agent_did: string;
-  recipient: string;
-  amount: string;
-  service_type: string;
-  status: string;
+  delegation: Record<string, unknown>;
+  tokens_revoked?: number;
 }
 
 export interface AgentPaymentClientLike {
-  setSpendingPolicy(
-    agentDid: string,
-    policy: {
-      max_per_transaction: string;
-      max_daily_spend: string;
-      allowed_services: string[];
-      active: boolean;
-    },
-  ): Promise<{ agent_did: string; status: string }>;
-  getSpendingPolicy(agentDid: string): Promise<RawSpendingPolicy>;
-  payForService(
-    agentDid: string,
-    provider: string,
-    amount: string,
-    serviceType: string,
-  ): Promise<RawAgentPaymentReceipt>;
-  getDailySpend(agentDid: string): Promise<RawDailySpend>;
-  listAgentTransactions(agentDid: string, limit?: number): Promise<RawAgentTransaction[]>;
+  getDailySpend(agentDid: string): Promise<RawDailySpend | null>;
 }
 
-function mapPolicy(raw: RawSpendingPolicy): AgentSpendingPolicy {
-  return {
-    agentDid: raw.agent_did,
-    maxPerTransaction: BigInt(raw.max_per_transaction),
-    maxDailySpend: BigInt(raw.max_daily_spend),
-    allowedServices: raw.allowed_services,
-    active: raw.active,
-  };
+export interface AgentTermsClientLike {
+  updateAgentTerms(
+    accountAddress: string,
+    agentDid: string,
+    terms: AgentTermsWire,
+    rotateTokens: boolean,
+    authorize: (challenge: RawChallenge) => Promise<CustodyAuthorization>,
+  ): Promise<RawTermsUpdate>;
+}
+
+const big = (v: string | null): bigint | null => (v === null ? null : BigInt(v));
+
+/** Refuses completed terms that differ from `requested` in anything but serving-node keys. */
+export function checkCompletedTerms(
+  requested: AgentTermsWire,
+  completed: AgentTermsWire,
+  rotateTokens: boolean,
+): string {
+  const target = toHex(agentTermsTarget(completed, rotateTokens));
+  const expected = toHex(
+    agentTermsTarget({ ...requested, serving_nodes: completed.serving_nodes }, rotateTokens),
+  );
+  if (target !== expected) {
+    throw new Error('The node returned terms that differ from the ones requested; nothing was signed.');
+  }
+  const ids = (t: AgentTermsWire) =>
+    t.serving_nodes.map((n) => `${n.machine_did}|${n.operator_did}`).join(',');
+  if (ids(requested) !== ids(completed)) {
+    throw new Error('The node changed the serving nodes; nothing was signed.');
+  }
+  return target;
 }
 
 export class AgentPaymentSdkAdapter implements AgentPaymentPort {
-  constructor(private readonly client: AgentPaymentClientLike) {}
+  constructor(
+    private readonly spend: AgentPaymentClientLike,
+    private readonly terms: AgentTermsClientLike,
+  ) {}
 
-  static fromClient(client: AgentPaymentClient): AgentPaymentSdkAdapter {
-    return new AgentPaymentSdkAdapter(client as unknown as AgentPaymentClientLike);
+  static fromClients(spend: AgentPaymentClient, auth: AuthClient): AgentPaymentSdkAdapter {
+    return new AgentPaymentSdkAdapter(
+      spend as unknown as AgentPaymentClientLike,
+      auth as unknown as AgentTermsClientLike,
+    );
   }
 
-  async setSpendingPolicy(req: SetPolicyRequest): Promise<SetPolicyResult> {
-    const raw = await this.client.setSpendingPolicy(req.agentDid, {
-      max_per_transaction: req.maxPerTransaction.toString(),
-      max_daily_spend: req.maxDailySpend.toString(),
-      allowed_services: [...req.allowedServices],
-      active: req.active,
-    });
-    return { agentDid: raw.agent_did, status: raw.status };
+  async getDailySpend(agentDid: string): Promise<DailySpend | null> {
+    const raw = await this.spend.getDailySpend(agentDid);
+    if (!raw) return null;
+    return {
+      agentDid: raw.agent_did,
+      spentToday: BigInt(raw.current_daily_spend),
+      dailyLimit: big(raw.max_daily_spend),
+      remaining: big(raw.remaining),
+    };
   }
 
-  async getSpendingPolicy(agentDid: string): Promise<AgentSpendingPolicy | null> {
-    try {
-      return mapPolicy(await this.client.getSpendingPolicy(agentDid));
-    } catch {
-      return null;
-    }
-  }
-
-  async payForService(req: PayForServiceRequest): Promise<AgentPaymentReceipt> {
-    const raw = await this.client.payForService(
+  async updateAgentTerms(req: UpdateAgentTermsRequest): Promise<AgentTermsUpdated> {
+    const raw = await this.terms.updateAgentTerms(
+      req.accountAddress,
       req.agentDid,
-      req.provider,
-      req.amount.toString(),
-      req.serviceType,
+      req.terms,
+      req.rotateTokens,
+      async (challenge) => {
+        if (!challenge.delegation) {
+          throw new Error('The node returned no completed terms; nothing was signed.');
+        }
+        const delegation = challenge.delegation as unknown as AgentTermsWire;
+        const targetHex = checkCompletedTerms(req.terms, delegation, req.rotateTokens);
+        return req.authorize({
+          challenge_id: challenge.challenge_id,
+          challenge_hex: challenge.challenge_hex,
+          account_address: challenge.account_address,
+          expires_in_secs: challenge.expires_in_secs,
+          delegation,
+          targetHex,
+        });
+      },
     );
     return {
-      receiptId: raw.receipt_id,
       agentDid: raw.agent_did,
-      provider: raw.provider,
-      amount: BigInt(raw.amount),
-      serviceType: raw.service_type,
-      txHash: raw.tx_hash,
+      delegation: raw.delegation as unknown as AgentTermsWire,
+      tokensRevoked: raw.tokens_revoked ?? 0,
     };
-  }
-
-  async getDailySpend(agentDid: string): Promise<DailySpend> {
-    const raw = await this.client.getDailySpend(agentDid);
-    return {
-      agentDid: raw.agent_did,
-      totalSpent: BigInt(raw.total_spent),
-      dailyLimit: BigInt(raw.daily_limit),
-      remaining: BigInt(raw.remaining),
-      transactionCount: raw.transaction_count,
-    };
-  }
-
-  async listAgentTransactions(
-    agentDid: string,
-    limit?: number,
-  ): Promise<readonly AgentTransactionRecord[]> {
-    const raw = await this.client.listAgentTransactions(agentDid, limit);
-    return raw.map((r) => ({
-      txId: r.tx_id,
-      agentDid: r.agent_did,
-      recipient: r.recipient,
-      amount: BigInt(r.amount),
-      serviceType: r.service_type,
-      status: r.status,
-    }));
   }
 }

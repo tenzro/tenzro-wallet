@@ -1,82 +1,56 @@
 /**
- * AgentPaymentPort — spending policy + per-call agent payment.
+ * AgentPaymentPort: a delegated agent's limits and its spend.
  *
- * Agents on Tenzro carry their own spending policies (max-per-tx, daily
- * cap, allowed service types) enforced server-side. The SDK calls
- * `tenzro_setSpendingPolicy` / `tenzro_getSpendingPolicy` and the node
- * runs `SpendingPolicy::is_allowed()` before every transfer. This port
- * exposes those calls plus `payForService` (a one-shot, policy-checked
- * payment from agent → service-provider).
- *
- * The wallet does NOT make policy decisions itself — it asks the node and
- * the node enforces. A malicious wallet client cannot forge a higher
- * limit; the wallet's role is to surface state to the user and originate
- * the call.
+ * An agent's limits are its terms in consensus. The controller changes them
+ * with `tenzro_updateAgentTerms`, approved by a passkey on the account; the
+ * node enforces them on every action. The wallet reads the spend and
+ * originates the change; it never decides a limit itself.
  */
 
-export interface AgentSpendingPolicy {
-  readonly agentDid: string;
-  readonly maxPerTransaction: bigint;
-  readonly maxDailySpend: bigint;
-  readonly allowedServices: readonly string[];
-  readonly active: boolean;
-}
-
-export interface SetPolicyRequest {
-  readonly agentDid: string;
-  readonly maxPerTransaction: bigint;
-  readonly maxDailySpend: bigint;
-  readonly allowedServices: readonly string[];
-  readonly active: boolean;
-}
-
-export interface SetPolicyResult {
-  readonly agentDid: string;
-  readonly status: string;
-}
-
-export interface PayForServiceRequest {
-  readonly agentDid: string;
-  /** Provider's DID or hex address. */
-  readonly provider: string;
-  readonly amount: bigint;
-  /** Free-form service-type tag (e.g. "inference", "rpc-call", "storage"). */
-  readonly serviceType: string;
-}
-
-export interface AgentPaymentReceipt {
-  readonly receiptId: string;
-  readonly agentDid: string;
-  readonly provider: string;
-  readonly amount: bigint;
-  readonly serviceType: string;
-  readonly txHash: string;
-}
+import type { CustodyAuthorization } from '../../custody/passkey/gate.ts';
+import type { AgentTermsWire } from './agent-terms.ts';
 
 export interface DailySpend {
   readonly agentDid: string;
-  readonly totalSpent: bigint;
-  readonly dailyLimit: bigint;
-  readonly remaining: bigint;
-  readonly transactionCount: number;
+  /** Spent today, wei. */
+  readonly spentToday: bigint;
+  /** The terms' daily limit, when they set one. */
+  readonly dailyLimit: bigint | null;
+  /** What the daily limit leaves, when the terms set one. */
+  readonly remaining: bigint | null;
 }
 
-export interface AgentTransactionRecord {
-  readonly txId: string;
+/** The challenge a terms change asks the passkey to sign. */
+export interface AgentTermsChallenge {
+  readonly challenge_id: string;
+  readonly challenge_hex: string;
+  readonly account_address: string;
+  readonly expires_in_secs: number;
+  /** The terms as the node completed them (serving nodes certified). */
+  readonly delegation: AgentTermsWire;
+  /** `agentTermsTarget(delegation, rotateTokens)`, hex: what the approval binds. */
+  readonly targetHex: string;
+}
+
+export interface UpdateAgentTermsRequest {
+  /** The controller's account. */
+  readonly accountAddress: string;
   readonly agentDid: string;
-  readonly recipient: string;
-  readonly amount: bigint;
-  readonly serviceType: string;
-  readonly status: string;
+  /** The full new terms. */
+  readonly terms: AgentTermsWire;
+  /** Also withdraw the agent's live access tokens. */
+  readonly rotateTokens: boolean;
+  /** Signs the challenge with a passkey on the account. */
+  readonly authorize: (challenge: AgentTermsChallenge) => Promise<CustodyAuthorization>;
+}
+
+export interface AgentTermsUpdated {
+  readonly agentDid: string;
+  readonly delegation: AgentTermsWire;
+  readonly tokensRevoked: number;
 }
 
 export interface AgentPaymentPort {
-  setSpendingPolicy(req: SetPolicyRequest): Promise<SetPolicyResult>;
-  getSpendingPolicy(agentDid: string): Promise<AgentSpendingPolicy | null>;
-  payForService(req: PayForServiceRequest): Promise<AgentPaymentReceipt>;
-  getDailySpend(agentDid: string): Promise<DailySpend>;
-  listAgentTransactions(
-    agentDid: string,
-    limit?: number,
-  ): Promise<readonly AgentTransactionRecord[]>;
+  getDailySpend(agentDid: string): Promise<DailySpend | null>;
+  updateAgentTerms(req: UpdateAgentTermsRequest): Promise<AgentTermsUpdated>;
 }

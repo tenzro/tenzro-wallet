@@ -40,7 +40,7 @@ describe('buildEip6963Announcement', () => {
       icon: VALID_ICON,
     });
     expect(info.rdns).toBe(TENZRO_PROVIDER_RDNS);
-    expect(TENZRO_PROVIDER_RDNS).toBe('network.tenzro.wallet');
+    expect(TENZRO_PROVIDER_RDNS).toBe('xyz.tenzro.wallet');
   });
 
   it('overrides name + rdns when supplied', () => {

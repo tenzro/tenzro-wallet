@@ -1,134 +1,29 @@
 /**
- * Kernel-level test for the agent-payment ports bundle. Pins:
+ * Kernel-level test for the agent ports bundle. Pins:
  *   (a) `kernel.agent.<port>()` returns the configured port,
- *   (b) accessing an unconfigured port throws a clear error,
- *   (c) the kernel doesn't accidentally hold references between unrelated ports.
+ *   (b) accessing an unconfigured port throws a clear error.
  */
 
 import { describe, expect, it } from 'vitest';
 import { testIdentity } from './identity/test-identity.ts';
 import { WalletKernel } from './kernel.ts';
-import type {
-  AgentPaymentPort,
-  Ap2Port,
-  Erc8004Port,
-  NanopaymentPort,
-} from './ports/agent/index.ts';
+import type { AgentPaymentPort } from './ports/agent/index.ts';
 import type { SurfaceModule } from './types/surface-module.ts';
 import type { SurfaceName } from './types/surface.ts';
 
-function stubAp2(): Ap2Port {
-  return {
-    verifyMandate: async () => ({ valid: true, mandateType: 'Intent' }),
-    validateMandatePair: async () => ({ valid: true, delegationEnforced: false }),
-    createSession: async () => ({
-      sessionId: 's-1',
-      agentDid: 'did:tenzro:agent',
-      providerDid: 'did:tenzro:p',
-      service: 'inference',
-      maxAmount: 1n,
-      totalSpent: 0n,
-      asset: 'TNZO',
-      status: 'active',
-    }),
-    authorizePayment: async (sid, amount) => ({
-      authorizationId: 'a-1',
-      sessionId: sid,
-      amount,
-      status: 'approved',
-    }),
-    executePayment: async (sid) => ({
-      receiptId: 'r-1',
-      sessionId: sid,
-      amount: 1n,
-      asset: 'TNZO',
-    }),
-    cancelSession: async (sid) => ({ sessionId: sid, status: 'cancelled' }),
-    getSession: async () => null,
-    listAgentSessions: async () => [],
-  };
-}
-
-function stubErc8004(): Erc8004Port {
-  return {
-    deriveAgentId: async (owner, salt) => ({
-      agentId: ('0x' + 'aa'.repeat(32)) as `0x${string}`,
-      owner,
-      salt,
-    }),
-    encodeRegister: async () => ({
-      selector: '0x12345678',
-      calldata: '0x12345678',
-    }),
-    encodeGetAgent: async () => ({ selector: '0x', calldata: '0x' }),
-    decodeGetAgent: async () => ({
-      registrationDataUri: 'ipfs://Qm',
-      owner: ('0x' + '11'.repeat(20)) as `0x${string}`,
-    }),
-    encodeFeedback: async () => ({ selector: '0x', calldata: '0x' }),
-    encodeRequestValidation: async () => ({ selector: '0x', calldata: '0x' }),
-    encodeSubmitValidation: async () => ({ selector: '0x', calldata: '0x' }),
-  };
-}
-
 function stubAgentPayment(): AgentPaymentPort {
   return {
-    setSpendingPolicy: async (req) => ({ agentDid: req.agentDid, status: 'ok' }),
-    getSpendingPolicy: async () => null,
-    payForService: async (req) => ({
-      receiptId: 'r-1',
-      agentDid: req.agentDid,
-      provider: req.provider,
-      amount: req.amount,
-      serviceType: req.serviceType,
-      txHash: '0xabc',
-    }),
     getDailySpend: async (agentDid) => ({
       agentDid,
-      totalSpent: 0n,
-      dailyLimit: 1n,
-      remaining: 1n,
-      transactionCount: 0,
+      spentToday: 10n,
+      dailyLimit: 100n,
+      remaining: 90n,
     }),
-    listAgentTransactions: async () => [],
-  };
-}
-
-function stubNanopayment(): NanopaymentPort {
-  return {
-    openChannel: async (req) => ({
-      channelId: 'ch-1',
-      payer: req.payer,
-      payee: req.payee,
-      deposit: req.deposit,
-      balance: req.deposit,
-      totalPaid: 0n,
-      asset: req.asset ?? 'TNZO',
-      paymentCount: 0,
-      status: 'open',
+    updateAgentTerms: async (req) => ({
+      agentDid: req.agentDid,
+      delegation: req.terms,
+      tokensRevoked: 0,
     }),
-    sendNanopayment: async (req) => ({
-      paymentId: 'p-1',
-      channelId: req.channelId,
-      amount: req.amount,
-      sequence: 1,
-    }),
-    flushBatch: async (channelId) => ({
-      channelId,
-      paymentCount: 0,
-      totalAmount: 0n,
-      txHash: '0x',
-      status: 'settled',
-    }),
-    closeChannel: async (channelId) => ({
-      channelId,
-      finalAmount: 0n,
-      refunded: 0n,
-      txHash: '0x',
-      status: 'closed',
-    }),
-    getChannel: async () => null,
-    listChannels: async () => [],
   };
 }
 
@@ -140,39 +35,10 @@ describe('WalletKernel agent-ports bundle', () => {
     const kernel = new WalletKernel({
       identity,
       surfaces: noSurfaces,
-      agentPorts: {
-        ap2: stubAp2(),
-        erc8004: stubErc8004(),
-        agentPayment: stubAgentPayment(),
-        nanopayment: stubNanopayment(),
-      },
+      agentPorts: { agentPayment: stubAgentPayment() },
     });
-
-    const v = await kernel.agent.ap2().verifyMandate({});
-    expect(v.valid).toBe(true);
-
-    const derived = await kernel.agent
-      .erc8004()
-      .deriveAgentId(
-        ('0x' + '11'.repeat(20)) as `0x${string}`,
-        ('0x' + '22'.repeat(32)) as `0x${string}`,
-      );
-    expect(derived.agentId.startsWith('0x')).toBe(true);
-
-    const receipt = await kernel.agent.agentPayment().payForService({
-      agentDid: 'did:tenzro:agent',
-      provider: '0xprovider',
-      amount: 1_000n,
-      serviceType: 'inference',
-    });
-    expect(receipt.txHash).toBe('0xabc');
-
-    const channel = await kernel.agent.nanopayment().openChannel({
-      payer: '0xa',
-      payee: '0xb',
-      deposit: 1_000n,
-    });
-    expect(channel.status).toBe('open');
+    const spend = await kernel.agent.agentPayment().getDailySpend('did:tenzro:agent');
+    expect(spend?.remaining).toBe(90n);
   });
 
   it('throws a clear error when a port is not configured', async () => {
@@ -180,21 +46,16 @@ describe('WalletKernel agent-ports bundle', () => {
     const kernel = new WalletKernel({
       identity,
       surfaces: noSurfaces,
-      // Only ap2 wired; the other three should throw on access.
-      agentPorts: { ap2: stubAp2() },
+      agentPorts: { agentPayment: stubAgentPayment() },
     });
-
-    expect(() => kernel.agent.erc8004()).toThrow(/agent port "erc8004" not configured/);
-    expect(() => kernel.agent.agentPayment()).toThrow(/agent port "agentPayment" not configured/);
-    expect(() => kernel.agent.nanopayment()).toThrow(/agent port "nanopayment" not configured/);
-    // ap2 still works.
-    expect(kernel.agent.ap2()).toBeTruthy();
+    expect(() => kernel.agent.escrow()).toThrow(/agent port "escrow" not configured/);
+    expect(kernel.agent.agentPayment()).toBeTruthy();
   });
 
   it('accessing any agent port throws when agentPorts is omitted entirely', async () => {
     const identity = await testIdentity({ uuid: 'kernel-agent-3' });
     const kernel = new WalletKernel({ identity, surfaces: noSurfaces });
-    expect(() => kernel.agent.ap2()).toThrow(/agent port "ap2" not configured/);
+    expect(() => kernel.agent.agentPayment()).toThrow(/agent port "agentPayment" not configured/);
   });
 
   it('htlcEscrow accessor mirrors the agent-port pattern', async () => {
@@ -214,39 +75,5 @@ describe('WalletKernel agent-ports bundle', () => {
 
     const unwired = new WalletKernel({ identity, surfaces: noSurfaces });
     expect(() => unwired.agent.htlcEscrow()).toThrow(/agent port "htlcEscrow" not configured/);
-  });
-
-  it('bridge.adapters() returns registered adapters; bridge.get() looks up by id', async () => {
-    const identity = await testIdentity({ uuid: 'kernel-bridge-1' });
-    const stub = (id: 'lifi' | 'ccip' | 'layerzero') => ({
-      adapterId: id,
-      quote: async () => {
-        throw new Error('test');
-      },
-      build: async () => {
-        throw new Error('test');
-      },
-      // eslint-disable-next-line @typescript-eslint/require-await
-      track: async function* () {
-        throw new Error('test');
-      },
-    });
-    const lifi = stub('lifi');
-    const ccip = stub('ccip');
-    const kernel = new WalletKernel({
-      identity,
-      surfaces: noSurfaces,
-      bridgeAdapters: [lifi, ccip],
-    });
-    expect(kernel.bridge.adapters()).toHaveLength(2);
-    expect(kernel.bridge.get('lifi')).toBe(lifi);
-    expect(kernel.bridge.get('ccip')).toBe(ccip);
-    expect(kernel.bridge.get('layerzero')).toBeUndefined();
-  });
-
-  it('bridge.adapters() defaults to empty when none registered', async () => {
-    const identity = await testIdentity({ uuid: 'kernel-bridge-2' });
-    const kernel = new WalletKernel({ identity, surfaces: noSurfaces });
-    expect(kernel.bridge.adapters()).toEqual([]);
   });
 });

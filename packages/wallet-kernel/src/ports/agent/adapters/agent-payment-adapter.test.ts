@@ -1,156 +1,126 @@
-/**
- * Pin the agent-payment adapter's wire-shape mapping. Spending policies are
- * authoritative server-side; the adapter is the wallet's shape-translation
- * layer for getting them in/out as bigints + camelCase.
- */
-
 import { describe, expect, it } from 'vitest';
-import { type AgentPaymentClientLike, AgentPaymentSdkAdapter } from './agent-payment-adapter.ts';
+import { toHex } from '../../../custody/passkey/bytes.ts';
+import type { CustodyAuthorization } from '../../../custody/passkey/gate.ts';
+import type { AgentTermsChallenge } from '../agent-payment.ts';
+import { type AgentTermsWire, agentTermsTarget } from '../agent-terms.ts';
+import vectors from '../fixtures/agent-terms-targets.json' with { type: 'json' };
+import {
+  type AgentPaymentClientLike,
+  AgentPaymentSdkAdapter,
+  type AgentTermsClientLike,
+} from './agent-payment-adapter.ts';
 
-interface Call {
-  readonly method: string;
-  readonly args: readonly unknown[];
-}
+const cases = vectors.cases as unknown as {
+  name: string;
+  terms: AgentTermsWire;
+  target: { delegate: string; update: string; update_rotate: string };
+}[];
 
-function fakeClient(overrides: Partial<AgentPaymentClientLike> = {}): {
-  client: AgentPaymentClientLike;
-  calls: Call[];
-} {
-  const calls: Call[] = [];
-  const policy = {
-    agent_did: 'did:tenzro:agent',
-    max_per_transaction: '5000000000000000000',
-    max_daily_spend: '50000000000000000000',
-    allowed_services: ['inference', 'storage'],
-    active: true,
-  };
-  const client: AgentPaymentClientLike = {
-    setSpendingPolicy: async (agentDid, body) => {
-      calls.push({ method: 'setSpendingPolicy', args: [agentDid, body] });
-      return { agent_did: agentDid, status: 'ok' };
-    },
-    getSpendingPolicy: async (agentDid) => {
-      calls.push({ method: 'getSpendingPolicy', args: [agentDid] });
-      return policy;
-    },
-    payForService: async (agentDid, provider, amount, serviceType) => {
-      calls.push({
-        method: 'payForService',
-        args: [agentDid, provider, amount, serviceType],
+describe('agentTermsTarget matches the node', () => {
+  for (const c of cases) {
+    it(c.name, () => {
+      expect(toHex(agentTermsTarget(c.terms))).toBe(c.target.delegate);
+      expect(toHex(agentTermsTarget(c.terms, false))).toBe(c.target.update);
+      expect(toHex(agentTermsTarget(c.terms, true))).toBe(c.target.update_rotate);
+    });
+  }
+});
+
+const base = cases[0]!.terms;
+const requested: AgentTermsWire = {
+  ...base,
+  serving_nodes: base.serving_nodes.map((n) => ({ ...n, dpop_public_key: '', dpop_jkt: '' })),
+  delegation_scope: { ...base.delegation_scope, max_daily_spend: '7000' },
+};
+const completed: AgentTermsWire = {
+  ...requested,
+  serving_nodes: requested.serving_nodes.map((n) => ({ ...n, dpop_public_key: 'ab', dpop_jkt: 'cd' })),
+};
+const auth: CustodyAuthorization = {
+  challenge_id: 'c1',
+  credential_id_hex: '0x01',
+  assertion: {} as CustodyAuthorization['assertion'],
+  ml_dsa_signature_hex: '0x02',
+};
+
+function termsClient(returned: AgentTermsWire, seen: AgentTermsChallenge[]): AgentTermsClientLike {
+  return {
+    async updateAgentTerms(account, agentDid, _terms, rotate, authorize) {
+      const a = await authorize({
+        challenge_id: 'c1',
+        challenge_hex: `0x${'11'.repeat(32)}`,
+        account_address: account,
+        expires_in_secs: 60,
+        delegation: returned as unknown as Record<string, unknown>,
       });
-      return {
-        receipt_id: 'rcpt-1',
-        agent_did: agentDid,
-        provider,
-        amount,
-        service_type: serviceType,
-        tx_hash: '0xabc',
-      };
+      expect(a).toBe(auth);
+      expect(rotate).toBe(true);
+      return { agent_did: agentDid, delegation: returned as unknown as Record<string, unknown>, tokens_revoked: 2 };
     },
-    getDailySpend: async (agentDid) => {
-      calls.push({ method: 'getDailySpend', args: [agentDid] });
-      return {
-        agent_did: agentDid,
-        total_spent: '1000000000000000000',
-        daily_limit: '50000000000000000000',
-        remaining: '49000000000000000000',
-        transaction_count: 3,
-      };
-    },
-    listAgentTransactions: async (agentDid, limit) => {
-      calls.push({ method: 'listAgentTransactions', args: [agentDid, limit] });
-      return [
-        {
-          tx_id: 't-1',
-          agent_did: agentDid,
-          recipient: '0xprovider',
-          amount: '1000000000000000000',
-          service_type: 'inference',
-          status: 'confirmed',
-        },
-      ];
-    },
-    ...overrides,
   };
-  return { client, calls };
 }
+
+const noSpend: AgentPaymentClientLike = { getDailySpend: async () => null };
 
 describe('AgentPaymentSdkAdapter', () => {
-  it('setSpendingPolicy maps bigint → decimal string + snake_case body', async () => {
-    const { client, calls } = fakeClient();
-    const adapter = new AgentPaymentSdkAdapter(client);
-    await adapter.setSpendingPolicy({
-      agentDid: 'did:tenzro:agent',
-      maxPerTransaction: 5n * 10n ** 18n,
-      maxDailySpend: 50n * 10n ** 18n,
-      allowedServices: ['inference'],
-      active: true,
-    });
-    expect(calls[0]?.args).toEqual([
-      'did:tenzro:agent',
+  it('maps the daily spend; null when the agent has no terms', async () => {
+    const a = new AgentPaymentSdkAdapter(
       {
-        max_per_transaction: '5000000000000000000',
-        max_daily_spend: '50000000000000000000',
-        allowed_services: ['inference'],
-        active: true,
+        getDailySpend: async (did) => ({
+          agent_did: did,
+          current_daily_spend: '40',
+          max_daily_spend: '100',
+          remaining: '60',
+        }),
       },
-    ]);
+      termsClient(completed, []),
+    );
+    expect(await a.getDailySpend('did:a')).toEqual({
+      agentDid: 'did:a',
+      spentToday: 40n,
+      dailyLimit: 100n,
+      remaining: 60n,
+    });
+    expect(await new AgentPaymentSdkAdapter(noSpend, termsClient(completed, [])).getDailySpend('x')).toBeNull();
   });
 
-  it('getSpendingPolicy round-trips amounts as bigints', async () => {
-    const { client } = fakeClient();
-    const adapter = new AgentPaymentSdkAdapter(client);
-    const policy = await adapter.getSpendingPolicy('did:tenzro:agent');
-    expect(policy?.maxPerTransaction).toBe(5n * 10n ** 18n);
-    expect(policy?.maxDailySpend).toBe(50n * 10n ** 18n);
-    expect(policy?.allowedServices).toEqual(['inference', 'storage']);
-  });
-
-  it('returns null when getSpendingPolicy throws (e.g. 404)', async () => {
-    const { client } = fakeClient({
-      getSpendingPolicy: async () => {
-        throw new Error('not found');
+  it('signs a terms update only after the completed terms check out', async () => {
+    const seen: AgentTermsChallenge[] = [];
+    const a = new AgentPaymentSdkAdapter(noSpend, termsClient(completed, seen));
+    const r = await a.updateAgentTerms({
+      accountAddress: '0xaa',
+      agentDid: 'did:tenzro:agent:example',
+      terms: requested,
+      rotateTokens: true,
+      authorize: async (c) => {
+        seen.push(c);
+        return auth;
       },
     });
-    const adapter = new AgentPaymentSdkAdapter(client);
-    expect(await adapter.getSpendingPolicy('missing')).toBeNull();
+    expect(r.tokensRevoked).toBe(2);
+    expect(seen).toHaveLength(1);
+    expect(seen[0]!.targetHex).toBe(toHex(agentTermsTarget(completed, true)));
   });
 
-  it('payForService maps decimal amount + service type', async () => {
-    const { client, calls } = fakeClient();
-    const adapter = new AgentPaymentSdkAdapter(client);
-    const receipt = await adapter.payForService({
-      agentDid: 'did:tenzro:agent',
-      provider: '0xprovider',
-      amount: 250_000_000_000_000_000n,
-      serviceType: 'inference',
-    });
-    expect(calls[0]?.args).toEqual([
-      'did:tenzro:agent',
-      '0xprovider',
-      '250000000000000000',
-      'inference',
-    ]);
-    expect(receipt.amount).toBe(250_000_000_000_000_000n);
-    expect(receipt.txHash).toBe('0xabc');
-  });
-
-  it('getDailySpend maps total_spent/daily_limit/remaining → bigint', async () => {
-    const { client } = fakeClient();
-    const adapter = new AgentPaymentSdkAdapter(client);
-    const spend = await adapter.getDailySpend('did:tenzro:agent');
-    expect(spend.totalSpent).toBe(1n * 10n ** 18n);
-    expect(spend.dailyLimit).toBe(50n * 10n ** 18n);
-    expect(spend.remaining).toBe(49n * 10n ** 18n);
-    expect(spend.transactionCount).toBe(3);
-  });
-
-  it('listAgentTransactions threads optional limit and maps records', async () => {
-    const { client, calls } = fakeClient();
-    const adapter = new AgentPaymentSdkAdapter(client);
-    const txs = await adapter.listAgentTransactions('did:tenzro:agent', 10);
-    expect(calls[0]?.args).toEqual(['did:tenzro:agent', 10]);
-    expect(txs[0]?.amount).toBe(1n * 10n ** 18n);
-    expect(txs[0]?.serviceType).toBe('inference');
+  it('refuses to sign when the node altered the limits', async () => {
+    const altered: AgentTermsWire = {
+      ...completed,
+      delegation_scope: { ...completed.delegation_scope, max_daily_spend: '9000000' },
+    };
+    let asked = false;
+    const a = new AgentPaymentSdkAdapter(noSpend, termsClient(altered, []));
+    await expect(
+      a.updateAgentTerms({
+        accountAddress: '0xaa',
+        agentDid: 'did:tenzro:agent:example',
+        terms: requested,
+        rotateTokens: true,
+        authorize: async () => {
+          asked = true;
+          return auth;
+        },
+      }),
+    ).rejects.toThrow(/differ from the ones requested/);
+    expect(asked).toBe(false);
   });
 });
