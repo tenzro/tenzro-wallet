@@ -11,6 +11,7 @@ export * from './driver.ts';
 export * from './gate.ts';
 export * from './machines.ts';
 export * from './readiness.ts';
+export * from './guardian.ts';
 export * from './recovery-kit.ts';
 export * from './rpc.ts';
 export * from './userop.ts';

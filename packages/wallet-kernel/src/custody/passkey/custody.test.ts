@@ -349,7 +349,7 @@ describe('recovery', () => {
     expect(req?.new_passkey_public_key_hex).toBe(toHex(auth.credentials[0]!.publicKey, true));
   });
 
-  it('adds a guardian with its kind, approving exactly its keys and kind', async () => {
+  it('adds a guardian with its role, approving exactly its keys and role', async () => {
     const { rpc, custody, account } = await enrolled();
     rpc.handlers.tenzro_addGuardian = (() => ({ guardian_count: 1, threshold: 1 })) as (
       params: never,
@@ -357,7 +357,7 @@ describe('recovery', () => {
     const guardian = {
       ed25519PublicKeyHex: toHex(new Uint8Array(32).fill(1)),
       mlDsaPublicKeyHex: toHex(new Uint8Array(ML_DSA_65_PUBLIC_KEY_BYTES).fill(2)),
-      kind: 'email' as const,
+      role: 'device' as const,
     };
     await custody.addGuardian({
       account: account.account,
@@ -367,9 +367,9 @@ describe('recovery', () => {
     const challenge = rpc.paramsOf('tenzro_createCustodyChallenge').at(-1);
     expect(challenge?.operation).toBe('add_guardian');
     expect(challenge?.target_hex).toBe(toHex(guardianTarget(guardian), true));
-    expect(fromHex(challenge?.target_hex as string).at(-1)).toBe(0x02);
+    expect(fromHex(challenge?.target_hex as string).at(-1)).toBe(0x03);
     const [added] = rpc.paramsOf('tenzro_addGuardian');
-    expect(added?.kind).toBe('email');
+    expect(added?.role).toBe('device');
   });
 
   it('cancels a recovery with a passkey approval bound to that recovery', async () => {

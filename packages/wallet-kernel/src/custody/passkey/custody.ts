@@ -26,6 +26,13 @@ import {
   authorizeChallenge,
   requestCustodyChallenge,
 } from './gate.ts';
+import {
+  type GuardianCard,
+  type GuardianRole,
+  type GuardianSource,
+  deriveGuardianKeys,
+  recoveryOpHash,
+} from './guardian.ts';
 import { type DeviceSummary, type WalletReadiness, assessReadiness } from './readiness.ts';
 import type { JsonRpcTransport } from './rpc.ts';
 import {
@@ -139,18 +146,12 @@ export interface SessionKeyGrant {
   readonly label?: string;
 }
 
-/**
- * What a guardian's approval stands for. It sets how long a recovery waits
- * before it can complete: a recovery key and an email verifier together, the
- * shortest; a recovery key alone, longer; an email verifier alone, the longest.
- */
-export type GuardianKind = 'recovery_key' | 'email';
-
 export interface GuardianInput {
   /** Composite key of the guardian identity. */
   readonly ed25519PublicKeyHex: string;
   readonly mlDsaPublicKeyHex: string;
-  readonly kind: GuardianKind;
+  /** From `guardianRole(source)`; sets how long a recovery it approves waits. */
+  readonly role: GuardianRole;
   readonly label?: string;
   readonly threshold?: number;
 }
@@ -169,12 +170,12 @@ export interface PendingRecovery {
   readonly cancelled: boolean;
 }
 
-/** The custody target for adding a guardian: its keys and its kind. */
+/** The custody target for adding a guardian: its keys and its role. */
 export function guardianTarget(guardian: GuardianInput): Uint8Array {
   return concatBytes(
     fromHex(guardian.ed25519PublicKeyHex),
     fromHex(guardian.mlDsaPublicKeyHex),
-    new Uint8Array([guardian.kind === 'recovery_key' ? 0x01 : 0x02]),
+    new Uint8Array([guardian.role === 'recovery_key' ? 0x01 : 0x03]),
   );
 }
 
@@ -185,6 +186,17 @@ export interface RecoveryStarted {
   readonly expires_at_ms: number;
   readonly guardians_required: number;
   readonly guardians_total: number;
+}
+
+/** What a recovering device hands its guardians. Public data only. */
+export interface RecoveryRequest {
+  readonly account: string;
+  readonly recoveryId: string;
+  readonly newPasskeyPublicKeyHex: string;
+  readonly newMlDsaPublicKeyHex: string;
+  readonly newCredentialIdHex: string;
+  readonly expiresAtMs: number;
+  readonly guardiansTotal: number;
 }
 
 export interface PasskeyCustodyOptions {
@@ -755,7 +767,7 @@ export class PasskeyCustody {
       account_address: opts.account,
       guardian_ed25519_pubkey_hex: g.ed25519PublicKeyHex,
       guardian_ml_dsa_pubkey_hex: g.mlDsaPublicKeyHex,
-      kind: g.kind,
+      role: g.role,
       ...(g.label ? { label: g.label } : {}),
       ...(g.threshold !== undefined ? { threshold: g.threshold } : {}),
       authorization,
@@ -771,7 +783,7 @@ export class PasskeyCustody {
     readonly account: string;
     readonly label: string;
     readonly ttlSecs?: number;
-  }): Promise<RecoveryStarted & { readonly credentialId: string }> {
+  }): Promise<RecoveryStarted & { readonly credentialId: string; readonly request: RecoveryRequest }> {
     const created = await this.authenticator.create({
       userId: fromHex(opts.account).slice(-20),
       userName: opts.label,
@@ -790,7 +802,16 @@ export class PasskeyCustody {
       new_ml_dsa_public_key_hex: toHex(publicKey, true),
       ...(opts.ttlSecs !== undefined ? { ttl_secs: opts.ttlSecs } : {}),
     });
-    return { ...started, credentialId: credential.id };
+    const request: RecoveryRequest = {
+      account: opts.account,
+      recoveryId: started.recovery_id,
+      newPasskeyPublicKeyHex: toHex(created.publicKey, true),
+      newMlDsaPublicKeyHex: toHex(publicKey, true),
+      newCredentialIdHex: toHex(created.credentialId, true),
+      expiresAtMs: started.expires_at_ms,
+      guardiansTotal: started.guardians_total,
+    };
+    return { ...started, credentialId: credential.id, request };
   }
 
   /**
@@ -852,6 +873,93 @@ export class PasskeyCustody {
       recovery_id: opts.recoveryId,
       authorization,
     });
+  }
+
+  /**
+   * Guardian side: creates the guardian passkey on this device and returns the
+   * card to hand to the account holder. Only public halves leave the device.
+   */
+  async createGuardian(opts: {
+    readonly label: string;
+    readonly source: GuardianSource;
+  }): Promise<GuardianCard> {
+    const created = await this.authenticator.create({
+      userId: randomBytes(16),
+      userName: `Guardian: ${opts.label}`,
+    });
+    const credential: CredentialRef = { id: toHex(created.credentialId), transports: created.transports };
+    const keys = deriveGuardianKeys(created.prf ?? (await this.#prfFor(credential)));
+    keys.wipe();
+    return {
+      format: 'tenzro-guardian',
+      version: 1,
+      label: opts.label,
+      source: opts.source,
+      ed25519: toHex(keys.ed25519PublicKey, true),
+      mlDsa65: toHex(keys.mlDsaPublicKey, true),
+      tier: created.tier,
+      ...(created.aaguid ? { aaguid: created.aaguid } : {}),
+      credentialId: toHex(created.credentialId, true),
+    };
+  }
+
+  /**
+   * Guardian side: approves a recovery with the guardian passkey on this
+   * device. The approval is computed here from the request and checked against
+   * the recovery the node lists for the account, so a guardian never signs a
+   * hash it was merely handed.
+   */
+  async approveRecovery(request: RecoveryRequest): Promise<{
+    guardian_signatures_collected: number;
+    guardians_required: number;
+    quorum_reached: boolean;
+    ready_at_ms: number | null;
+  }> {
+    const pending = (await this.listPendingRecoveries(request.account)).find(
+      (r) => r.recovery_id === request.recoveryId,
+    );
+    if (!pending || pending.finalized || pending.cancelled) {
+      throw new PasskeyError('The network has no open recovery matching this request.', 'invalid');
+    }
+    if (
+      stripped(pending.new_credential_id_hex) !== stripped(request.newCredentialIdHex) ||
+      pending.expires_at_ms !== request.expiresAtMs
+    ) {
+      throw new PasskeyError('This request does not match the recovery the network holds.', 'invalid');
+    }
+    const opHash = recoveryOpHash({
+      account: request.account,
+      newPasskeyPublicKey: fromHex(request.newPasskeyPublicKeyHex),
+      newMlDsaPublicKey: fromHex(request.newMlDsaPublicKeyHex),
+      newCredentialId: fromHex(request.newCredentialIdHex),
+      recoveryId: request.recoveryId,
+      expiresAtMs: request.expiresAtMs,
+    });
+    const signed = await this.authenticator.get({ challenge: opHash, allow: [] });
+    if (!signed.prf) {
+      throw new PasskeyError('This passkey cannot derive keys (PRF), so it cannot act as a guardian.', 'no-prf');
+    }
+    const keys = deriveGuardianKeys(signed.prf);
+    let signatureHex: string;
+    try {
+      signatureHex = toHex(keys.approve(opHash), true);
+    } finally {
+      keys.wipe();
+    }
+    // The node does not publish which index a guardian holds; an approval
+    // verifies only at its own index, and a mismatch changes nothing.
+    for (let i = 0; i < request.guardiansTotal; i++) {
+      try {
+        return await this.submitRecoverySignature({
+          recoveryId: request.recoveryId,
+          guardianIndex: i,
+          signatureHex,
+        });
+      } catch (e) {
+        if (!/is not guardian \d+'s approval/.test(String((e as Error)?.message ?? e))) throw e;
+      }
+    }
+    throw new PasskeyError('This passkey is not a guardian of the account.', 'invalid');
   }
 
   // ── internals ─────────────────────────────────────────────────────────
