@@ -14,7 +14,7 @@ External Canton Network MainNet is a *separate* ledger that we already participa
 
 Today, a user who wants to do all of this needs three or four wallets: MetaMask for EVM, Phantom/Solflare for SVM, a Canton wallet (Splice wallet UI, Loop, Dfns, Fireblocks-Canton) for CC and Canton tokens, plus a TNZO wallet for native Tenzro operations. Each has its own seed, its own UX, its own consent flow, and none of them know about the others. That defeats the entire premise of Tenzro's unified runtime.
 
-**Tenzro Wallet's job is to collapse those into one.** One identity (TDIP DID), one custody primitive (MPC 2-of-3), one consent UI, one balance view, one transaction history — across four execution surfaces and across cross-chain destinations.
+**Tenzro Wallet's job is to collapse those into one.** One identity (TDIP DID), one custody primitive (passkeys), one consent UI, one balance view, one transaction history — across four execution surfaces and across cross-chain destinations.
 
 ---
 
@@ -33,10 +33,10 @@ The wallet must treat (4a) and (4b) as **two different ledgers** that happen to 
 
 ## 3. Design principles
 
-1. **One identity, four addresses.** TDIP `did:tenzro:human:{uuid}` is the root. Per-surface keys/addresses are *deterministic projections* of the root, derived inside the MPC quorum. The user never sees four seed phrases.
+1. **One identity, four addresses.** TDIP `did:tenzro:human:{uuid}` is the root. Per-surface addresses are projections of the root. The user never sees four seed phrases.
 2. **Pointers are not bridges.** Within Tenzro Ledger, "send TNZO from EVM to SVM" is a balance-view change, not a value transfer. The UI must not call it a bridge, must not charge a bridge fee, and must not show a confirmation modal that implies risk. Bridge UX is reserved for moves that *cross* ledgers (to Canton MainNet, to external Ethereum/Solana).
-3. **Passkey-quorum custody, no seed phrases.** A Tenzro identity is held by a 2-of-2 threshold quorum: one *passkey-bound device share* on a user device (phone, laptop, tablet, hardware key), unlockable only through the platform passkey on that device (Apple Passkeys / Google Passkeys / WebAuthn / FIDO2), plus one share in the Tenzro node TEE. Both signatures are required for every transaction; neither side can sign alone. There is no seed phrase. Recovery is "prove identity, get a new device share dealt by the TEE." This is the **Tenzro-native custody model** for testnet and pre-launch, governed by the network and exposed by every Tenzro RPC node; the quorum extends to 2-of-3 (device + paired device + TEE) before MainNet launch. See §4.3.
-4. **Hybrid signing on Tenzro native.** Ed25519 + ML-DSA-65 on Tenzro txs ([wallet-sdk](https://tenzro.com/docs/wallet-sdk)). Pure Ed25519 on Canton, pure secp256k1 on EVM, pure Ed25519 on SVM. The wallet picks per surface; the user does not.
+3. **Passkey custody, no seed phrases.** The user's passkey (Apple Passkeys / Google Passkeys / WebAuthn / FIDO2) is the only signing key; it signs every approval itself and the wallet stores only public data. Recovery is guardian-approved: a new passkey on a new device is added once guardians approve and the waiting period passes. See §4.3.
+4. **One signer, bound per context.** The passkey signs a digest bound to the context the message is used in (§4.3); the wallet picks the context per surface, the user does not.
 5. **Capabilities, not raw signing.** All app-facing access is scoped: session keys with per-tx caps, daily limits, contract whitelists, time windows. AP2 and Mastercard Agent Pay tokens layer on top of this, with the rule that the *effective limit is the intersection of the agent's identity-level delegation and the per-session policy*.
 6. **Consent is one screen.** A single confirmation flow describes what is happening in human terms ("send 10 USDC to alice.tenzro on Solana side; arrives in <1s, no bridge fee") regardless of which surface is involved.
 7. **Greenfield-first, additively compatible.** We ship a Tenzro-native wallet first; we are not reskinning MetaMask or Phantom. We will *expose* EIP-1193 and Solana wallet-adapter shims so dApps written for those ecosystems can talk to us, but that is a compatibility layer, not the core API. The core dApp API is **CIP-103 / `window.canton` style** ([Splice Wallet Kernel](https://github.com/hyperledger-labs/splice-wallet-kernel)) extended with Tenzro methods.
@@ -59,7 +59,7 @@ The wallet must treat (4a) and (4b) as **two different ledgers** that happen to 
 │                │   Wallet Kernel (TS, shared core)    │                  │
 │                │  ┌─────────────────────────────────┐ │                  │
 │                │  │  Identity (TDIP)                │ │                  │
-│                │  │  Custody (passkey-quorum 2-of-N) │ │                 │
+│                │  │  Custody (passkeys)             │ │                  │
 │                │  │  Consent / Session policy       │ │                  │
 │                │  │  Balance aggregator             │ │                  │
 │                │  │  Tx router (per-surface)        │ │                  │
@@ -71,13 +71,13 @@ The wallet must treat (4a) and (4b) as **two different ledgers** that happen to 
 └─────────────────────┼─────────────┼─────────────┼────────────────────────┘
                       │             │             │
               ┌───────▼─────┐ ┌─────▼─────────┐ ┌────▼──────────────────────┐
-              │ Tenzro RPC  │ │ Pairing /     │ │ Canton MainNet validator  │
-              │ (JSON-RPC + │ │ sign page     │ │  Splice Wallet Kernel     │
-              │  REST,      │ │ (hosted on    │ │  → validator-app :5003    │
-              │  hosts /    │ │  every RPC    │ │  → participant LAPI :7575 │
-              │  wallet/*)  │ │  node, TEE    │ │                           │
-              │             │ │  share lives  │ │                           │
-              │             │ │  here)        │ │                           │
+              │ Tenzro RPC  │ │ Guardian /    │ │ Canton MainNet validator  │
+              │ (JSON-RPC + │ │ recover pages │ │  Splice Wallet Kernel     │
+              │  REST)      │ │               │ │  → validator-app :5003    │
+              │             │ │               │ │  → participant LAPI :7575 │
+              │             │ │               │ │                           │
+              │             │ │               │ │                           │
+              │             │ │               │ │                           │
               └─────────────┘ └───────────────┘ └───────────────────────────┘
                       │
               ┌───────┴────────┐
@@ -91,7 +91,7 @@ The wallet must treat (4a) and (4b) as **two different ledgers** that happen to 
 
 We deliberately do **not** ship four mini-wallets glued together. There is one wallet kernel; it owns identity, custody, consent, and policy. Surfaces are *modules* — pure functions that translate user intent into the surface-appropriate transaction shape:
 
-- `surfaces/tenzroNative.ts` — builds Native VM txs, hybrid Ed25519+ML-DSA-65 sign
+- `surfaces/tenzroNative.ts` — builds Native VM txs
 - `surfaces/evm.ts` — builds EIP-1559 / 4337 UserOps; secp256k1 sign
 - `surfaces/svm.ts` — builds Solana txs/instructions; Ed25519 sign
 - `surfaces/cantonInternal.ts` — Canton-on-Tenzro via CantonAdapter
@@ -103,96 +103,48 @@ Each surface module exports the same interface: `prepare(intent) → preview`, `
 
 A new user gets:
 1. A `did:tenzro:human:{uuid}` ([identity](https://tenzro.com/docs/identity)).
-2. A **2-of-2 passkey-quorum** custody record: one paired device (phone or laptop) holding a passkey-bound share, plus the Tenzro node TEE holding the second share. Both signatures are required for every transaction. Pre-launch (before MainNet), this extends to 2-of-3 with a second user device; for testnet we ship 2-of-2.
-3. Per-surface key material derived deterministically inside the quorum:
+2. A custody record of enrolled passkeys (§4.3). The DID is a one-way function of the first passkey's P-256 public key; the account is a smart account guarded by a WebAuthn validator.
+3. Per-surface keys (`SurfaceKey`):
    - **Tenzro native:** Ed25519 (root)
-   - **EVM:** secp256k1, derived path `m/tenzro/evm/0`
-   - **SVM:** Ed25519, derived path `m/tenzro/svm/0`
+   - **EVM:** secp256k1
+   - **SVM:** Ed25519
    - **Canton (internal):** Ed25519 → Canton external party id materialized at first use via `ExternalPartySetupProposal`
    - **Canton (external MainNet):** *separately* allocated Ed25519 + party id; can be the same key as internal if the user opts in, but defaults to a distinct key so MainNet exposure is opt-in.
 
-The DID Document (W3C-compatible) lists each derived key under `verificationMethod` with a `tenzro:surface` field. Anyone resolving the DID sees one identity with four cryptographic personas — including dApps that need to know "what's this user's EVM address?" without a separate handshake.
+The DID Document (W3C-compatible) lists each surface key under `verificationMethod` with a `tenzro:surface` field. Anyone resolving the DID sees one identity with four cryptographic personas — including dApps that need to know "what's this user's EVM address?" without a separate handshake.
 
-### 4.3 Custody: passkey-quorum, the Tenzro-native model
+### 4.3 Custody: passkeys
 
-Tenzro Wallet does not use seed phrases, hardware wallets, or password-encrypted keystores as its primary custody model. The Tenzro-native model is a **passkey-quorum**: a *threshold share* of the identity's signing key sits in the user's device, unlockable only by the platform passkey (Apple Passkeys / Google Passkeys / WebAuthn / FIDO2), and a complementary share sits in the Tenzro node TEE. Both signatures are required for every transaction; neither side can sign alone.
+Custody is passkeys only. The user's WebAuthn P-256 passkey signs every approval itself (webauthn-p256). The wallet derives no key, wraps no key and stores no secret; the device keeps only public data: the DID, the account address and which credential belongs to the account. There is no seed phrase. The code lives in `packages/wallet-kernel/src/custody/passkey/`:
 
-For testnet and pre-launch the quorum is **2-of-2** (one user device + node TEE). Before MainNet launch, the default extends to **2-of-3** with a second user device joining the quorum, so loss of any single side — phone, laptop, or TEE access — is recoverable without invoking the social-recovery path. The signing primitives (FROST-Ed25519, threshold-ECDSA / FROST-secp256k1, see §4.3.5) are the same in both configurations; only the threshold and the number of paired devices change. This document specifies the 2-of-2 testnet shape in §4.3.1–§4.3.5, then describes the 2-of-3 extension in §4.3.6.
+- `custody.ts` — `PasskeyCustody`: create a wallet (`tenzro_enrollPasskey`), sign in on any device, list, link and remove devices (never the last one), second-factor policy, spending limits, session keys, guardians and recovery.
+- `composite.ts` — what a passkey signs. Each signature is over a digest bound to the context the message is used in: `M' = prefix || label || len(ctx) || ctx || SHA-512(message)`, and the WebAuthn challenge is `base64url(SHA-256(M'))`. The assertion travels as a bincode `PasskeySignature` bundle.
+- `gate.ts` — every custody change is authorised the same way. The node issues a single-use challenge bound to the account, the operation and its target (`tenzro_createCustodyChallenge`); the wallet recomputes the digest from those and the challenge's `nonce_hex`, so it never signs a digest it was merely handed; an enrolled passkey signs it with user verification required, and the assertion travels with the change.
+- `guardian.ts` — recovery guardians (§4.3.3).
+- `userop.ts` — ERC-4337 user operations. The account is a smart account guarded by a WebAuthn validator; the passkey signs the user-operation hash and the wallet submits it with `eth_sendUserOperation`.
+- `recovery-kit.ts` — an instructions-only Recovery Kit with public data. It holds no key.
 
-This is governed by the network: every Tenzro RPC node hosts the canonical onboarding/sign page (`https://<node>/wallet/...`) under the same TLS/auth surface that hosts the JSON-RPC. The wallet's job is to drive that flow and assemble signatures; the node's job is to be the always-available rendezvous point and the TEE-side co-signer.
+#### 4.3.1 Enrolment
 
-#### 4.3.1 Why this, not seed phrases or single-key MPC
+Creating a wallet makes a passkey on the Tenzro relying party. The DID is a one-way function of the passkey's P-256 public key, so the same passkey always opens the same identity. Enrolment sends the registration authenticatorData, so the node reads the passkey's provider (AAGUID) and backup flags. Further passkeys (another device, a security key) are added through the custody gate; the last passkey cannot be removed.
 
-- **Phishing resistance.** Passkeys are bound to the relying-party origin (`tenzro.xyz` and any user-pinned RPC origin). A phishing site cannot trick the platform authenticator into producing the passkey assertion needed to unwrap the device share.
-- **No key escape via screenshot/clipboard.** The share never decodes outside the platform authenticator's secure enclave (Secure Enclave on iOS/macOS, StrongBox on Android, TPM on Windows, dedicated chip on FIDO2 keys). It is also never visible in plaintext memory of the wallet's JS runtime.
-- **Network can't sign alone.** The TEE share is one of two; without the user's passkey-asserted device leg, no Tenzro signature is valid. The network is a co-signer, not a custodian.
-- **OS-native UX.** Onboarding and signing use a passkey ceremony users already understand: Face ID / Touch ID / Windows Hello / a Google prompt. No one writes down 12 words.
-- **Composes with TDIP and AP2.** The passkey assertion can be re-presented as a `dpop_jkt`-style binding when the wallet authenticates to RPC, so the same user-presence proof that authorises the on-chain signature also authorises the surrounding API call. Mastercard Agent Pay and AP2 mandate verification can demand passkey-fresh assertions for high-value steps.
-- **Pre-launch upgrade path is straightforward.** Adding a second user device to the quorum (2-of-3) is purely additive — the device share, the TEE share, and the threshold-signing scheme all stay the same; only the threshold parameter and the device-count change.
+#### 4.3.2 Independence
 
-#### 4.3.2 Provisioning flow
+Any enrolled passkey the holder unlocks can approve. What protects the account is independence: passkeys that sync through one provider count as one root, and each device-bound passkey is a root of its own. High-risk operations (sending, recovery, raising limits) need distinct-provider roots.
 
-1. User visits a Tenzro RPC node's onboarding page (e.g. `https://rpc.tenzro.xyz/wallet/new`) on their phone or laptop.
-2. The page runs a passkey ceremony (`navigator.credentials.create`) bound to the Tenzro-network relying-party id. The platform authenticator generates a passkey credential and returns the `credentialId` + public key.
-3. Server-side, the node TEE generates a fresh Tenzro identity, splits the signing key into 2 shares (this device + node TEE), and returns the device's share **wrapped with a key derived from the passkey assertion** (HKDF over the authenticator's private-key-derived secret, exposed via `largeBlob` extension or PRF extension where available; falls back to wrapping with a server-held key escrowed under the same passkey if the platform doesn't support PRF yet).
-4. The wrapped share is stored in IndexedDB / OS keychain; the unwrap key never leaves the authenticator.
-5. The TEE share is registered in the node TEE's keystore (Tenzro Cortex), keyed off the new DID.
-6. The DID Document is registered with the device's passkey public key listed under `verificationMethod` with `tenzro:role: "device-share"`. The node TEE share is similarly listed with `tenzro:role: "tee-share"`. The threshold record is `2-of-2`.
+#### 4.3.3 Guardians and recovery
 
-After step 6 the user has a working 2-of-2 quorum and can transact on testnet. Pre-launch this provisioning extends to deal a third share to a second user device; see §4.3.6.
+A guardian makes a guardian passkey at `/guardian` and sends the holder a card: label, role, P-256 public key, credential id and registration data. The holder adds it in Settings (`tenzro_addGuardian`), approved by their own passkey over a target that binds the guardian's key, provider, backup flags, role and label. Settings shows a quorum preview: a threshold of 2 or more is recommended, and the threshold cannot exceed the number of independent provider roots among the guardians.
 
-#### 4.3.3 Signing flow
+Recovery runs at `/recover`:
 
-For every transaction the kernel constructs the canonical preimage (per §4.5 / wallet-sdk docs) and collects 2 signatures: one from the user's device, one from the node TEE.
+1. A new passkey is made on the new device and `tenzro_initiateRecovery` opens the request.
+2. The request link goes to the guardians, who approve with their guardian passkeys (`tenzro_submitRecoverySignature`; the guardian's index is found via `tenzro_listGuardians`).
+3. After the waiting period, which depends on which roles approved, `tenzro_finalizeRecovery` adds the new passkey. Any existing passkey can cancel the recovery during the wait.
 
-1. Kernel signs the preimage on the device it's running on, gated by a passkey assertion (`navigator.credentials.get` with `userVerification: "required"`; the assertion's signature is mixed into the preimage so the assertion is bound to *this specific tx*).
-2. Kernel calls `tenzro_signAndSendTransaction` with the local signature share + the passkey-asserted DPoP-bound session JWT. The node TEE supplies its share, combines, and submits in one round-trip.
-3. The TEE refuses to co-sign without a fresh, in-window passkey assertion bound to this preimage. There is no "session token rubber-stamp" path — every signature requires a real `userVerification` on a user device.
+#### 4.3.4 Canton
 
-Step 2 is what the SDK exposes today via `tenzro_signAndSendTransaction`. The TEE's contribution is the *threshold complement*, not a unilateral signature; it is verifiable as such by the node's signature-aggregation logic.
-
-#### 4.3.4 Per-surface keys under threshold
-
-The identity has one root signing key per surface (Ed25519 for Tenzro native, secp256k1 for EVM, Ed25519 for SVM, Ed25519 for Canton). Each is held under the same 2-of-2 passkey-quorum. Threshold signing schemes per surface:
-
-- **Ed25519 (Tenzro native, SVM, Canton):** FROST-Ed25519 (RFC 9591). Mature, well-implemented, fits 2-of-2 directly and extends to 2-of-3 unchanged.
-- **secp256k1 (EVM):** FROST-secp256k1 or GG20/CGGMP21-style threshold ECDSA. We pick whichever has the cleanest WASM-compatible implementation at build time.
-- **ML-DSA-65 (Tenzro native, hybrid leg):** **open question**, see §11. Threshold ML-DSA is research-stage. M5 ships with the *node TEE* supplying the ML-DSA leg alone (treating ML-DSA as a node-TEE-only signature initially) while the user-device leg is FROST-Ed25519 over the same preimage. The hybrid still verifies because the canonical preimage's `Transaction::hash()` covers both pubkeys; the threshold property only applies to the Ed25519 leg. Documented trade-off until threshold ML-DSA is production-ready.
-
-#### 4.3.5 Recovery (testnet, 2-of-2)
-
-In a 2-of-2 quorum, loss of either side breaks signing. Recovery paths:
-
-- **Device lost, TEE survives:** user opens any Tenzro RPC node's `/wallet/recover` page on a new device, runs a passkey ceremony, and submits a recovery proof (verified email, social-recovery delegates per TDIP, or Tenzro-id KYC re-assertion as the user pre-registered at provisioning). On success, the TEE re-randomises the device leg and deals a fresh share to the new device. The TEE *can* drive this rotation gated by the recovery proof — that is by design; the TEE share is the institutional fallback for users who keep it in their quorum.
-- **TEE share unavailable for that DID:** rare in practice (the TEE keystore is replicated across Tenzro Cortex nodes), but if it happens, fall back to social recovery via TDIP delegates: ≥k of the user's pre-registered delegates co-sign a recovery attestation that the network verifies, and a fresh quorum is dealt against the same DID. Same primitive Argent and Safe use, Tenzro-native (delegates are TDIP DIDs, verification on Tenzro Ledger).
-- **Lost everything including delegate access:** the DID is unrecoverable. Documented at provisioning time as the consequence of refusing to designate delegates.
-- **Compromise suspected:** the user re-runs the recovery flow and supplies a recovery proof. The TEE re-randomises both shares; the DID stays the same, the public keys rotate.
-
-The 2-of-3 pre-launch upgrade (§4.3.6) materially improves this: loss of any one side stops being a recovery event because the remaining 2 still meet threshold.
-
-#### 4.3.6 Pre-launch upgrade: 2-of-3
-
-Before MainNet launch, the default quorum extends to 2-of-3 by adding a second user device. The mechanism:
-
-1. On the originally-paired device, the wallet generates a one-shot pairing token and asks the node to register it (POST `/wallet/pairing/start`). The node returns a short-lived URL (`https://<node>/wallet/pair?session=<token>`) and a TTL.
-2. The wallet renders that URL as a QR code.
-3. On the second device, the user scans → opens the URL → runs a passkey ceremony.
-4. The originally-paired device, **after a passkey assertion of its own**, participates in a threshold-share-redeal protocol with the node TEE that dealss the existing key into 3 shares (this device, new device, TEE) and updates the threshold to 2-of-3.
-5. The DID Document is updated to add the new device's passkey public key to `verificationMethod` and the threshold record becomes `2-of-3`.
-
-After this, any 2 of the 3 shares can sign — including the two user-device combination, which means the user can transact without the TEE participating, useful for offline / sovereignty cases. The TEE share remains for recovery and for one-tap signing when only one of the user's devices is to hand.
-
-This whole flow is implemented in M5 alongside the rest of the passkey-quorum custody system; it lands as part of "M5 ships testnet 2-of-2; M5.5 / pre-launch ships 2-of-3."
-
-#### 4.3.7 Canton wrinkle (unchanged from prior design)
-
-Canton parties on Canton MainNet must be **external parties** — the party private key is held client-side, the validator only relays. Under the passkey-quorum model:
-
-- The Canton-shaped Ed25519 key is one of the per-surface keys held under the same 2-of-2 (or 2-of-3, post-launch) quorum.
-- External-party allocation against the Tenzro validator (or user-chosen validator) uses the Splice Wallet SDK's external-key flow.
-- Every Canton command is *prepared* by the validator's Ledger API, *threshold-signed* by the quorum, *submitted* back through the validator.
-
-This is the same model Loop, Dfns, and Fireblocks use for Canton custody, except the threshold-signing is passkey-quorum instead of HSM-quorum.
+Canton parties on Canton MainNet must be **external parties** — the party key is held client-side and the validator only relays. Every Canton command is *prepared* by the validator's Ledger API, approved through passkey custody, and *submitted* back through the validator.
 
 ### 4.4 Canton-internal surface (M4): same protocol, different synchronizer
 
@@ -242,7 +194,7 @@ The Splice Wallet Kernel is **the** reference implementation, not a competing st
 **Tenzro Wallet's positioning:**
 
 - Tenzro Wallet is a **CIP-0103-compliant Async wallet**. Generate TS bindings from `openrpc-dapp-remote-api.json` so the wire contract is mechanically faithful.
-- The passkey-quorum custody (§4.3) implements the **Signing API** (`openrpc-signing-api.json`) — a JSON-RPC endpoint hosted on every Tenzro RPC node, exposing `signTransaction / getTransaction / getTransactions` to any `wallet-gateway-remote` deployment that wants to delegate to a Tenzro node. Cleaner than a TS-only driver and reuses the same RPC trust boundary as the rest of the wallet's `/wallet/*` endpoints.
+- Passkey custody (§4.3) implements the **Signing API** (`openrpc-signing-api.json`) — a JSON-RPC endpoint hosted on every Tenzro RPC node, exposing `signTransaction / getTransaction / getTransactions` to any `wallet-gateway-remote` deployment that wants to delegate to a Tenzro node. Cleaner than a TS-only driver and reuses the same RPC trust boundary as the rest of the wallet's `/wallet/*` endpoints.
 - **WalletConnect** went live on Canton 2026-04-27. It sits *alongside* CIP-0103 as transport/discovery, not a replacement; the wire methods are still CIP-0103. Tenzro Wallet ships a WalletConnect bridge that proxies WC sessions to the CIP-0103 endpoint. Discovery for institutional dApps lands here.
 
 CIP-0103 still doesn't standardize multi-provider discovery in a browser-extension context (explicitly "future CIP, not yet filed"). For the extension form factor we follow EIP-6963-style multi-provider conventions on our own.
@@ -299,7 +251,7 @@ The namespace key is the cold/recovery key (used for topology changes — adding
 
 #### 4.5.5 Signature schemes
 
-Canton 3.5 documented external-signing curves: **Ed25519** (`SIGNING_ALGORITHM_SPEC_ED25519`) and **ECDSA P-256** (`SIGNING_ALGORITHM_SPEC_EC_DSA_SHA_256`). secp256k1 support for external parties on Global Synchronizer MainNet is **unclear in public docs** as of 2026-04 — verify before locking. ECDSA P-256 maps cleanly to WebAuthn passkey ES256 output, so passkey-direct signing is feasible for the signing-key leg if the passkey-derived key is registered in `PartyToKeyMapping`. For the namespace key we default to Ed25519 (matches FROST-Ed25519 in the quorum, matches the Splice Wallet Kernel's internal driver).
+Canton 3.5 documented external-signing curves: **Ed25519** (`SIGNING_ALGORITHM_SPEC_ED25519`) and **ECDSA P-256** (`SIGNING_ALGORITHM_SPEC_EC_DSA_SHA_256`). secp256k1 support for external parties on Global Synchronizer MainNet is **unclear in public docs** as of 2026-04 — verify before locking. ECDSA P-256 is the curve of a WebAuthn passkey (ES256), so the passkey's own key can be registered in `PartyToKeyMapping` as the signing key.
 
 #### 4.5.6 Onboarding flow against the Tenzro validator
 
@@ -307,12 +259,12 @@ Tenzro operates a non-SV Canton validator running a Splice 0.5.x baseline. Stand
 
 Onboarding a Tenzro Wallet user as a Canton external party against this validator:
 
-1. Wallet generates namespace + signing keypairs locally (passkey-bound, under the §4.3 quorum).
+1. Wallet supplies the namespace + signing public keys from passkey custody (§4.3).
 2. `POST /api/validator/v0/admin/external-party/topology/generate` → validator returns 3 unsigned topology txs (NamespaceDelegation, PartyToKeyMapping, PartyToParticipant) + a bundle hash.
-3. Quorum signs the bundle hash with the namespace key (SHA-256, hash purpose 55 for the multi-tx bundle).
+3. The passkey signs the bundle hash with the namespace key (SHA-256, hash purpose 55 for the multi-tx bundle).
 4. `POST .../topology/submit` with the signed bundle.
 5. `POST .../setup-proposal` → validator becomes preapproval *provider*.
-6. `POST .../setup-proposal/prepare-accept` → quorum signs → `submit-accept`. User now has a `TransferPreapproval` (90-day expiry, auto-renewed by the validator's automation when within 30 days of expiry).
+6. `POST .../setup-proposal/prepare-accept` → passkey signs → `submit-accept`. User now has a `TransferPreapproval` (90-day expiry, auto-renewed by the validator's automation when within 30 days of expiry).
 
 Subsequent sends bypass the validator-app `/v0/wallet/*` convenience endpoints and go direct to `:7575/v2/interactive-submission/*` — keeps the wallet vendor-neutral against the JSON Ledger API rather than coupled to Splice validator-app endpoint stability.
 
@@ -324,13 +276,9 @@ CIP-0103 maps this to `txChanged` events with states `pending → signed → exe
 
 ### 4.6 Custody: signing-driver abstraction
 
-Per-share storage and signing is pluggable so each leg of the quorum is a separate driver and we can add institutional ones later without rewriting the kernel:
+Signing is a pluggable `SigningDriver` so other signers can be added without rewriting the kernel:
 
-- `passkey-share` — passkey-bound device share. Used on every paired user device. Implements PRF/largeBlob unwrap + threshold-share signing.
-- `node-tee-share` — Tenzro Cortex TEE share, accessed via `tenzro_signAndSendTransaction` with the local share's contribution attached. Always present in the testnet 2-of-2 quorum and present-by-default in the 2-of-3 pre-launch quorum.
-- `pairing-channel` — (2-of-3 pre-launch only) virtual driver that posts a sign-request to the user's other paired device through the node-hosted pairing channel and waits for the threshold-share signature back. Lets two user devices alone meet the threshold.
-- `core-signing-fireblocks` — institutional users who already custody on Fireblocks. Replaces one of the device shares; rest of the quorum is unchanged.
-- `core-signing-blockdaemon` — same idea, Blockdaemon Builder Vault.
+- passkey driver (`custody/passkey/driver.ts`) — the preimage is the 32-byte UserOperation hash; each contributing passkey signs `signingDigest(UserOperation, hash)` as its WebAuthn challenge, and the driver returns the encoded bundle the account's WebAuthn validator verifies.
 - `core-signing-participant` — Canton participant-managed parties for users who *want* validator-custodied Canton keys (e.g. exchanges). Only applies to the Canton surface key, not the rest of the identity.
 
 (`core-signing-*` driver names match Splice Wallet Kernel deliberately — we reuse those drivers where they fit.)
@@ -504,7 +452,7 @@ SVM and Canton don't have direct paymaster equivalents documented. For SVM-on-Te
 
 The wallet exposes a CIP-103-compatible JSON-RPC 2.0 API at `window.tenzro` (and `window.canton` as an alias for Canton-only dApps), with EIP-1193-style event semantics. Methods are namespaced:
 
-- `tenzro_*` — wallet-level (createWallet, balance, send, escrow, channel, history, signAndSendTransaction, setDelegationScope)
+- `tenzro_*` — wallet-level (createWallet, balance, send, escrow, channel, history, setDelegationScope)
 - `tdip_*` — identity (resolve, addCredential, sign DPoP, prove KYA tier)
 - `canton_*` — Canton-specific (allocateExternalParty, prepareCommand, signCommand, submit) — same as Splice Wallet Kernel
 - `eth_*` — EIP-1193 shim for EVM dApps
@@ -535,7 +483,7 @@ We ship three from day one and a fourth shortly after:
 1. **Browser extension** (Chromium + Firefox). Injects `window.tenzro` and `window.canton`. Same kernel running in a service worker; UI in popup + side panel. This is the dApp connector.
 2. **Web app** at `wallet.tenzro.com` (Next.js App Router on Vercel). Standalone wallet UI. Imports the same kernel. Useful for first-time users who don't want to install anything.
 3. **Desktop** (Tauri, mirroring the Tenzro desktop stack — Tauri + React + Tailwind 4 + OKLCH per the architecture doc). For power users who want local node integration and deeper key custody.
-4. **Mobile** (React Native + Expo, post-v1). Holds a passkey-bound device share natively (Secure Enclave / StrongBox), receives QR-pairing requests, and acts as the second signer in Path A flows. Push notifications for sign-requests, incoming transfers, and channel events.
+4. **Mobile** (React Native + Expo, post-v1). Uses the platform passkey (Secure Enclave / StrongBox) for approvals. Push notifications for sign-requests, incoming transfers, and channel events.
 
 All four share `tenzro-wallet`. UI code is duplicated minimally — most of it is in `@tenzro/wallet-react` + `@tenzro/wallet-shadcn`.
 
@@ -546,18 +494,17 @@ All four share `tenzro-wallet`. UI code is duplicated minimally — most of it i
 | # | Milestone | Acceptance |
 |---|---|---|
 | 1 | Kernel skeleton | TS monorepo (pnpm + turborepo), `tenzro-wallet` package, in-memory signing stub, all four surface modules with mock RPCs, full type contracts on every method |
-| 2 | Tenzro native surface live (Path B only) | Linked `tenzro-sdk`, real RPC, server-side hybrid signing via `tenzro_signAndSendTransaction` + DPoP-bound session, `wallet create / balance / send` work on testnet. Custody is "node TEE + DPoP-asserted browser session" — passkey-quorum lands in M5. |
+| 2 | Tenzro native surface live | Linked `tenzro-sdk`, real RPC, `wallet create / balance / send` work on testnet. |
 | 3 | EVM + SVM surfaces (on-Tenzro) | Cross-VM pointer transfers between wTNZO and SPL-TNZO views via precompile `0x1003`; unified balance card |
 | 4a | **Canton design + ports (M4 design phase)** | Pre-2026-05-05 work: (1) DESIGN.md §4.4 + §4.5 finalised — both surfaces specced, port shape pinned, `SurfaceKey` shape change documented; (2) `CantonLedgerPort` interface declared in `ports/canton/` (no SDK adapter yet); (3) `CantonIdentityPort` declared (DID → partyId, parallel to `TenzroIdentityPort`); (4) `SurfaceKey` variants for `canton-internal` / `canton-external` extended to namespace + signing keys + threshold + hosting participant + synchronizerId; (5) `cantonInternalSurface` + `cantonExternalSurface` wired to ports — `sign`/`submit` delegate to ports, ports throw "SDK pending" until 4b lands; (6) typecheck + tests still green. |
 | 4b | **Canton MainNet surface live (M4 SDK phase)** | Post-2026-05-05 work, gated on the Splice 0.5.x baseline being available: (1) `SpliceValidatorAdapter` — the only file importing `@canton-network/wallet-sdk`; (2) Onboarding flow against `topology/{generate,submit}` + `setup-proposal/{prepare-accept,submit-accept}`; (3) `PreparedTransaction` proto vendored from Canton OSS, re-decoded for user verification, hash recomputed and asserted (SHA-256, hash purpose 11, `HASHING_SCHEME_VERSION_V2` pinned); (4) Two-path transfer routing (preapproval vs Token Standard two-step) with Scan preapproval lookup; (5) CC `Numeric 10` decimal-string marshalling at the port boundary; (6) `watch()` against `/v2/commands/completions`; (7) CIP-0103 Async dApp API endpoint generated from `openrpc-dapp-remote-api.json`, hosted on Tenzro RPC nodes; (8) Signing API endpoint generated from `openrpc-signing-api.json` so any `wallet-gateway-remote` can delegate to Tenzro; (9) WalletConnect bridge proxying WC sessions to the CIP-0103 endpoint; (10) `splice-amulet 0.1.17` pinned in `packageIdSelectionPreference`. Validates against the Tenzro-operated Canton validator. |
-| 5 | **Passkey-quorum custody (testnet 2-of-2)** | The §4.3 model end to end at the testnet shape: passkey-bound device share + node-TEE share, FROST-Ed25519 + FROST-secp256k1 threshold signing, node-hosted `/wallet/new` and `/wallet/recover` pages, DID Document with both pubkeys, recovery via passkey + pre-registered proof. Replaces the M2 "node-TEE + DPoP-asserted browser session" temporary custody with the network-governed model. |
-| 5.5 | **2-of-3 pre-launch upgrade** | QR pairing flow for second user device, threshold-redeal protocol (2-of-2 → 2-of-3), `pairing-channel` driver for two-user-device signing without TEE, social recovery via TDIP delegates. Lands before MainNet. |
+| 5 | **Passkey custody** | The §4.3 model: passkey enrolment, custody gate, guardians and recovery, ERC-4337 user ops signed by the passkey. The earlier threshold/share design was removed. |
 | 6 | Browser extension | `window.tenzro` provider, EIP-1193 + Solana wallet-adapter shims, end-to-end flow with a sample Tenzro dApp |
 | 7 | Settlement primitives | Escrow create/release/refund (all 6 release modes), nanopayment channel open/update/close, x402 HTTP-402 interception |
 | 8 | Bridge router | LI.FI + CCIP + LayerZero adapters; route-selection UI; first cross-chain Tenzro→Ethereum and Tenzro→Canton-MainNet move |
 | 9 | TDIP integration | DID provisioning at first launch, DID Document export, AP2 + Mastercard Agent Pay sessions with KYA tier checks |
 
-Milestones 1–5.5 are the unique-and-hard part. 6 onward is mostly assembly.
+Milestones 1–5 are the unique-and-hard part. 6 onward is mostly assembly.
 
 ### 10.1 Deferred work
 
@@ -565,55 +512,18 @@ The following items have ports / shapes pinned but full implementation is gated.
 
 | Area | Deferred element | Gate | Kernel state |
 |---|---|---|---|
-| M5 | `core-signing-frost-secp256k1` + `core-signing-frost-ed25519` device drivers | Library selection (ZF `frost-ed25519` / `frost-secp256k1`, NCC-audited Oct 2023; ship as wasm-bindgen WASM) — host loads WASM at construction time | **Drivers + coordinator port + HTTP adapter shipped.** `frostEd25519Driver()` + `frostSecp256k1Driver()` orchestrate the 3-round protocol against `FrostCoordinator`. `FrostHttpAdapter` (at `src/custody/frost/http-adapter.ts`) implements that port against Tenzro `/wallet/frost/{ed25519,secp256k1}/*`. `FrostBackend` injection point includes `frostBackendUnavailable()` (typed-throw stub) and `composeFrostBackend({ed25519, secp256k1})` (per-curve dispatch) at `src/custody/frost/backend.ts`; host plugs in WASM-wrapped ZF FROST. |
-| M5 | ML-DSA-65 leg threshold-signing | Audited threshold ML-DSA library exists (NIST IR 8214C tracks it; nothing audited as of 2026-05) | **TEE-only path shipped + HTTP adapter shipped.** `MlDsaCoordinator` exposes `mode: 'tee-only' \| 'threshold'`; `hybridEd25519MlDsaDriver()` composes FROST-Ed25519 + node-TEE ML-DSA in parallel. `MlDsaHttpAdapter` (at `src/custody/mldsa/http-adapter.ts`) wraps `/wallet/mldsa/{capabilities,sign}`. When `capabilities().mode` flips to `'threshold'`, the driver swaps without caller change. |
-| M5 | PRF/largeBlob-vs-escrow share-unwrap path | Runtime branch in device-provisioning UI | **Unwrapper + HTTP adapter + WebAuthn adapter shipped.** `PasskeyShareUnwrapper` does capability-driven mode selection (PRF > largeBlob > escrow), wipes share bytes on dispose. `ShareEnvelopeHttpAdapter` (at `src/custody/passkey-share/http-adapter.ts`) wraps `/wallet/share/{envelope,escrow/challenge,escrow/unwrap}`. `WebAuthnAuthenticatorAdapter` (at `src/custody/passkey-share/webauthn-adapter.ts`) implements the browser-side `PasskeyAuthenticatorAdapter`: PRF as primary path (CTAP2.1 hmac-secret), largeBlob fallback, plain assertion for escrow. UI still out of kernel scope. |
-| M5 | Provisioning + recovery flows (§4.3.2 / §4.3.5) | Tenzro `/wallet/{new,recover}/*` endpoints | **Orchestrators shipped.** `walletNew()` (at `src/identity/wallet-new.ts`) drives the §4.3.2 flow: `ProvisioningPort.start` → `PasskeyEnroller.enroll` (`navigator.credentials.create`) → `ProvisioningPort.finalize` → optional `DeviceShareStore.put` → `confirm`, with cancel-on-failure rollback. `walletRecover()` mirrors it for §4.3.5 against `/wallet/recover/*`, accepting `email-otp` / `social` (delegate signatures) / `tenzro-id-kyc` proof envelopes plus a `forceRotate` flag for compromise-suspected paths. Both replace M1 `provisionIdentity()` deterministic mock; the M1 helper is retained for tests. |
-| M5.5 | Delegate-set-size UX | UX validation against onboarding tests | **Done in kernel.** `DelegateSetConfig` + `validateDelegateSet` + `defaultDelegateSet` (3-of-5 default, k/n configurable up to 5-of-7) shipped at `src/identity/delegate-set.ts`. |
+| M5 | Threshold and share-based custody | — | **Removed.** Custody is passkeys only (§4.3). |
 | M6 | `window.tenzro` injection — EIP-6963 announcement | Browser-extension package (`@tenzro/wallet-extension`) | **Builder shipped in kernel; consume side SDK-supplied.** Announce side: `buildEip6963Announcement()` at `src/dapp/eip6963.ts` (default rdns sourced from the SDK's `TENZRO_PROVIDER_RDNS = 'network.tenzro.wallet'` so announce/consume are aligned by import). Consume side: `tenzro-sdk` exports `discoverEip6963Provider`, `Eip1193Transport`, and `TenzroNotInstalledError`; the kernel re-exports them via `src/dapp/index.ts`. Injected-provider adapter path: `TenzroSdkAdapter.fromInjected({rdns, timeoutMs, config})` in `src/ports/adapters/tenzro-sdk-adapter.ts` wraps `TenzroClient.fromInjected()` so dApp hosts get a kernel-shaped `TenzroRpcPort` whose RPC calls travel through `provider.request(...)` instead of a fetch endpoint. The browser-extension package (M6) still owns the actual `window.tenzro` injection + `dispatchEvent`. |
 | M7 | Visa TAP credential signer + Mastercard Agent Pay token issuance | `tenzro-sdk` `PaymentClient.signVisaTap` + `issueMastercardToken` | **Settle-side live; issuance pending.** `payVisaTap()` + `payMastercard()` shipped in `tenzro-sdk@0.2.0` (`tenzro_payVisaTap` / `tenzro_payMastercard` RPCs); the wallet's `payment-rails-adapter` calls them through. Issuance-side hooks (`signVisaTap()` / `issueMastercardToken()` on `PaymentRailsPort`) still throw "SDK pending" until the issuance SDK methods exist; wire mapping is final. |
 | M7 | OpenAI ACP buyer adapter | `tenzro-sdk` `AcpClient` | **Adapter wired against structural `AcpClientLike`.** `AcpSdkAdapter` mirrors public ACP v1 wire shape; swap structural type for SDK type when it ships. |
 | M8 | Bridge router adapters (LI.FI / CCIP / LayerZero / Wormhole / deBridge / Canton) | `tenzro-sdk` `client.bridge.{getRoutes,bridgeTokens,getTransferStatus,listAdapters}` | **Live on testnet.** `BridgeRoutePort` in `src/ports/bridge/bridge.ts` + six per-vendor adapters in `src/ports/bridge/adapters/`. All adapters forward to the SAME `client.bridge` (`getRoutes` + `bridgeTokens` shipped in `tenzro-sdk@0.2.0`) and pass `vendor: BridgeAdapterId` as a multiplexing arg — matching what Tenzro ships (one router, six vendor IDs). |
 | ERC-7802 | SuperchainERC20 cross-chain mint/burn calldata | `tenzro-sdk` `client.erc7802().{crosschainMint,crosschainBurn}` | **Live on testnet.** `Erc7802Port` at `src/ports/agent/erc7802.ts`; `Erc7802SdkAdapter` calls `Erc7802Client.{crosschainMint,crosschainBurn}` (shipped in `tenzro-sdk@0.2.0`) and returns `{to, data, value}` calldata that the wallet routes through the `evm-on-tenzro` surface for signing. |
 | Cross-chain escrow | HTLC-style Tenzro↔Canton escrow | Splice allocation-contract maturity + Tenzro VM HTLC tx_type | **Port + adapter shipped (SDK-pending).** `HtlcEscrowPort` at `src/ports/agent/htlc-escrow.ts`; `HtlcEscrowSdkAdapter` calls `tenzro-sdk` `SettlementClient.{lockHtlc,redeemHtlc,refundHtlc,getHtlc}` when present, throws "SDK pending" otherwise. Wire shape (`/v1/htlc/*`, base64-encoded secrets) pinned. |
-| Cross-cutting | Receive-memo generalisation (§11.9) | None — straightforward shape | **Done in kernel.** `MemoSpec` on `Intent` + `SurfaceModule.memoSpec()` + `kernel.memoSpec(intent)`; canton-external surface returns the canonical 256-char text spec. |
+| Cross-cutting | Receive-memo generalisation (§11.7) | None — straightforward shape | **Done in kernel.** `MemoSpec` on `Intent` + `SurfaceModule.memoSpec()` + `kernel.memoSpec(intent)`; canton-external surface returns the canonical 256-char text spec. |
 
 ### 10.2 Tenzro endpoints needed (kernel consumes; Tenzro implements)
 
 The kernel-side ports + adapters above target a stable set of Tenzro-hosted endpoints. They're enumerated here so the Tenzro RPC implementation has a single contract to ship against. All requests use snake_case wire form; the wallet kernel translates to camelCase + `bigint` at the adapter boundary. All endpoints are JSON over HTTPS unless noted (the bridge `track` may stream).
-
-**Custody — FROST round-coordination** (`src/custody/frost/coordinator.ts`)
-
-| Method | Path | Body | Response |
-|---|---|---|---|
-| POST | `/wallet/frost/{ed25519\|secp256k1}/start` | `{did, surface_key, scheme, preimage_b64, purpose?}` | `{session_id, expires_at, participants[]}` |
-| POST | `/wallet/frost/{ed25519\|secp256k1}/commit` | `{session_id, device_commitment_b64}` | `{session_id, state}` |
-| POST | `/wallet/frost/{ed25519\|secp256k1}/await-challenge` | `{session_id}` (long-poll) | `{session_id, state, group_commitment_b64, signer_set[], lambda_b64}` |
-| POST | `/wallet/frost/{ed25519\|secp256k1}/respond` | `{session_id, device_share_b64}` | `{session_id, state}` |
-| POST | `/wallet/frost/{ed25519\|secp256k1}/finalize` | `{session_id}` | `{session_id, state, signature_b64}` |
-| POST | `/wallet/frost/{ed25519\|secp256k1}/abort` | `{session_id, reason?}` | (idempotent) |
-
-**Custody — ML-DSA-65** (`src/custody/mldsa/coordinator.ts`)
-
-| Method | Path | Body | Response |
-|---|---|---|---|
-| GET  | `/wallet/mldsa/capabilities` | — | `{mode: 'tee-only'\|'threshold', public_key?}` |
-| POST | `/wallet/mldsa/sign` | `{did, surface_key, preimage_b64, purpose?}` | `{signature_b64}` (3293 bytes) |
-| POST | `/wallet/mldsa/{start-round,commit,respond,finalize}` | (parallel to FROST shape) | (threshold mode only — gated on NIST IR 8214B) |
-
-**Custody — Passkey share unwrap** (`src/custody/passkey-share/unwrapper.ts`)
-
-| Method | Path | Body | Response |
-|---|---|---|---|
-| GET  | `/wallet/share/envelope?credential_id=…&surface_key=…` | — | `{wrapped_share_b64, alg, salt_b64}` (PRF/largeBlob path) |
-| POST | `/wallet/share/escrow/challenge` | `{credential_id, surface_key}` | `{nonce, expires_at}` |
-| POST | `/wallet/share/escrow/unwrap` | `{credential_id, surface_key, assertion, nonce}` | `{wrapped_share_b64, pepper_b64}` |
-
-**Custody — QR pairing** (`src/custody/pairing/port.ts` — already shipped)
-
-| Method | Path | Notes |
-|---|---|---|
-| POST | `/wallet/pairing/{start,claim,poll,finalize,cancel}` | 2-of-2 → 2-of-3 redeal |
 
 **HTLC cross-chain escrow** (`src/ports/agent/adapters/htlc-escrow-adapter.ts`)
 
@@ -644,27 +554,23 @@ For Canton, the build step emits a DAML command body (`transactions[].body = {co
 
 **Already-live endpoints (consumed via existing `tenzro-sdk` clients)**
 
-- `tenzro_signAndSendTransaction` + DPoP-bound session (M2 baseline)
-- Wallet-control RPCs `/wallet/{new,recover,balance,send,…}` (per `reference_tenzro_architecture`)
+- Passkey custody RPCs: `tenzro_enrollPasskey`, `tenzro_createCustodyChallenge`, `tenzro_addGuardian`, `tenzro_listGuardians`, `tenzro_initiateRecovery`, `tenzro_submitRecoverySignature`, `tenzro_finalizeRecovery`, and `eth_sendUserOperation`
 - Canton ledger-API `/v2/{commands,state,topology,…}` (M4b)
 - AP2 / ERC-8004 / agent-payment / nanopayment / session-key / TEE-attestation / native escrow / payment-rails RPCs
 
-The endpoint set above is what the Tenzro RPC + node TEE need to host for milestones M5 onward to light up end-to-end.
+The endpoint set above is what the Tenzro RPC needs to host for milestones M5 onward to light up end-to-end.
 
 ---
 
 ## 11. Open questions / things to nail down before building
 
-1. **Threshold ML-DSA-65.** Hybrid signing on Tenzro native is Ed25519 + ML-DSA-65. FROST-Ed25519 is mature; threshold ML-DSA is research-stage. M5 ships with the Ed25519 leg threshold-signed across the device-quorum and the ML-DSA leg supplied by the node TEE alone (which means *the TEE is in every Tenzro-native sig until threshold ML-DSA exists*). When does that change? Track [NIST IR 8214B](https://csrc.nist.gov/projects/threshold-cryptography) and the FROST-PQ literature; revisit when an audited, WASM-shippable implementation exists.
-2. **secp256k1 for Canton external parties.** Canton 3.5 documents Ed25519 and ECDSA P-256 for `SigningAlgorithmSpec`. secp256k1 acceptance on Global Synchronizer MainNet is unclear in public docs as of 2026-04 — verify via the Canton crypto provider's enum in OSS source and the SV-allowlisted curves before locking in. If secp256k1 isn't accepted, the EVM-leg key cannot double as a Canton signing key for users who want a single keypair across surfaces; document the constraint at onboarding.
-3. **PRF/largeBlob fallback for share unwrap.** WebAuthn PRF and largeBlob extensions are the cleanest way to derive a share-unwrap key from a passkey assertion, but Safari/iOS support is partial as of 2026-04. For platforms that lack PRF, fall back to wrapping the share with a server-held key escrowed under a per-passkey envelope (the node TEE holds the envelope key; the passkey assertion authorises decryption). Document the threat-model difference between PRF-mode and escrow-mode share storage.
-4. **Hashing scheme version migration.** Canton currently mandates `HASHING_SCHEME_VERSION_V2` for prepared-transaction hashing. A V3 will ship eventually, with different proto canonicalisation rules. The wallet's hash recomputation breaks silently if it's not version-aware. Strategy: pin the version explicitly in code, reject `prepareSubmission` responses carrying a version the wallet doesn't implement, fail loudly. Track Canton release notes for the V3 announcement; treat scheme upgrades as forced-upgrade events for the wallet.
-5. **PreparedTransaction proto vendoring strategy.** ~~The proto is in Canton OSS (`community/ledger/ledger-api/.../interactive_submission_service.proto`) but not published as an npm package independent of the full SDK. Options: (a) vendor the `.proto` into `tenzro-wallet` and generate TS bindings at build time, (b) consume `@canton-network/wallet-sdk`'s exported types and accept the version pinning that comes with it, (c) hand-write a minimal subset of the proto types we actually decode.~~ **Resolved (2026-04):** option (b) — consume `@canton-network/wallet-sdk`'s exported types via `SpliceValidatorAdapter`. The adapter is the only kernel file that imports the Canton SDK; the version pinning is contained there and aligns with our `splice-amulet 0.1.17` pin. Vendoring (a) was rejected as duplicate maintenance; hand-rolling (c) was rejected as a re-decoding gap risk.
-6. **dApp provider discovery in the browser-extension form factor.** ~~CIP-0103 explicitly defers multi-provider discovery to "a future CIP" that has not been filed.~~ **Resolved (2026-04):** follow [EIP-6963](https://eips.ethereum.org/EIPS/eip-6963) conventions for in-page provider announcement (`eip6963:announceProvider` / `eip6963:requestProvider` with a Tenzro-namespaced `info.rdns`). WalletConnect remains the bridge for institutional/server dApps. Revisit if a Canton CIP lands.
-7. **Cross-chain escrow.** Punted for v1 (use AP2 + bridge). v2 candidate: hashed-timelock-style escrow that locks on Tenzro and unlocks on Canton on proof of Canton-side delivery. Needs Splice allocation-contract maturity. **Partial coverage shipped (2026-05):** for SuperchainERC20-compatible tokens (TNZO + others), `Erc7802Port` provides supply-consistent crosschain mint/burn that bypasses bridge aggregators entirely — no escrow needed when the token itself is ERC-7802. The HTLC port (§11.7) still covers the Canton corridor where DAML settlement is needed.
-8. **Stablecoin on Tempo.** ~~[Tempo integration](https://tenzro.com/docs/tempo) is in the docs as TIP-20 USDC/USDT with sub-second finality. Treat Tempo as a fifth surface or as an asset-routing detail under the existing surfaces?~~ **Resolved (2026-04):** asset-routing detail. Tempo is reachable through the existing EVM and Tenzro-native surfaces; users see "USDC" with a "Tempo" badge in the unified balance view. No fifth surface, no new `SurfaceKey` variant. Routing decisions land in `selectRoute()` based on asset preference + corridor availability.
-9. **Receive memos for non-Canton chains.** Some external chains (e.g. Stellar, XRPL via bridge) require memos. Generalize the "exchange recipient with memo" pattern across all surfaces, not just Canton.
-10. **Social-recovery delegate set size.** §4.3.6 specifies "k of n TDIP delegates" but doesn't fix the numbers. 3-of-5 is the Argent default; 2-of-3 is friendlier; 5-of-7 is exchange-grade. **Deferred to UX validation (M5.5):** ship 3-of-5 default, allow user-configurable k/n at delegate-set creation, validate against onboarding usability tests before MainNet.
+1. **secp256k1 for Canton external parties.** Canton 3.5 documents Ed25519 and ECDSA P-256 for `SigningAlgorithmSpec`. secp256k1 acceptance on Global Synchronizer MainNet is unclear in public docs as of 2026-04 — verify via the Canton crypto provider's enum in OSS source and the SV-allowlisted curves before locking in. If secp256k1 isn't accepted, the EVM-leg key cannot double as a Canton signing key for users who want a single keypair across surfaces; document the constraint at onboarding.
+2. **Hashing scheme version migration.** Canton currently mandates `HASHING_SCHEME_VERSION_V2` for prepared-transaction hashing. A V3 will ship eventually, with different proto canonicalisation rules. The wallet's hash recomputation breaks silently if it's not version-aware. Strategy: pin the version explicitly in code, reject `prepareSubmission` responses carrying a version the wallet doesn't implement, fail loudly. Track Canton release notes for the V3 announcement; treat scheme upgrades as forced-upgrade events for the wallet.
+3. **PreparedTransaction proto vendoring strategy.** ~~The proto is in Canton OSS (`community/ledger/ledger-api/.../interactive_submission_service.proto`) but not published as an npm package independent of the full SDK. Options: (a) vendor the `.proto` into `tenzro-wallet` and generate TS bindings at build time, (b) consume `@canton-network/wallet-sdk`'s exported types and accept the version pinning that comes with it, (c) hand-write a minimal subset of the proto types we actually decode.~~ **Resolved (2026-04):** option (b) — consume `@canton-network/wallet-sdk`'s exported types via `SpliceValidatorAdapter`. The adapter is the only kernel file that imports the Canton SDK; the version pinning is contained there and aligns with our `splice-amulet 0.1.17` pin. Vendoring (a) was rejected as duplicate maintenance; hand-rolling (c) was rejected as a re-decoding gap risk.
+4. **dApp provider discovery in the browser-extension form factor.** ~~CIP-0103 explicitly defers multi-provider discovery to "a future CIP" that has not been filed.~~ **Resolved (2026-04):** follow [EIP-6963](https://eips.ethereum.org/EIPS/eip-6963) conventions for in-page provider announcement (`eip6963:announceProvider` / `eip6963:requestProvider` with a Tenzro-namespaced `info.rdns`). WalletConnect remains the bridge for institutional/server dApps. Revisit if a Canton CIP lands.
+5. **Cross-chain escrow.** Punted for v1 (use AP2 + bridge). v2 candidate: hashed-timelock-style escrow that locks on Tenzro and unlocks on Canton on proof of Canton-side delivery. Needs Splice allocation-contract maturity. **Partial coverage shipped (2026-05):** for SuperchainERC20-compatible tokens (TNZO + others), `Erc7802Port` provides supply-consistent crosschain mint/burn that bypasses bridge aggregators entirely — no escrow needed when the token itself is ERC-7802. The HTLC port (§11.5) still covers the Canton corridor where DAML settlement is needed.
+6. **Stablecoin on Tempo.** ~~[Tempo integration](https://tenzro.com/docs/tempo) is in the docs as TIP-20 USDC/USDT with sub-second finality. Treat Tempo as a fifth surface or as an asset-routing detail under the existing surfaces?~~ **Resolved (2026-04):** asset-routing detail. Tempo is reachable through the existing EVM and Tenzro-native surfaces; users see "USDC" with a "Tempo" badge in the unified balance view. No fifth surface, no new `SurfaceKey` variant. Routing decisions land in `selectRoute()` based on asset preference + corridor availability.
+7. **Receive memos for non-Canton chains.** Some external chains (e.g. Stellar, XRPL via bridge) require memos. Generalize the "exchange recipient with memo" pattern across all surfaces, not just Canton.
 
 ### 11.1 SDK gaps — ports declared, adapters pending
 
@@ -684,10 +590,10 @@ When the SDK adds the missing client, the kernel-side change is mechanical: for 
 ## 12. Why not just use what exists
 
 - **MetaMask + Phantom + Splice Wallet UI + tenzro-cli** — four UIs, four seed phrases, four consent flows, no unified balance, no cross-VM pointer awareness. The whole point of Tenzro's runtime is wasted at the UX layer.
-- **Fork MetaMask, add SVM and Canton** — MetaMask's account model is single-secp256k1-key-per-account. TDIP, passkey-quorum custody, and Canton external parties all violate that assumption. The fork would be 80% rewrite.
+- **Fork MetaMask, add SVM and Canton** — MetaMask's account model is single-secp256k1-key-per-account. TDIP, passkey custody, and Canton external parties all violate that assumption. The fork would be 80% rewrite.
 - **Use Splice Wallet Kernel as-is** — it's Canton-only. Brilliant for Canton, but no EVM/SVM/Tenzro-native surface, no AP2, no x402.
 - **Wallet-as-a-service (Dynamic, Privy, Web3Auth)** — closes the seed-phrase problem but doesn't solve the multi-VM, TDIP, settlement-primitive, or Canton-external-party problems, and they custody keys on their servers (not in the user's passkey-protected secure enclaves). Useful as a *signer driver* for users who want it (we'd add `core-signing-privy` to the driver list), not as the wallet's default.
-- **MPC-as-a-service (Fireblocks, Coinbase WaaS, Lit Protocol)** — solves threshold signing but doesn't solve passkey UX, multi-VM, or Canton. A `core-signing-fireblocks` driver makes sense for institutional users; for everyone else, the Tenzro-native passkey-quorum is the answer.
+- **MPC-as-a-service (Fireblocks, Coinbase WaaS, Lit Protocol)** — solves threshold signing but doesn't solve passkey UX, multi-VM, or Canton. A `core-signing-fireblocks` driver makes sense for institutional users; for everyone else, passkey custody is the answer.
 
 The right move is to build the kernel, reuse Splice Wallet Kernel patterns where they fit (CIP-103, signing-driver shape, external party flow), and own the unifying layer ourselves.
 

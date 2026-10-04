@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { toHex } from '../../../custody/passkey/bytes.ts';
-import type { CustodyAuthorization } from '../../../custody/passkey/gate.ts';
+import { type CustodyAuthorization, custodyChallengeDigest } from '../../../custody/passkey/gate.ts';
+import { fromHex } from '../../../custody/passkey/bytes.ts';
 import type { AgentTermsChallenge } from '../agent-payment.ts';
 import { type AgentTermsWire, agentTermsTarget } from '../agent-terms.ts';
 import vectors from '../fixtures/agent-terms-targets.json' with { type: 'json' };
@@ -45,9 +46,13 @@ const auth: CustodyAuthorization = {
 function termsClient(returned: AgentTermsWire, seen: AgentTermsChallenge[]): AgentTermsClientLike {
   return {
     async updateAgentTerms(account, agentDid, _terms, rotate, authorize) {
+      const target = agentTermsTarget(returned, rotate);
+      const nonce = new Uint8Array(16).fill(7);
       const a = await authorize({
         challenge_id: 'c1',
-        challenge_hex: `0x${'11'.repeat(32)}`,
+        challenge_hex: toHex(custodyChallengeDigest(fromHex(account), 'update_agent_terms', target, nonce), true),
+        nonce_hex: toHex(nonce, true),
+        target_hex: toHex(target, true),
         account_address: account,
         expires_in_secs: 60,
         delegation: returned as unknown as Record<string, unknown>,

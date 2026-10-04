@@ -9,8 +9,8 @@
  */
 
 import type { AgentPaymentClient, AuthClient } from 'tenzro-sdk';
-import { toHex } from '../../../custody/passkey/bytes.ts';
-import type { CustodyAuthorization } from '../../../custody/passkey/gate.ts';
+import { fromHex, toHex } from '../../../custody/passkey/bytes.ts';
+import { type CustodyAuthorization, custodyChallengeDigest } from '../../../custody/passkey/gate.ts';
 import type {
   AgentPaymentPort,
   AgentTermsUpdated,
@@ -30,6 +30,9 @@ interface RawChallenge {
   challenge_id: string;
   challenge_hex: string;
   account_address: string;
+  /** The 16-byte nonce and the target the digest binds, `0x` hex. */
+  nonce_hex: string;
+  target_hex: string;
   expires_in_secs: number;
   delegation?: Record<string, unknown>;
 }
@@ -113,6 +116,21 @@ export class AgentPaymentSdkAdapter implements AgentPaymentPort {
         }
         const delegation = challenge.delegation as unknown as AgentTermsWire;
         const targetHex = checkCompletedTerms(req.terms, delegation, req.rotateTokens);
+        const strip = (h: string) => h.replace(/^0x/, '').toLowerCase();
+        const nonce = fromHex(challenge.nonce_hex ?? '');
+        const digest = custodyChallengeDigest(
+          fromHex(req.accountAddress),
+          'update_agent_terms',
+          fromHex(targetHex),
+          nonce,
+        );
+        if (
+          nonce.length !== 16 ||
+          strip(challenge.target_hex ?? '') !== strip(targetHex) ||
+          strip(challenge.challenge_hex) !== toHex(digest)
+        ) {
+          throw new Error('The node issued a challenge for different terms than the ones checked; nothing was signed.');
+        }
         return req.authorize({
           challenge_id: challenge.challenge_id,
           challenge_hex: challenge.challenge_hex,

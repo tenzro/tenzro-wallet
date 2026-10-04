@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { fromHex, toHex } from './bytes.ts';
 import { PasskeyCustody } from './custody.ts';
 import { humanDidFromPasskey, recoverAssertionPublicKeys } from './derive.ts';
-import { FakeAuthenticator, MockRpc, challengeDigest } from './fake-authenticator.fixture.ts';
+import { FakeAuthenticator, MockRpc, issuedChallenge } from './fake-authenticator.fixture.ts';
 import { PasskeyError } from './webauthn.ts';
 
 const FIRST = '0x00000000000000000000000000000000000a11ce';
@@ -24,9 +24,9 @@ function setup(recordCredentials?: () => unknown[]) {
   let firstXy = '';
   let firstCred = '';
   const rpc = new MockRpc({
-    tenzro_createCustodyChallenge: () => {
+    tenzro_createCustodyChallenge: (p: { account_address: string; operation: string; target_hex?: string }) => {
       n += 1;
-      return { challenge_id: `c${n}`, challenge_hex: challengeDigest(n), expires_in_secs: 300 };
+      return issuedChallenge(n, p);
     },
     tenzro_enrollPasskey: (p: {
       passkey_public_key_hex: string;
@@ -223,9 +223,9 @@ describe('linking a phone from the first device', () => {
     const ids: string[] = [];
     let n = 0;
     const rpc = new MockRpc({
-      tenzro_createCustodyChallenge: () => {
+      tenzro_createCustodyChallenge: (p: { account_address: string; operation: string; target_hex?: string }) => {
         n += 1;
-        return { challenge_id: `c${n}`, challenge_hex: challengeDigest(n), expires_in_secs: 300 };
+        return issuedChallenge(n, p);
       },
       tenzro_enrollPasskey: (p: { passkey_public_key_hex: string; credential_id_hex: string }) => {
         ids.push(p.credential_id_hex.replace(/^0x/, ''));
@@ -271,9 +271,9 @@ describe('linking a phone from the first device', () => {
     const ids: string[] = [];
     let n = 0;
     const rpc = new MockRpc({
-      tenzro_createCustodyChallenge: () => {
+      tenzro_createCustodyChallenge: (p: { account_address: string; operation: string; target_hex?: string }) => {
         n += 1;
-        return { challenge_id: `c${n}`, challenge_hex: challengeDigest(n), expires_in_secs: 300 };
+        return issuedChallenge(n, p);
       },
       tenzro_enrollPasskey: (p: { passkey_public_key_hex: string; credential_id_hex: string }) => {
         ids.push(p.credential_id_hex.replace(/^0x/, ''));

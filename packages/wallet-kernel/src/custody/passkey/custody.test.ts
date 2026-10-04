@@ -492,6 +492,144 @@ describe('recovery', () => {
     expect(cd.challenge).toBe(b64url(recoveryApprovalChallenge(opHash)));
   });
 
+  /**
+   * Wire vectors for the node: the requests this wallet sends to enrol a
+   * passkey, add a guardian and approve a recovery, with the values both
+   * sides derive. TENZRO_WRITE_FIXTURES=1 rewrites the file (keys and
+   * signatures are fresh each time); otherwise the derived values in the
+   * committed file are recomputed here. The node's
+   * passkey_rpc_wallet_vectors test verifies the same file.
+   */
+  it('matches the committed wire vectors', async () => {
+    const fs = await import('node:fs');
+    const path = new URL('./fixtures/wire-vectors.json', import.meta.url);
+    type Vectors = {
+      rp_id: string;
+      account: string;
+      account_passkey_hex: string;
+      enroll_request: Record<string, unknown>;
+      guardian_card: GuardianCard;
+      other_guardian_card: GuardianCard;
+      add_guardian: { target_hex: string; nonce_hex: string; challenge_hex: string; request: Record<string, unknown> };
+      recovery: {
+        recovery_id: string;
+        expires_at_ms: number;
+        initiate_request: Record<string, unknown>;
+        op_hash_hex: string;
+        approval_challenge_hex: string;
+        guardian_index: number;
+        submit_request: Record<string, unknown>;
+      };
+    };
+    if (process.env.TENZRO_WRITE_FIXTURES === '1') {
+      const { rpc, custody, account, auth } = await enrolled();
+      rpc.handlers.tenzro_addGuardian = (() => ({ guardian_count: 2, threshold: 2 })) as (params: never) => unknown;
+      // Fake authenticators derive keys from a counter: skip ahead so every
+      // passkey in the vectors is distinct.
+      const fresh = async (skip: number) => {
+        const a = new FakeAuthenticator();
+        for (let i = 0; i < skip; i++) await a.create({ userId: new Uint8Array(16), userName: 'skip' });
+        return a;
+      };
+      const guardianDevice = await fresh(1);
+      guardianDevice.tier = 'synced';
+      guardianDevice.aaguid = new Uint8Array(16).fill(0xa1);
+      const guardian = new PasskeyCustody({ rpc, authenticator: guardianDevice });
+      const card = await guardian.createGuardian({ label: '  Sam (é) ', source: 'trusted_person' });
+      guardianDevice.preferred = card.credentialId.replace(/^0x/, '').toLowerCase();
+      await custody.addGuardian({ account: account.account, card, threshold: 2, approver: { id: account.credentialId } });
+      const challenge = rpc.paramsOf('tenzro_createCustodyChallenge').at(-1)!;
+      const nonce = new Uint8Array(16).fill(rpc.paramsOf('tenzro_createCustodyChallenge').length);
+      const target = guardianTarget(card);
+
+      const node = recoveryNode();
+      const { request } = await new PasskeyCustody({ rpc: node, authenticator: await fresh(2) }).startRecovery({
+        account: ACCOUNT,
+        label: 'New phone',
+      });
+      const other = await new PasskeyCustody({ rpc: node, authenticator: await fresh(3) }).createGuardian({
+        label: 'Other',
+        source: 'security_key',
+      });
+      const member = (c: GuardianCard, index: number) => ({
+        index,
+        p256_pubkey_hex: c.p256,
+        role: c.role,
+        aaguid: '0x',
+        backup_eligible: false,
+        backup_state: false,
+      });
+      node.handlers.tenzro_listGuardians = (() => ({
+        threshold: 2,
+        independent_roots: 2,
+        members: [member(other, 0), member(card, 1)],
+      })) as (params: never) => unknown;
+      const approver = new PasskeyCustody({ rpc: node, authenticator: guardianDevice });
+      await approver.approveRecovery(request);
+      const opHash = recoveryOpHash({
+        account: ACCOUNT,
+        newPasskeyPublicKey: fromHex(request.newPasskeyPublicKeyHex),
+        newCredentialId: fromHex(request.newCredentialIdHex),
+        recoveryId: request.recoveryId,
+        expiresAtMs: request.expiresAtMs,
+      });
+      const v: Vectors = {
+        rp_id: auth.rpId,
+        account: account.account,
+        account_passkey_hex: toHex(auth.credentials[0]!.publicKey, true),
+        enroll_request: rpc.paramsOf('tenzro_enrollPasskey')[0]!,
+        guardian_card: card,
+        other_guardian_card: other,
+        add_guardian: {
+          target_hex: toHex(target, true),
+          nonce_hex: toHex(nonce, true),
+          challenge_hex: toHex(
+            custodyChallengeDigest(fromHex(account.account), String(challenge.operation), target, nonce),
+            true,
+          ),
+          request: rpc.paramsOf('tenzro_addGuardian')[0]!,
+        },
+        recovery: {
+          recovery_id: request.recoveryId,
+          expires_at_ms: request.expiresAtMs,
+          initiate_request: node.paramsOf('tenzro_initiateRecovery')[0]!,
+          op_hash_hex: toHex(opHash, true),
+          approval_challenge_hex: toHex(recoveryApprovalChallenge(opHash), true),
+          guardian_index: 1,
+          submit_request: node.paramsOf('tenzro_submitRecoverySignature')[0]!,
+        },
+      };
+      fs.mkdirSync(new URL('./fixtures/', import.meta.url), { recursive: true });
+      fs.writeFileSync(path, `${JSON.stringify(v, null, 2)}\n`);
+    }
+    const v = JSON.parse(fs.readFileSync(path, 'utf8')) as Vectors;
+    const target = guardianTarget(v.guardian_card);
+    expect(toHex(target, true)).toBe(v.add_guardian.target_hex);
+    expect(
+      toHex(custodyChallengeDigest(fromHex(v.account), 'add_guardian', target, fromHex(v.add_guardian.nonce_hex)), true),
+    ).toBe(v.add_guardian.challenge_hex);
+    const keys = [
+      v.account_passkey_hex,
+      v.guardian_card.p256,
+      v.other_guardian_card.p256,
+      String(v.recovery.initiate_request.new_passkey_public_key_hex),
+    ];
+    expect(new Set(keys).size).toBe(keys.length);
+    expect(v.add_guardian.request.label).toBe(v.guardian_card.label);
+    expect(v.add_guardian.request.guardian_p256_pubkey_hex).toBe(v.guardian_card.p256);
+    const r = v.recovery;
+    const opHash = recoveryOpHash({
+      account: String(r.initiate_request.account_address),
+      newPasskeyPublicKey: fromHex(String(r.initiate_request.new_passkey_public_key_hex)),
+      newCredentialId: fromHex(String(r.initiate_request.new_credential_id_hex)),
+      recoveryId: r.recovery_id,
+      expiresAtMs: r.expires_at_ms,
+    });
+    expect(toHex(opHash, true)).toBe(r.op_hash_hex);
+    expect(toHex(recoveryApprovalChallenge(opHash), true)).toBe(r.approval_challenge_hex);
+    expect(r.submit_request.guardian_index).toBe(r.guardian_index);
+  });
+
   it('round-trips a recovery request as text and refuses anything else', async () => {
     const rpc = recoveryNode();
     const { request } = await new PasskeyCustody({ rpc, authenticator: new FakeAuthenticator() }).startRecovery({

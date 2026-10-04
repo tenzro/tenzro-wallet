@@ -9,6 +9,7 @@ import { p256 } from '@noble/curves/nist.js';
 import { sha256 } from '@noble/hashes/sha2.js';
 
 import { concatBytes, fromHex, toHex, toNumberArray, utf8 } from './bytes.ts';
+import { custodyChallengeDigest } from './gate.ts';
 import { PasskeyError } from './webauthn.ts';
 import type {
   CreatePasskeyOptions,
@@ -89,6 +90,11 @@ export class FakeAuthenticator implements PasskeyAuthenticator {
         cred.aaguid,
         new Uint8Array([0, cred.id.length]),
         cred.id,
+        // COSE_Key {1: 2 (EC2), 3: -7 (ES256), -1: 1 (P-256), -2: x, -3: y}
+        new Uint8Array([0xa5, 0x01, 0x02, 0x03, 0x26, 0x20, 0x01, 0x21, 0x58, 0x20]),
+        cred.publicKey.slice(0, 32),
+        new Uint8Array([0x22, 0x58, 0x20]),
+        cred.publicKey.slice(32),
       ),
       ...(/^0*$/.test(toHex(cred.aaguid)) ? {} : { aaguid: toHex(cred.aaguid) }),
     };
@@ -158,3 +164,20 @@ export class MockRpc {
 export const challengeDigest = (n: number): string => toHex(sha256(utf8(`challenge-${n}`)), true);
 
 export { fromHex };
+
+/** A custody challenge as the node issues it: the digest over the requested change and a nonce. */
+export function issuedChallenge(
+  n: number,
+  p: { account_address: string; operation: string; target_hex?: string },
+): Record<string, unknown> {
+  const nonce = new Uint8Array(16).fill(n);
+  const target = fromHex(p.target_hex ?? '');
+  const digest = custodyChallengeDigest(fromHex(p.account_address), p.operation, target, nonce);
+  return {
+    challenge_id: `c${n}`,
+    challenge_hex: toHex(digest, true),
+    nonce_hex: toHex(nonce, true),
+    target_hex: toHex(target, true),
+    expires_in_secs: 300,
+  };
+}

@@ -51,9 +51,9 @@ export interface CustodyChallenge {
   /** base64url of `signingDigest(AccountOwner, digest)`. */
   readonly webauthn_challenge?: string;
   /** The 16-byte nonce the digest binds, `0x` hex. */
-  readonly nonce_hex?: string;
+  readonly nonce_hex: string;
   /** The target the node bound, `0x` hex. */
-  readonly target_hex?: string;
+  readonly target_hex: string;
   readonly account_address?: string;
   readonly operation?: string;
   readonly expires_in_secs: number;
@@ -114,19 +114,16 @@ export async function requestCustodyChallenge(
   if (digest.length !== 32) {
     throw new PasskeyError('The node issued a malformed custody challenge.', 'invalid');
   }
-  if (challenge.nonce_hex !== undefined) {
-    const nonce = fromHex(challenge.nonce_hex);
-    const bound = challenge.target_hex !== undefined ? fromHex(challenge.target_hex) : target;
-    if (
-      nonce.length !== 16 ||
-      !equalBytes(bound, target) ||
-      !equalBytes(custodyChallengeDigest(fromHex(account), operation, target, nonce), digest)
-    ) {
-      throw new PasskeyError(
-        'The node issued a custody challenge for a different change than the one requested.',
-        'invalid',
-      );
-    }
+  const nonce = fromHex(challenge.nonce_hex ?? '');
+  if (
+    nonce.length !== 16 ||
+    !equalBytes(fromHex(challenge.target_hex ?? ''), target) ||
+    !equalBytes(custodyChallengeDigest(fromHex(account), operation, target, nonce), digest)
+  ) {
+    throw new PasskeyError(
+      'The node issued a custody challenge for a different change than the one requested.',
+      'invalid',
+    );
   }
   if (
     challenge.webauthn_challenge !== undefined &&

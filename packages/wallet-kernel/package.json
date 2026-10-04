@@ -1,7 +1,7 @@
 {
   "name": "tenzro-wallet",
   "version": "0.3.0",
-  "description": "Tenzro Wallet kernel: non-custodial passkey accounts (P-256 + ML-DSA-65, device linking, guardian recovery), hardware-rooted agents and machines, and one identity across the Tenzro native, EVM, SVM and Canton surfaces. Agent-payment ports, capital intents, bridge router, CAIP discovery.",
+  "description": "Tenzro Wallet kernel: non-custodial passkey accounts (P-256 passkeys, device linking, guardian recovery), hardware-rooted agents and machines, and one identity across the Tenzro native, EVM, SVM and Canton surfaces. Agent-payment ports, capital intents, bridge router, CAIP discovery.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
