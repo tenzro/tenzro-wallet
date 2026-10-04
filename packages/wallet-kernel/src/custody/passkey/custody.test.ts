@@ -7,10 +7,12 @@
 import { describe, expect, it } from 'vitest';
 
 import { fromHex, toHex } from './bytes.ts';
-import { ML_DSA_65_PUBLIC_KEY_BYTES, ML_DSA_65_SIGNATURE_BYTES } from './constants.ts';
-import { PasskeyCustody, guardianTarget } from './custody.ts';
-import { deriveCustodyKey, humanDidFromPasskey, verifyCustodySignature } from './derive.ts';
+import { SignatureContext, signingDigest, webauthnChallenge } from './composite.ts';
+import { PasskeyCustody, decodeRecoveryRequest, encodeRecoveryRequest } from './custody.ts';
+import { humanDidFromPasskey } from './derive.ts';
 import { passkeySigningDriver } from './driver.ts';
+import { custodyChallengeDigest } from './gate.ts';
+import { type GuardianCard, guardianTarget, recoveryApprovalChallenge, recoveryOpHash } from './guardian.ts';
 import { FakeAuthenticator, MockRpc, challengeDigest } from './fake-authenticator.fixture.ts';
 import { onboardDelegatedAgent, registerControlledMachine } from './machines.ts';
 import { PasskeyError } from './webauthn.ts';
@@ -26,10 +28,22 @@ function b64url(bytes: Uint8Array): string {
 function nodeMock(extra: Record<string, (params: never) => unknown> = {}) {
   let n = 0;
   const credentialIds: string[] = [];
+  const digests: Uint8Array[] = [];
   const rpc = new MockRpc({
-    tenzro_createCustodyChallenge: () => {
+    tenzro_createCustodyChallenge: (p: { account_address: string; operation: string; target_hex?: string }) => {
       n += 1;
-      return { challenge_id: `c${n}`, challenge_hex: challengeDigest(n), expires_in_secs: 300 };
+      const nonce = new Uint8Array(16).fill(n);
+      const target = p.target_hex ? fromHex(p.target_hex) : new Uint8Array(0);
+      const digest = custodyChallengeDigest(fromHex(p.account_address), p.operation, target, nonce);
+      digests.push(digest);
+      return {
+        challenge_id: `c${n}`,
+        challenge_hex: toHex(digest, true),
+        webauthn_challenge: webauthnChallenge(SignatureContext.AccountOwner, digest),
+        nonce_hex: toHex(nonce, true),
+        target_hex: toHex(target, true),
+        expires_in_secs: 300,
+      };
     },
     tenzro_enrollPasskey: (p: { passkey_public_key_hex: string; credential_id_hex: string }) => {
       credentialIds.push(p.credential_id_hex);
@@ -72,88 +86,75 @@ function nodeMock(extra: Record<string, (params: never) => unknown> = {}) {
     }),
     ...extra,
   });
-  return { rpc, credentialIds };
+  return { rpc, credentialIds, digests };
 }
 
 async function enrolled() {
   const auth = new FakeAuthenticator();
-  const { rpc, credentialIds } = nodeMock();
+  const { rpc, credentialIds, digests } = nodeMock();
   const custody = new PasskeyCustody({ rpc, authenticator: auth });
   const account = await custody.createWallet({ displayName: 'Ada' });
-  return { auth, rpc, custody, account, credentialIds };
+  return { auth, rpc, custody, account, credentialIds, digests };
 }
 
 describe('createWallet', () => {
-  it('proves possession of both legs over an enroll_passkey challenge', async () => {
-    const { auth, rpc, account } = await enrolled();
+  it('proves possession of the passkey over an enroll_passkey challenge', async () => {
+    const { auth, rpc, account, digests } = await enrolled();
     const cred = auth.credentials[0]!;
 
     const [challengeReq] = rpc.paramsOf('tenzro_createCustodyChallenge');
     // passkey_rpc.rs require_key_possession: account = the P-256 key (x || y),
-    // target = credential_id || ml_dsa_public_key.
+    // target = credential_id.
     expect(challengeReq?.account_address).toBe(toHex(cred.publicKey, true));
     expect(challengeReq?.operation).toBe('enroll_passkey');
-    const target = fromHex(challengeReq?.target_hex as string);
-    expect(toHex(target.slice(0, cred.id.length))).toBe(toHex(cred.id));
-    expect(target.length).toBe(cred.id.length + ML_DSA_65_PUBLIC_KEY_BYTES);
+    expect(challengeReq?.target_hex).toBe(toHex(cred.id, true));
 
     const [enroll] = rpc.paramsOf('tenzro_enrollPasskey');
     expect(Object.keys(enroll ?? {}).sort()).toEqual([
       'authorization',
       'credential_id_hex',
       'display_name',
-      'ml_dsa_public_key_hex',
       'passkey_public_key_hex',
+      'registration_authenticator_data_hex',
       'salt',
     ]);
     expect(enroll?.passkey_public_key_hex).toBe(toHex(cred.publicKey, true));
     expect(enroll?.credential_id_hex).toBe(toHex(cred.id, true));
     expect(enroll?.salt).toBe(0);
-    const vk = fromHex(enroll?.ml_dsa_public_key_hex as string);
-    expect(toHex(vk)).toBe(toHex(target.slice(cred.id.length)));
+    const reg = fromHex(enroll?.registration_authenticator_data_hex as string);
+    expect(reg[32]! & 0x40).toBe(0x40);
 
-    const authz = enroll?.authorization as {
-      challenge_id: string;
-      credential_id_hex: string;
+    const authz = enroll?.authorization as Record<string, unknown> & {
       assertion: Record<string, unknown>;
-      ml_dsa_signature_hex: string;
     };
+    expect(Object.keys(authz).sort()).toEqual(['assertion', 'challenge_id', 'credential_id_hex']);
     expect(authz.challenge_id).toBe('c1');
     expect(authz.credential_id_hex).toBe(toHex(cred.id, true));
     // Byte fields travel as JSON number arrays, never base64.
     expect(Array.isArray(authz.assertion.authenticator_data)).toBe(true);
-    expect(Array.isArray(authz.assertion.client_data_json)).toBe(true);
-    expect(Array.isArray(authz.assertion.signature)).toBe(true);
     const clientData = JSON.parse(
       new TextDecoder().decode(new Uint8Array(authz.assertion.client_data_json as number[])),
     ) as { challenge: string };
-    const digest = fromHex(challengeDigest(1));
-    expect(clientData.challenge).toBe(b64url(digest));
-    const mlSig = fromHex(authz.ml_dsa_signature_hex);
-    expect(mlSig).toHaveLength(ML_DSA_65_SIGNATURE_BYTES);
-    expect(verifyCustodySignature(digest, mlSig, vk)).toBe(true);
+    expect(clientData.challenge).toBe(webauthnChallenge(SignatureContext.AccountOwner, digests[0]!));
 
     expect(account.did).toBe(humanDidFromPasskey(cred.publicKey));
     expect(account.account).toBe(ACCOUNT);
     expect(account.credentialId).toBe(toHex(cred.id));
   });
 
-  it('derives the same ML-DSA key the passkey will reproduce later', async () => {
-    const { auth, rpc } = await enrolled();
-    const [enroll] = rpc.paramsOf('tenzro_enrollPasskey');
-    const signed = await auth.get({ challenge: new Uint8Array(32), allow: [] });
-    expect(toHex(deriveCustodyKey(signed.prf!).publicKey, true)).toBe(
-      enroll?.ml_dsa_public_key_hex,
-    );
-  });
-
-  it('reads the PRF with one extra assertion when create() did not return it', async () => {
+  it('refuses a challenge whose digest does not match the requested change', async () => {
     const auth = new FakeAuthenticator();
-    auth.returnPrfOnCreate = false;
-    const { rpc } = nodeMock();
+    const { rpc } = nodeMock({
+      tenzro_createCustodyChallenge: () => ({
+        challenge_id: 'c1',
+        challenge_hex: challengeDigest(1),
+        nonce_hex: toHex(new Uint8Array(16), true),
+        expires_in_secs: 300,
+      }),
+    });
     const custody = new PasskeyCustody({ rpc, authenticator: auth });
-    const account = await custody.createWallet({ displayName: 'Ada' });
-    expect(account.account).toBe(ACCOUNT);
+    await expect(custody.createWallet({ displayName: 'Ada' })).rejects.toBeInstanceOf(PasskeyError);
+    expect(rpc.paramsOf('tenzro_enrollPasskey')).toHaveLength(0);
   });
 
   it('refuses an identity that does not derive from the passkey', async () => {
@@ -238,12 +239,17 @@ describe('linkDevice', () => {
       'authorization',
       'label',
       'new_credential_id_hex',
+      'new_credential_proof',
       'new_passkey_public_key_hex',
-      'new_pq_verifying_key_hex',
+      'new_registration_authenticator_data_hex',
     ]);
-    expect(fromHex(add?.new_pq_verifying_key_hex as string).length).toBe(
-      ML_DSA_65_PUBLIC_KEY_BYTES,
-    );
+    // The new passkey signs the same challenge as the approving one.
+    const proof = add?.new_credential_proof as { assertion: { client_data_json: number[] } };
+    const authzCd = (add?.authorization as { assertion: { client_data_json: number[] } }).assertion
+      .client_data_json;
+    const challengeOf = (cd: number[]) =>
+      (JSON.parse(new TextDecoder().decode(new Uint8Array(cd))) as { challenge: string }).challenge;
+    expect(challengeOf(proof.assertion.client_data_json)).toBe(challengeOf(authzCd));
     expect(add?.new_passkey_public_key_hex).toBe(toHex(second.publicKey, true));
     const authz = add?.authorization as { credential_id_hex: string };
     expect(authz.credential_id_hex).toBe(toHex(first.id, true));
@@ -336,40 +342,181 @@ describe('policy, limits and session keys', () => {
 });
 
 describe('recovery', () => {
-  it('starts recovery with a new passkey and its own ML-DSA key', async () => {
+  function recoveryNode() {
+    const pending: Record<string, unknown>[] = [];
+    const { rpc } = nodeMock({
+      tenzro_initiateRecovery: ((p: {
+        account_address: string;
+        new_passkey_public_key_hex: string;
+        new_credential_id_hex: string;
+      }) => {
+        const r = {
+          recovery_id: 'r1',
+          account_address: p.account_address,
+          expires_at_ms: 1_700_000_000_000,
+          guardians_required: 2,
+          guardians_total: 3,
+        };
+        pending.push({
+          recovery_id: 'r1',
+          new_credential_id_hex: p.new_credential_id_hex,
+          created_at_ms: 0,
+          expires_at_ms: r.expires_at_ms,
+          ready_at_ms: null,
+          guardian_signatures_collected: 0,
+          finalized: false,
+          cancelled: false,
+        });
+        return {
+          ...r,
+          recovery_op_hash_hex: toHex(
+            recoveryOpHash({
+              account: p.account_address,
+              newPasskeyPublicKey: fromHex(p.new_passkey_public_key_hex),
+              newCredentialId: fromHex(p.new_credential_id_hex),
+              recoveryId: 'r1',
+              expiresAtMs: r.expires_at_ms,
+            }),
+            true,
+          ),
+        };
+      }) as (params: never) => unknown,
+      tenzro_listPendingRecoveries: () => ({ pending_recoveries: pending }),
+      tenzro_submitRecoverySignature: ((p: unknown) => ({
+        ...(p as object),
+        guardian_signatures_collected: 1,
+        guardians_required: 2,
+        quorum_reached: false,
+        ready_at_ms: null,
+      })) as (params: never) => unknown,
+    });
+    return rpc;
+  }
+
+  it('starts recovery with a new passkey only', async () => {
     const auth = new FakeAuthenticator();
-    const { rpc } = nodeMock();
+    const rpc = recoveryNode();
     const custody = new PasskeyCustody({ rpc, authenticator: auth });
     const started = await custody.startRecovery({ account: ACCOUNT, label: 'New phone' });
     expect(started.recovery_id).toBe('r1');
     const [req] = rpc.paramsOf('tenzro_initiateRecovery');
-    expect(fromHex(req?.new_ml_dsa_public_key_hex as string)).toHaveLength(
-      ML_DSA_65_PUBLIC_KEY_BYTES,
-    );
+    expect(Object.keys(req ?? {}).sort()).toEqual([
+      'account_address',
+      'new_credential_id_hex',
+      'new_passkey_public_key_hex',
+      'new_registration_authenticator_data_hex',
+    ]);
     expect(req?.new_passkey_public_key_hex).toBe(toHex(auth.credentials[0]!.publicKey, true));
   });
 
-  it('adds a guardian with its role, approving exactly its keys and role', async () => {
+  it('refuses a recovery the node started for a different passkey', async () => {
+    const auth = new FakeAuthenticator();
+    const { rpc } = nodeMock();
+    const custody = new PasskeyCustody({ rpc, authenticator: auth });
+    await expect(custody.startRecovery({ account: ACCOUNT, label: 'New phone' })).rejects.toBeInstanceOf(
+      PasskeyError,
+    );
+  });
+
+  it('adds a guardian from its card, approving exactly its key, provider, role and label', async () => {
     const { rpc, custody, account } = await enrolled();
     rpc.handlers.tenzro_addGuardian = (() => ({ guardian_count: 1, threshold: 1 })) as (
       params: never,
     ) => unknown;
-    const guardian = {
-      ed25519PublicKeyHex: toHex(new Uint8Array(32).fill(1)),
-      mlDsaPublicKeyHex: toHex(new Uint8Array(ML_DSA_65_PUBLIC_KEY_BYTES).fill(2)),
-      role: 'device' as const,
-    };
+    const guardianDevice = new FakeAuthenticator();
+    guardianDevice.tier = 'synced';
+    guardianDevice.aaguid = new Uint8Array(16).fill(0xa1);
+    const card: GuardianCard = await new PasskeyCustody({
+      rpc,
+      authenticator: guardianDevice,
+    }).createGuardian({ label: 'Sam', source: 'trusted_person' });
+    expect(card.role).toBe('device');
+
     await custody.addGuardian({
       account: account.account,
-      guardian,
+      card,
+      threshold: 1,
       approver: { id: account.credentialId },
     });
     const challenge = rpc.paramsOf('tenzro_createCustodyChallenge').at(-1);
     expect(challenge?.operation).toBe('add_guardian');
-    expect(challenge?.target_hex).toBe(toHex(guardianTarget(guardian), true));
-    expect(fromHex(challenge?.target_hex as string).at(-1)).toBe(0x03);
+    expect(challenge?.target_hex).toBe(toHex(guardianTarget(card), true));
     const [added] = rpc.paramsOf('tenzro_addGuardian');
-    expect(added?.role).toBe('device');
+    expect(Object.keys(added ?? {}).sort()).toEqual([
+      'account_address',
+      'authorization',
+      'guardian_credential_id_hex',
+      'guardian_p256_pubkey_hex',
+      'guardian_registration_authenticator_data_hex',
+      'label',
+      'role',
+      'threshold',
+    ]);
+    expect(added?.guardian_p256_pubkey_hex).toBe(toHex(guardianDevice.credentials[0]!.publicKey, true));
+  });
+
+  it('approves from the guardian device at the index its key holds', async () => {
+    const rpc = recoveryNode();
+    const recovering = new PasskeyCustody({ rpc, authenticator: new FakeAuthenticator() });
+    const { request } = await recovering.startRecovery({ account: ACCOUNT, label: 'New phone' });
+
+    const guardianDevice = new FakeAuthenticator();
+    const guardian = new PasskeyCustody({ rpc, authenticator: guardianDevice });
+    const card = await guardian.createGuardian({ label: 'Key', source: 'security_key' });
+    rpc.handlers.tenzro_listGuardians = (() => ({
+      threshold: 2,
+      independent_roots: 2,
+      members: [
+        { index: 0, p256_pubkey_hex: `0x${'05'.repeat(64)}`, role: 'device', aaguid: '0x', backup_eligible: false, backup_state: false },
+        { index: 1, p256_pubkey_hex: card.p256, role: 'recovery_key', aaguid: '0x', backup_eligible: false, backup_state: false },
+      ],
+    })) as (params: never) => unknown;
+
+    await guardian.approveRecovery(request);
+    const [sub] = rpc.paramsOf('tenzro_submitRecoverySignature');
+    expect(Object.keys(sub ?? {}).sort()).toEqual(['guardian_index', 'recovery_id', 'signature']);
+    expect(sub?.guardian_index).toBe(1);
+    const sig = sub?.signature as { classical: { form: string; client_data_json: string }; pq?: unknown };
+    expect(sig.classical.form).toBe('web_authn');
+    expect(sig.pq).toBeUndefined();
+    const cd = JSON.parse(new TextDecoder().decode(fromHex(sig.classical.client_data_json))) as {
+      challenge: string;
+    };
+    const opHash = recoveryOpHash({
+      account: ACCOUNT,
+      newPasskeyPublicKey: fromHex(request.newPasskeyPublicKeyHex),
+      newCredentialId: fromHex(request.newCredentialIdHex),
+      recoveryId: 'r1',
+      expiresAtMs: request.expiresAtMs,
+    });
+    expect(cd.challenge).toBe(b64url(recoveryApprovalChallenge(opHash)));
+  });
+
+  it('round-trips a recovery request as text and refuses anything else', async () => {
+    const rpc = recoveryNode();
+    const { request } = await new PasskeyCustody({ rpc, authenticator: new FakeAuthenticator() }).startRecovery({
+      account: ACCOUNT,
+      label: 'New phone',
+    });
+    expect(decodeRecoveryRequest(encodeRecoveryRequest(request))).toEqual(request);
+    expect(() => decodeRecoveryRequest('nope')).toThrow(PasskeyError);
+  });
+
+  it('refuses to approve with a passkey that is not a guardian', async () => {
+    const rpc = recoveryNode();
+    const recovering = new PasskeyCustody({ rpc, authenticator: new FakeAuthenticator() });
+    const { request } = await recovering.startRecovery({ account: ACCOUNT, label: 'New phone' });
+    const stranger = new FakeAuthenticator();
+    await new PasskeyCustody({ rpc, authenticator: stranger }).createGuardian({ label: 'X', source: 'own_passkey' });
+    rpc.handlers.tenzro_listGuardians = (() => ({
+      threshold: 1,
+      independent_roots: 1,
+      members: [{ index: 0, p256_pubkey_hex: `0x${'05'.repeat(64)}`, role: 'device', aaguid: '0x', backup_eligible: false, backup_state: false }],
+    })) as (params: never) => unknown;
+    await expect(new PasskeyCustody({ rpc, authenticator: stranger }).approveRecovery(request)).rejects.toBeInstanceOf(
+      PasskeyError,
+    );
+    expect(rpc.paramsOf('tenzro_submitRecoverySignature')).toHaveLength(0);
   });
 
   it('cancels a recovery with a passkey approval bound to that recovery', async () => {
@@ -422,7 +569,7 @@ describe('signIn', () => {
 });
 
 describe('passkeySigningDriver', () => {
-  it('returns one bincode bundle whose ML-DSA leg verifies over the op hash', async () => {
+  it('returns one bincode bundle signed over the userop context', async () => {
     const { auth, account } = await enrolled();
     const driver = passkeySigningDriver({
       authenticator: auth,
@@ -433,34 +580,30 @@ describe('passkeySigningDriver', () => {
       did: account.did as never,
       surfaceKey: {
         surface: 'tenzro-native',
-        scheme: 'webauthn-p256+ml-dsa-65',
+        scheme: 'webauthn-p256',
         address: ACCOUNT,
         credentialIds: [account.credentialId],
       },
-      scheme: 'webauthn-p256+ml-dsa-65',
+      scheme: 'webauthn-p256',
       preimage: opHash,
     });
     expect(res.signatures).toHaveLength(1);
     const bundle = res.signatures[0]!;
-    // Vec length prefix (u64 LE) = 1 entry.
+    // Vec length prefix (u64 LE) = 1 entry, then the credential id.
     expect(toHex(bundle.slice(0, 8))).toBe('0100000000000000');
-    // The ML-DSA signature is the 3309-byte field before the credential id.
     const credLen = fromHex(account.credentialId).length;
-    const mlSig = bundle.slice(
-      bundle.length - 8 - credLen - ML_DSA_65_SIGNATURE_BYTES,
-      bundle.length - 8 - credLen,
-    );
-    const signed = await auth.get({ challenge: new Uint8Array(32), allow: [] });
-    expect(verifyCustodySignature(opHash, mlSig, deriveCustodyKey(signed.prf!).publicKey)).toBe(
-      true,
-    );
+    expect(toHex(bundle.slice(16, 16 + credLen))).toBe(account.credentialId);
+    // No post-quantum leg: the entry ends with Option::None.
+    expect(bundle.at(-1)).toBe(0);
+    const expected = b64url(signingDigest(SignatureContext.UserOperation, opHash));
+    expect(new TextDecoder().decode(bundle)).toContain(`"challenge":"${expected}"`);
   });
 
   it('refuses other schemes and non-32-byte preimages', async () => {
     const driver = passkeySigningDriver({ authenticator: new FakeAuthenticator() });
     const surfaceKey = {
       surface: 'tenzro-native' as const,
-      scheme: 'webauthn-p256+ml-dsa-65' as const,
+      scheme: 'webauthn-p256' as const,
       address: ACCOUNT,
       credentialIds: [],
     };
@@ -476,7 +619,7 @@ describe('passkeySigningDriver', () => {
       driver.sign({
         did: 'x' as never,
         surfaceKey,
-        scheme: 'webauthn-p256+ml-dsa-65',
+        scheme: 'webauthn-p256',
         preimage: new Uint8Array(31),
       }),
     ).rejects.toBeInstanceOf(PasskeyError);

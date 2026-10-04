@@ -40,7 +40,6 @@ const auth: CustodyAuthorization = {
   challenge_id: 'c1',
   credential_id_hex: '0x01',
   assertion: {} as CustodyAuthorization['assertion'],
-  ml_dsa_signature_hex: '0x02',
 };
 
 function termsClient(returned: AgentTermsWire, seen: AgentTermsChallenge[]): AgentTermsClientLike {

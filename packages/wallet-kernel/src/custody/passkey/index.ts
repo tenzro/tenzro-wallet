@@ -4,6 +4,7 @@
  */
 
 export { fromHex as hexToBytes, toHex as bytesToHex } from './bytes.ts';
+export * from './composite.ts';
 export * from './constants.ts';
 export * from './custody.ts';
 export * from './derive.ts';

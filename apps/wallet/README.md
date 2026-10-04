@@ -8,8 +8,8 @@ Framework-free host that wires the wallet kernel into a page:
 | `window.tenzro` provider (EIP-1193) and EIP-6963 announcement | `src/dispatch/window-tenzro.ts` |
 | Load order and wiring | `src/main.ts` |
 
-Custody is non-custodial and passkey-based: the passkey stays in the device's authenticator, the post-quantum
-ML-DSA-65 key is derived from it on demand, and nothing secret is stored. The chain id is always read from the
+Custody is non-custodial and passkey-based: the passkey stays in the device's authenticator, is the
+only signing key, and nothing secret is stored. The chain id is always read from the
 node (`eth_chainId`).
 
 ## Wire-up

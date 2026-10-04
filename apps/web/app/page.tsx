@@ -50,7 +50,7 @@ const trendFacts = [
   {
     icon: Fingerprint,
     title: 'Your passkey is your wallet',
-    body: 'Non-custodial. No seed phrases, no key files. Every approval is a passkey signature plus a post-quantum ML-DSA-65 signature derived from it. Link more devices to stay safe.',
+    body: 'Non-custodial. No seed phrases, no key files. Every approval is a passkey signature, made inside the authenticator. Link more devices to stay safe.',
   },
   {
     icon: Zap,
@@ -251,8 +251,7 @@ export default function LandingPage() {
           </h2>
           <p className="text-lg text-foreground-muted max-w-2xl mx-auto leading-relaxed mb-8">
             Your wallet is created from a passkey on your device and never leaves your hands: every
-            approval is signed on the device with the passkey and a post-quantum ML-DSA-65 key
-            derived from it. Link a phone, a laptop or a security key so that losing one device
+            approval is signed by the passkey, inside the device's secure hardware. Link a phone, a laptop or a security key so that losing one device
             never means losing the wallet. No words to write down.
           </p>
           <div className="flex justify-center gap-3">

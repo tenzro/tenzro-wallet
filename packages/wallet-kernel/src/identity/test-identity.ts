@@ -37,7 +37,7 @@ export async function testIdentity(opts: TestIdentityOptions = {}): Promise<Tdip
       'tenzro-native',
       {
         surface: 'tenzro-native',
-        scheme: 'webauthn-p256+ml-dsa-65',
+        scheme: 'webauthn-p256',
         address: deriveEvmAddress(derive(seed, 'account', 32)),
         credentialIds: [`0x${hex(derive(seed, 'credential', 16))}`],
       },

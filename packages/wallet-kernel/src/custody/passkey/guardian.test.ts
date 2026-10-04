@@ -1,88 +1,99 @@
-import { ed25519 } from '@noble/curves/ed25519.js';
-import { ml_dsa65 } from '@noble/post-quantum/ml-dsa.js';
 import { describe, expect, it } from 'vitest';
-import { utf8 } from './bytes.ts';
+
+import { concatBytes, toHex, utf8 } from './bytes.ts';
+import { SignatureContext, signingDigest } from './composite.ts';
 import {
   type GuardianCard,
+  type QuorumMember,
+  cardQuorumMember,
   checkGuardianQuorum,
-  compositeMessage,
   decodeGuardianCard,
-  deriveGuardianKeys,
   encodeGuardianCard,
   guardianRole,
+  guardianTarget,
+  recoveryApprovalChallenge,
   recoveryOpHash,
+  registrationProvenance,
 } from './guardian.ts';
 
-const prf = new Uint8Array(32).fill(7);
+const rpIdHash = new Uint8Array(32).fill(0xee);
 
-function readComposite(sig: Uint8Array): { classical: Uint8Array; pq: Uint8Array } {
-  const view = new DataView(sig.buffer, sig.byteOffset);
-  const a = Number(view.getBigUint64(0, true));
-  const b = Number(view.getBigUint64(8 + a, true));
-  expect(16 + a + b).toBe(sig.length);
-  return { classical: sig.slice(8, 8 + a), pq: sig.slice(16 + a) };
+function regData(flags: number, aaguid: Uint8Array, credentialId: Uint8Array): Uint8Array {
+  return concatBytes(
+    rpIdHash,
+    new Uint8Array([0x45 | flags, 0, 0, 0, 0]),
+    aaguid,
+    new Uint8Array([0, credentialId.length]),
+    credentialId,
+  );
 }
 
-describe('guardian keys', () => {
-  it('derive deterministically from the PRF and differ per PRF', () => {
-    const a = deriveGuardianKeys(prf);
-    const b = deriveGuardianKeys(prf);
-    const c = deriveGuardianKeys(new Uint8Array(32).fill(8));
-    expect(a.ed25519PublicKey).toEqual(b.ed25519PublicKey);
-    expect(a.mlDsaPublicKey).toEqual(b.mlDsaPublicKey);
-    expect(a.ed25519PublicKey).not.toEqual(c.ed25519PublicKey);
-    expect(a.mlDsaPublicKey.length).toBe(1952);
-  });
+const aaguidA = new Uint8Array(16).fill(0xa1);
 
-  it('sign a recovery approval both legs verify over the composite message', () => {
-    const k = deriveGuardianKeys(prf);
-    const hash = new Uint8Array(32).fill(3);
-    const { classical, pq } = readComposite(k.approve(hash));
-    const m = compositeMessage(hash);
-    expect(classical.length).toBe(64);
-    expect(ed25519.verify(classical, m, k.ed25519PublicKey)).toBe(true);
-    const context = utf8('COMPSIG-MLDSA65-Ed25519-SHA512');
-    expect(ml_dsa65.verify(pq, m, k.mlDsaPublicKey, { context })).toBe(true);
-    expect(ml_dsa65.verify(pq, compositeMessage(new Uint8Array(32)), k.mlDsaPublicKey, { context })).toBe(false);
-    k.wipe();
-  });
-});
+function card(over: Partial<GuardianCard> = {}, flags = 0x18): GuardianCard {
+  return {
+    format: 'tenzro-guardian',
+    version: 2,
+    label: 'Backup key',
+    role: 'recovery_key',
+    p256: toHex(new Uint8Array(64).fill(1), true),
+    credentialId: '0x0405',
+    registrationAuthenticatorData: toHex(regData(flags, aaguidA, new Uint8Array([4, 5])), true),
+    ...over,
+  };
+}
 
 describe('recoveryOpHash', () => {
-  const base = {
-    account: `0x${'ab'.repeat(20)}`,
-    newPasskeyPublicKey: new Uint8Array(64).fill(1),
-    newMlDsaPublicKey: new Uint8Array(1952).fill(2),
-    newCredentialId: new Uint8Array(16).fill(3),
-    recoveryId: 'rec-1',
-    expiresAtMs: 1_700_000_000_000,
-  };
-  it('binds every part', () => {
-    const h = recoveryOpHash(base);
-    expect(h.length).toBe(32);
-    expect(recoveryOpHash({ ...base, recoveryId: 'rec-2' })).not.toEqual(h);
-    expect(recoveryOpHash({ ...base, expiresAtMs: base.expiresAtMs + 1 })).not.toEqual(h);
-    expect(recoveryOpHash({ ...base, newMlDsaPublicKey: new Uint8Array(1952) })).not.toEqual(h);
+  it('matches the network derivation', () => {
+    const h = recoveryOpHash({
+      account: `0x${'11'.repeat(20)}`,
+      newPasskeyPublicKey: concatBytes(new Uint8Array(32).fill(2), new Uint8Array(32).fill(3)),
+      newCredentialId: new Uint8Array([4, 5]),
+      recoveryId: 'rec-1',
+      expiresAtMs: 1_700_000_000_000,
+    });
+    // Reference: python hashlib over the same preimage.
+    expect(toHex(h)).toBe('7136490488210343c2c3a15e2e3d995c39ba80ec155740323426cd73d750a377');
+  });
+
+  it('is approved under the recovery-approval context', () => {
+    const op = new Uint8Array(32).fill(9);
+    expect(recoveryApprovalChallenge(op)).toEqual(signingDigest(SignatureContext.RecoveryApproval, op));
   });
 });
 
-const card = (over: Partial<GuardianCard>): GuardianCard => ({
-  format: 'tenzro-guardian',
-  version: 1,
-  label: 'g',
-  source: 'trusted_person',
-  ed25519: `0x${'11'.repeat(32)}`,
-  mlDsa65: `0x${'22'.repeat(1952)}`,
-  tier: 'synced',
-  credentialId: `0x${Math.random().toString(16).slice(2)}`,
-  ...over,
-});
-
-describe('guardian cards and quorum independence', () => {
-  it('round-trip a card and refuse anything else', () => {
-    const c = card({ aaguid: 'ea9b8d664d011d213ce4b6b48cb575d4' });
+describe('guardian cards', () => {
+  it('round-trip and refuse anything else', () => {
+    const c = card();
     expect(decodeGuardianCard(encodeGuardianCard(c))).toEqual(c);
-    expect(() => decodeGuardianCard('not a card')).toThrow(/not a guardian card/);
+    expect(() => decodeGuardianCard('not a card')).toThrow();
+    expect(() => decodeGuardianCard(encodeGuardianCard(card({ p256: '0x01' })))).toThrow();
+    expect(() =>
+      decodeGuardianCard(encodeGuardianCard(card({ registrationAuthenticatorData: '0x00' }))),
+    ).toThrow();
+  });
+
+  it('read provider and backup flags from the registration', () => {
+    const p = registrationProvenance(regData(0x18, aaguidA, new Uint8Array([1])));
+    expect(p).toEqual({ aaguid: aaguidA, backupEligible: true, backupState: true });
+    expect(registrationProvenance(regData(0, aaguidA, new Uint8Array([1]))).backupEligible).toBe(false);
+  });
+
+  it('name key, no pq key, provider, flags, role and label in the target', () => {
+    const t = guardianTarget(card());
+    expect(toHex(t)).toBe(
+      toHex(
+        concatBytes(
+          new Uint8Array(64).fill(1),
+          new Uint8Array(32),
+          aaguidA,
+          new Uint8Array([0b11, 0x01]),
+          utf8('Backup key'),
+        ),
+      ),
+    );
+    expect(toHex(guardianTarget(card({ role: 'device' })))).not.toBe(toHex(t));
+    expect(toHex(guardianTarget(card({ label: 'Phone' })))).not.toBe(toHex(t));
   });
 
   it('maps sources to node roles', () => {
@@ -90,18 +101,40 @@ describe('guardian cards and quorum independence', () => {
     expect(guardianRole('own_passkey')).toBe('device');
     expect(guardianRole('trusted_person')).toBe('device');
   });
+});
 
-  it('accepts a quorum only when no provider can reach the threshold alone', () => {
-    const icloud = 'fbfc3007154e4ecc8c0b6e020557d7bd';
-    const gpm = 'ea9b8d664d011d213ce4b6b48cb575d4';
-    const twoSame = [card({ aaguid: icloud }), card({ aaguid: icloud })];
-    expect(checkGuardianQuorum(twoSame, 0, 2).ok).toBe(false);
-    expect(checkGuardianQuorum([card({ aaguid: icloud }), card({ aaguid: gpm })], 0, 2).ok).toBe(true);
-    expect(checkGuardianQuorum([card({ aaguid: icloud }), card({ tier: 'device-bound' })], 0, 2).ok).toBe(true);
-    expect(checkGuardianQuorum([card({}), card({})], 0, 2).ok).toBe(false);
-    expect(checkGuardianQuorum([card({ aaguid: icloud })], 0, 1).ok).toBe(false);
-    expect(checkGuardianQuorum([card({ aaguid: icloud })], 2, 2).ok).toBe(false);
-    expect(checkGuardianQuorum([card({ aaguid: icloud }), card({ aaguid: gpm })], 1, 3).ok).toBe(true);
-    expect(checkGuardianQuorum([card({ aaguid: icloud }), card({ aaguid: gpm })], 0, 3).ok).toBe(false);
+describe('quorum preview', () => {
+  const synced = (id: string, aaguid = 'a1'.repeat(16)): QuorumMember => ({ id, backupEligible: true, aaguid });
+  const bound = (id: string): QuorumMember => ({ id, backupEligible: false });
+
+  it('counts synced passkeys of one provider once', () => {
+    const r = checkGuardianQuorum([synced('01'), synced('02'), synced('03')], 2);
+    expect(r.ok).toBe(false);
+    expect(r.roots).toBe(1);
+  });
+
+  it('counts each device-bound passkey on its own', () => {
+    expect(checkGuardianQuorum([bound('01'), bound('02')], 2)).toEqual({ ok: true, roots: 2, reason: null });
+  });
+
+  it('groups synced passkeys that report no provider', () => {
+    expect(checkGuardianQuorum([synced('01', ''), synced('02', '00'.repeat(16))], 2).roots).toBe(1);
+  });
+
+  it('accepts distinct providers up to the root count', () => {
+    const members = [synced('01'), synced('02', 'b2'.repeat(16)), bound('03')];
+    expect(checkGuardianQuorum(members, 3).ok).toBe(true);
+    expect(checkGuardianQuorum(members, 4).ok).toBe(false);
+    expect(checkGuardianQuorum(members, 0).ok).toBe(false);
+  });
+
+  it('flags a threshold of one', () => {
+    const r = checkGuardianQuorum([bound('01')], 1);
+    expect(r.ok).toBe(true);
+    expect(r.reason).not.toBeNull();
+  });
+
+  it('reads a card as a member', () => {
+    expect(cardQuorumMember(card())).toEqual({ id: '01'.repeat(64), backupEligible: true, aaguid: 'a1'.repeat(16) });
   });
 });

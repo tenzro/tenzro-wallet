@@ -3,12 +3,12 @@
  *
  * A person's account is a smart account guarded by the WebAuthn validator.
  * To move value the wallet builds a UserOperation, hashes it (EIP-712,
- * EntryPoint domain "0.8"), has an enrolled passkey sign that hash (the
- * WebAuthn challenge is the raw 32-byte hash) together with the passkey's
- * ML-DSA-65 key, and submits it with `eth_sendUserOperation`.
+ * EntryPoint domain "0.8"), has an enrolled passkey sign it (the WebAuthn
+ * challenge is `signingDigest(UserOperation, hash)`), and submits it with
+ * `eth_sendUserOperation`.
  *
- * The signature is the validator's bundle: a bincode (1.x, fixint, little
- * endian) `Vec<HybridWebAuthnSignature>`, one entry per contributing passkey.
+ * The signature is the validator's bundle (`encodePasskeySignatureBundle`),
+ * one entry per contributing passkey.
  */
 
 import { keccak256 } from '../../crypto/keccak256.ts';
@@ -137,43 +137,6 @@ export function encodeExecuteCall(
     uint256(BigInt(data.length)),
     padded,
   );
-}
-
-export interface HybridSignatureEntry {
-  readonly authenticatorData: Uint8Array;
-  readonly clientDataJson: Uint8Array;
-  readonly signature: Uint8Array;
-  readonly userHandle?: Uint8Array;
-  readonly mlDsaSignature: Uint8Array;
-  readonly credentialId: Uint8Array;
-}
-
-function u64le(n: number): Uint8Array {
-  const out = new Uint8Array(8);
-  let x = BigInt(n);
-  for (let i = 0; i < 8; i++) {
-    out[i] = Number(x & 0xffn);
-    x >>= 8n;
-  }
-  return out;
-}
-
-const vecBytes = (b: Uint8Array): Uint8Array => concatBytes(u64le(b.length), b);
-
-/** bincode 1.x encoding of `Vec<HybridWebAuthnSignature>` for `userOp.signature`. */
-export function encodeHybridSignatureBundle(entries: readonly HybridSignatureEntry[]): Uint8Array {
-  const parts: Uint8Array[] = [u64le(entries.length)];
-  for (const e of entries) {
-    parts.push(
-      vecBytes(e.authenticatorData),
-      vecBytes(e.clientDataJson),
-      vecBytes(e.signature),
-      e.userHandle ? concatBytes(new Uint8Array([1]), vecBytes(e.userHandle)) : new Uint8Array([0]),
-      vecBytes(e.mlDsaSignature),
-      vecBytes(e.credentialId),
-    );
-  }
-  return concatBytes(...parts);
 }
 
 const q = (v: bigint): string => `0x${v.toString(16)}`;

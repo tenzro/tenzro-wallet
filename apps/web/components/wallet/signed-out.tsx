@@ -15,6 +15,9 @@ export function SignedOut({ what }: { what: string }) {
       <Button asChild>
         <Link href="/onboarding">Sign in or create a wallet</Link>
       </Button>
+      <Button asChild variant="ghost">
+        <Link href="/recover">Lost every device? Recover</Link>
+      </Button>
     </EmptyState>
   );
 }

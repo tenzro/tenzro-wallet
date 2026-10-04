@@ -1,68 +1,16 @@
 /**
- * Key and identity derivation for passkey custody. Pure functions.
+ * Identity derivation for passkey custody. Pure functions.
  *
- * - The human DID is a one-way function of the passkey's P-256 public key, so
- *   the same passkey always yields the same identity.
- * - The post-quantum ML-DSA-65 leg is derived from the passkey's WebAuthn PRF
- *   output. Nothing is stored: the same passkey reproduces the same key on any
- *   device, and the secret half only exists in memory for one ceremony.
+ * The human DID is a one-way function of the passkey's P-256 public key, so
+ * the same passkey always yields the same identity. No other key is derived
+ * from a passkey: the passkey itself is the only signing key.
  */
 
 import { p256 } from '@noble/curves/nist.js';
-import { hkdf } from '@noble/hashes/hkdf.js';
 import { sha256 } from '@noble/hashes/sha2.js';
-import { ml_dsa65 } from '@noble/post-quantum/ml-dsa.js';
 
 import { concatBytes, toHex, utf8 } from './bytes.ts';
-import {
-  HUMAN_DID_DOMAIN,
-  ML_DSA_65_PUBLIC_KEY_BYTES,
-  ML_DSA_HKDF_INFO,
-  P256_PUBLIC_KEY_BYTES,
-  PRF_SALT_LABEL,
-} from './constants.ts';
-
-/** `SHA-256("tenzro/passkey-prf/custody-ml-dsa-65/v1")`, passed as `prf.eval.first`. */
-export function custodyPrfSalt(): Uint8Array {
-  return sha256(utf8(PRF_SALT_LABEL));
-}
-
-export interface CustodyKeyPair {
-  /** ML-DSA-65 verifying key, 1952 bytes. Enrolled on the account next to the passkey. */
-  readonly publicKey: Uint8Array;
-  /** ML-DSA-65 signing key. Zero it (`fill(0)`) as soon as the ceremony is over. */
-  readonly secretKey: Uint8Array;
-}
-
-/**
- * `seed = HKDF-SHA256(ikm = prf, salt = "", info = "tenzro/custody/ml-dsa-65/v1", L = 32)`,
- * then `ml_dsa65.keygen(seed)`. Deterministic in `prf`.
- */
-export function deriveCustodyKey(prfOutput: Uint8Array): CustodyKeyPair {
-  if (prfOutput.length < 32) {
-    throw new Error('passkey PRF output must be at least 32 bytes');
-  }
-  const seed = hkdf(sha256, prfOutput, new Uint8Array(0), utf8(ML_DSA_HKDF_INFO), 32);
-  const keys = ml_dsa65.keygen(seed);
-  seed.fill(0);
-  if (keys.publicKey.length !== ML_DSA_65_PUBLIC_KEY_BYTES) {
-    throw new Error('unexpected ML-DSA-65 verifying key length');
-  }
-  return keys;
-}
-
-/** ML-DSA-65 (pure, empty context) over the raw 32-byte digest the node issued. */
-export function signCustodyDigest(digest: Uint8Array, secretKey: Uint8Array): Uint8Array {
-  return ml_dsa65.sign(digest, secretKey);
-}
-
-export function verifyCustodySignature(
-  digest: Uint8Array,
-  signature: Uint8Array,
-  publicKey: Uint8Array,
-): boolean {
-  return ml_dsa65.verify(signature, digest, publicKey);
-}
+import { HUMAN_DID_DOMAIN, P256_PUBLIC_KEY_BYTES } from './constants.ts';
 
 /**
  * Normalises a P-256 public key to raw `x || y` (64 bytes). Accepts raw,

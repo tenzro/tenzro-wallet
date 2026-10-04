@@ -3,7 +3,7 @@
  * driver-shaped object without touching real crypto or a real passkey.
  *
  * Production signing goes through `custody/passkey/*`: a WebAuthn assertion
- * plus an ML-DSA-65 signature derived on the device from the passkey.
+ * from the passkey.
  * This stub is not on any production path and exists solely to keep tests
  * fast and deterministic.
  *

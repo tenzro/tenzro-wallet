@@ -3,15 +3,10 @@ import { sha256 } from '@noble/hashes/sha2.js';
 import { describe, expect, it } from 'vitest';
 
 import { concatBytes, toHex, utf8 } from './bytes.ts';
-import { ML_DSA_65_PUBLIC_KEY_BYTES, ML_DSA_65_SIGNATURE_BYTES } from './constants.ts';
 import {
-  custodyPrfSalt,
-  deriveCustodyKey,
   humanDidFromPasskey,
   normalizeP256PublicKey,
   recoverAssertionPublicKeys,
-  signCustodyDigest,
-  verifyCustodySignature,
 } from './derive.ts';
 
 describe('humanDidFromPasskey', () => {
@@ -39,37 +34,6 @@ describe('humanDidFromPasskey', () => {
     expect(humanDidFromPasskey(sec1)).toBe(humanDidFromPasskey(xy));
     expect(humanDidFromPasskey(spki)).toBe(humanDidFromPasskey(xy));
     expect(() => normalizeP256PublicKey(new Uint8Array(33))).toThrow();
-  });
-});
-
-describe('deriveCustodyKey (passkey PRF -> ML-DSA-65)', () => {
-  it('uses the canonical PRF salt', () => {
-    expect(toHex(custodyPrfSalt())).toBe(
-      'd522604ac7c348d837598a69872931523548d62e8d9b6db71c532b982cbac062',
-    );
-  });
-
-  it('is deterministic in the PRF output', () => {
-    const prf = sha256(utf8('prf-output-1'));
-    const a = deriveCustodyKey(prf);
-    const b = deriveCustodyKey(new Uint8Array(prf));
-    expect(toHex(a.publicKey)).toBe(toHex(b.publicKey));
-    expect(a.publicKey).toHaveLength(ML_DSA_65_PUBLIC_KEY_BYTES);
-    const c = deriveCustodyKey(sha256(utf8('prf-output-2')));
-    expect(toHex(c.publicKey)).not.toBe(toHex(a.publicKey));
-  });
-
-  it('signs a 32-byte digest that verifies against the derived key', () => {
-    const { publicKey, secretKey } = deriveCustodyKey(sha256(utf8('prf')));
-    const digest = sha256(utf8('digest'));
-    const sig = signCustodyDigest(digest, secretKey);
-    expect(sig).toHaveLength(ML_DSA_65_SIGNATURE_BYTES);
-    expect(verifyCustodySignature(digest, sig, publicKey)).toBe(true);
-    expect(verifyCustodySignature(sha256(utf8('other')), sig, publicKey)).toBe(false);
-  });
-
-  it('refuses a short PRF output', () => {
-    expect(() => deriveCustodyKey(new Uint8Array(16))).toThrow(/PRF/);
   });
 });
 

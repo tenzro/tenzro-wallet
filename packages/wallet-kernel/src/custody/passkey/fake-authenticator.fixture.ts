@@ -1,16 +1,14 @@
 /**
  * In-memory WebAuthn authenticator for unit tests. Produces real P-256
- * assertions (DER, over `authenticatorData || SHA-256(clientDataJSON)`) and a
- * deterministic PRF output per credential, so the custody flows run end to
- * end without a browser. Test-only; excluded from the package build.
+ * assertions (DER, over `authenticatorData || SHA-256(clientDataJSON)`) and
+ * registration authenticatorData, so the custody flows run end to end without
+ * a browser. Test-only; excluded from the package build.
  */
 
 import { p256 } from '@noble/curves/nist.js';
-import { hmac } from '@noble/hashes/hmac.js';
 import { sha256 } from '@noble/hashes/sha2.js';
 
 import { concatBytes, fromHex, toHex, toNumberArray, utf8 } from './bytes.ts';
-import { custodyPrfSalt } from './derive.ts';
 import { PasskeyError } from './webauthn.ts';
 import type {
   CreatePasskeyOptions,
@@ -26,7 +24,7 @@ interface FakeCredential {
   readonly secretKey: Uint8Array;
   readonly publicKey: Uint8Array;
   readonly userId: Uint8Array;
-  readonly prfSecret: Uint8Array;
+  readonly aaguid: Uint8Array;
   readonly tier: PasskeyTier;
 }
 
@@ -41,7 +39,8 @@ export class FakeAuthenticator implements PasskeyAuthenticator {
   readonly credentials: FakeCredential[] = [];
   /** Which credential answers the next `get()` when several are allowed. */
   preferred: string | undefined;
-  returnPrfOnCreate = true;
+  /** AAGUID of the provider, 16 bytes; zero reports none. */
+  aaguid: Uint8Array = new Uint8Array(16);
   tier: PasskeyTier = 'device-bound';
   /**
    * Behave as a device that already holds the account's passkeys (synced
@@ -73,7 +72,7 @@ export class FakeAuthenticator implements PasskeyAuthenticator {
       secretKey,
       publicKey: p256.getPublicKey(secretKey, false).slice(1),
       userId: opts.userId,
-      prfSecret: sha256(concatBytes(seed, utf8('prf'))),
+      aaguid: this.aaguid,
       tier: this.tier,
     };
     const excluded = (opts.exclude ?? []).some((c) => c.id === toHex(cred.id));
@@ -84,7 +83,14 @@ export class FakeAuthenticator implements PasskeyAuthenticator {
       publicKey: cred.publicKey,
       transports: ['internal'],
       tier: cred.tier,
-      ...(this.returnPrfOnCreate ? { prf: this.#prf(cred) } : {}),
+      registrationAuthenticatorData: concatBytes(
+        sha256(utf8(this.rpId)),
+        new Uint8Array([0x01 | 0x04 | 0x40 | (cred.tier === 'synced' ? 0x08 | 0x10 : 0), 0, 0, 0, 0]),
+        cred.aaguid,
+        new Uint8Array([0, cred.id.length]),
+        cred.id,
+      ),
+      ...(/^0*$/.test(toHex(cred.aaguid)) ? {} : { aaguid: toHex(cred.aaguid) }),
     };
   }
 
@@ -117,17 +123,12 @@ export class FakeAuthenticator implements PasskeyAuthenticator {
         signature: toNumberArray(signature),
         user_handle: toNumberArray(cred.userId),
       },
-      prf: this.#prf(cred),
       userHandle: cred.userId,
     };
   }
 
   credential(idHex: string): FakeCredential | undefined {
     return this.credentials.find((c) => toHex(c.id) === idHex.replace(/^0x/, ''));
-  }
-
-  #prf(cred: FakeCredential): Uint8Array {
-    return hmac(sha256, cred.prfSecret, custodyPrfSalt());
   }
 }
 

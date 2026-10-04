@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { fromHex, toHex } from './bytes.ts';
 import {
   encodeExecuteCall,
-  encodeHybridSignatureBundle,
   userOperationHash,
   userOperationToJson,
 } from './userop.ts';
@@ -26,32 +25,6 @@ describe('userOperationHash', () => {
       '0x0000000000000000000000000000000000004337',
     );
     expect(toHex(hash)).toBe('7f2d210634b43b82d7bbdd1a7e1f2eb79ab627b9e4a0a358a63403adffa455c5');
-  });
-});
-
-describe('encodeHybridSignatureBundle', () => {
-  it('matches bincode 1.x encoding of Vec<HybridWebAuthnSignature>', () => {
-    const bundle = encodeHybridSignatureBundle([
-      {
-        authenticatorData: new Uint8Array([1, 2, 3]),
-        clientDataJson: new TextEncoder().encode('{}'),
-        signature: new Uint8Array(4).fill(9),
-        mlDsaSignature: new Uint8Array(5).fill(7),
-        credentialId: new Uint8Array([0xaa, 0xbb]),
-      },
-      {
-        authenticatorData: new Uint8Array([4]),
-        clientDataJson: new Uint8Array(0),
-        signature: new Uint8Array([8]),
-        userHandle: new Uint8Array([5, 6]),
-        mlDsaSignature: new Uint8Array(0),
-        credentialId: new Uint8Array([0xcc]),
-      },
-    ]);
-    // Reference: `bincode::serialize` (bincode 1) of the same structs in Rust.
-    expect(toHex(bundle)).toBe(
-      '0200000000000000030000000000000001020302000000000000007b7d04000000000000000909090900050000000000000007070707070200000000000000aabb0100000000000000040000000000000000010000000000000008010200000000000000050600000000000000000100000000000000cc',
-    );
   });
 });
 

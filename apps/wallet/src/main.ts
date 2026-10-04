@@ -11,8 +11,8 @@
  *   4. Install the EIP-1193 provider on `window.tenzro` and announce it
  *      (EIP-6963).
  *
- * Nothing secret is stored: the passkey lives in the authenticator, and the
- * post-quantum key is re-derived from it whenever a signature is needed.
+ * Nothing secret is stored: the passkey lives in the authenticator and is
+ * the only signing key.
  */
 
 import {

@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 
 import { fromHex, toHex } from './bytes.ts';
 import { PasskeyCustody } from './custody.ts';
-import { deriveCustodyKey, humanDidFromPasskey, recoverAssertionPublicKeys } from './derive.ts';
+import { humanDidFromPasskey, recoverAssertionPublicKeys } from './derive.ts';
 import { FakeAuthenticator, MockRpc, challengeDigest } from './fake-authenticator.fixture.ts';
 import { PasskeyError } from './webauthn.ts';
 
@@ -107,15 +107,12 @@ describe('addWallet', () => {
     expect(last.authorization).toBeDefined();
     expect(last.passkey_public_key_hex).toBe(enrols[0]?.passkey_public_key_hex);
 
-    // The enrolment challenge is keyed to the passkey and bound to its credential and ML-DSA key.
+    // The enrolment challenge is keyed to the passkey and bound to its credential.
     const challenges = rpc.paramsOf('tenzro_createCustodyChallenge');
     const c = challenges[challenges.length - 1] as Record<string, string>;
     expect(c.operation).toBe('enroll_passkey');
     expect(c.account_address).toBe(last.passkey_public_key_hex);
-    expect(String(c.target_hex).replace(/^0x/, '')).toBe(
-      String(last.credential_id_hex).replace(/^0x/, '') +
-        String(last.ml_dsa_public_key_hex).replace(/^0x/, ''),
-    );
+    expect(c.target_hex).toBe(last.credential_id_hex);
   });
 
   it('refuses salt 0 and an account whose record does not show the first passkey', async () => {
@@ -171,21 +168,12 @@ function provesFor(
 describe('connecting a site while creating or signing in', () => {
   const code = new Uint8Array(32).fill(9);
 
-  it('creates with three approvals, the PRF read doubling as the proof', async () => {
+  it('creates with three approvals: create, enrol, proof', async () => {
     const { custody, authenticator } = setup();
-    authenticator.returnPrfOnCreate = false;
     const seen = counted(authenticator);
     const account = await custody.createWallet({ displayName: 'Ada', challenge: code });
     expect(seen.map((s) => s.kind)).toEqual(['create', 'get', 'get']);
     expect(account.proof?.account).toBe(account.account);
-    provesFor(account.proof!, code, authenticator);
-  });
-
-  it('creates with three approvals when the PRF came at creation', async () => {
-    const { custody, authenticator } = setup();
-    const seen = counted(authenticator);
-    const account = await custody.createWallet({ displayName: 'Ada', challenge: code });
-    expect(seen.map((s) => s.kind)).toEqual(['create', 'get', 'get']);
     provesFor(account.proof!, code, authenticator);
   });
 
@@ -214,7 +202,6 @@ describe('connecting a site while creating or signing in', () => {
 
   it('passes the phone hint to every approval of the flow', async () => {
     const { custody, authenticator } = setup();
-    authenticator.returnPrfOnCreate = false;
     const seen = counted(authenticator);
     await custody.createWallet({ displayName: 'Ada', challenge: code, hints: ['hybrid'] });
     expect(seen.every((s) => s.hints?.[0] === 'hybrid')).toBe(true);
@@ -265,21 +252,21 @@ describe('linking a phone from the first device', () => {
       hints: ['hybrid'],
       approver: { id: first.credentialId },
     });
-    expect(seen).toEqual([{ kind: 'create', hints: ['hybrid'] }, { kind: 'get' }]);
+    // The phone creates, this device approves, the phone signs its own proof.
+    expect(seen).toEqual([
+      { kind: 'create', hints: ['hybrid'] },
+      { kind: 'get' },
+      { kind: 'get', hints: ['hybrid'] },
+    ]);
     const [added] = rpc.paramsOf('tenzro_addPasskey') as Array<{
       authorization: { credential_id_hex: string };
-      new_pq_verifying_key_hex: string;
+      new_credential_proof: { assertion: unknown };
     }>;
     expect(added?.authorization.credential_id_hex.replace(/^0x/, '')).toBe(first.credentialId);
-    // The phone's own post-quantum key, derived from its PRF, goes with it.
-    const phone = auth.credentials[1]!;
-    const phonePrf = (
-      await auth.get({ challenge: new Uint8Array(32), allow: [{ id: toHex(phone.id) }] })
-    ).prf!;
-    expect(added?.new_pq_verifying_key_hex).toBe(toHex(deriveCustodyKey(phonePrf).publicKey, true));
+    expect(added?.new_credential_proof.assertion).toBeDefined();
   });
 
-  it('reads the new device PRF on that device before this one approves, when create did not return it', async () => {
+  it('has this device approve before the new passkey signs its own proof', async () => {
     const auth = new FakeAuthenticator();
     const ids: string[] = [];
     let n = 0;
@@ -304,7 +291,6 @@ describe('linking a phone from the first device', () => {
     });
     const custody = new PasskeyCustody({ rpc, authenticator: auth });
     const first = await custody.createWallet({ displayName: 'Ada' });
-    auth.returnPrfOnCreate = false;
     const seen = counted(auth);
     const allowSeen: string[][] = [];
     const get = auth.get.bind(auth);
@@ -320,7 +306,7 @@ describe('linking a phone from the first device', () => {
       approver: { id: first.credentialId },
     });
     expect(seen.map((s) => s.kind)).toEqual(['create', 'get', 'get']);
-    expect(allowSeen[0]).toEqual([toHex(auth.credentials[1]!.id)]);
-    expect(allowSeen[1]).toEqual([first.credentialId]);
+    expect(allowSeen[0]).toEqual([first.credentialId]);
+    expect(allowSeen[1]).toEqual([toHex(auth.credentials[1]!.id)]);
   });
 });

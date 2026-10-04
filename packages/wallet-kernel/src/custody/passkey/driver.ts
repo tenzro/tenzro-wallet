@@ -2,16 +2,20 @@
  * `SigningDriver` for passkey accounts.
  *
  * The preimage is the 32-byte UserOperation hash. Each contributing passkey
- * signs it as its WebAuthn challenge, the ML-DSA-65 key derived from that
- * passkey's PRF output signs the same hash, and the driver returns the
- * encoded bundle the account's WebAuthn validator verifies.
+ * signs `signingDigest(UserOperation, hash)` as its WebAuthn challenge, and
+ * the driver returns the encoded bundle the account's WebAuthn validator
+ * verifies.
  */
 
 import type { SigningDriver, SigningRequest, SigningResult } from '../../types/signing-driver.ts';
 import { toHex } from './bytes.ts';
-import { signWithPrf } from './gate.ts';
-import { type HybridSignatureEntry, encodeHybridSignatureBundle } from './userop.ts';
-import { type CredentialRef, type PasskeyAuthenticator, PasskeyError } from './webauthn.ts';
+import { SignatureContext, encodePasskeySignatureBundle, signingDigest } from './composite.ts';
+import {
+  type CredentialRef,
+  type PasskeyAuthenticator,
+  PasskeyError,
+  type PasskeySignature,
+} from './webauthn.ts';
 
 export interface PasskeySigningDriverOptions {
   readonly authenticator: PasskeyAuthenticator;
@@ -27,7 +31,7 @@ export function passkeySigningDriver(opts: PasskeySigningDriverOptions): Signing
   return {
     id: 'passkey',
     async sign(req: SigningRequest): Promise<SigningResult> {
-      if (req.scheme !== 'webauthn-p256+ml-dsa-65') {
+      if (req.scheme !== 'webauthn-p256') {
         throw new PasskeyError(`the passkey driver cannot sign ${req.scheme}`, 'invalid');
       }
       if (req.preimage.length !== 32) {
@@ -40,11 +44,12 @@ export function passkeySigningDriver(opts: PasskeySigningDriverOptions): Signing
           : []);
       const required = opts.requiredSignatures ?? 1;
       const used = new Set<string>();
-      const entries: HybridSignatureEntry[] = [];
+      const challenge = signingDigest(SignatureContext.UserOperation, req.preimage);
+      const entries: PasskeySignature[] = [];
       for (let i = 0; i < required; i++) {
         const remaining = allow.filter((c) => !used.has(c.id.replace(/^0x/, '').toLowerCase()));
         const signed = await opts.authenticator.get({
-          challenge: req.preimage,
+          challenge,
           allow: remaining,
           ...(opts.hybrid ? { hybrid: true } : {}),
         });
@@ -56,18 +61,9 @@ export function passkeySigningDriver(opts: PasskeySigningDriverOptions): Signing
           );
         }
         used.add(id);
-        entries.push({
-          authenticatorData: new Uint8Array(signed.assertion.authenticator_data),
-          clientDataJson: new Uint8Array(signed.assertion.client_data_json),
-          signature: new Uint8Array(signed.assertion.signature),
-          ...(signed.assertion.user_handle
-            ? { userHandle: new Uint8Array(signed.assertion.user_handle) }
-            : {}),
-          mlDsaSignature: signWithPrf(signed, req.preimage),
-          credentialId: signed.credentialId,
-        });
+        entries.push(signed);
       }
-      return { signatures: [encodeHybridSignatureBundle(entries)] };
+      return { signatures: [encodePasskeySignatureBundle(entries)] };
     },
   };
 }

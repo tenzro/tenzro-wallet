@@ -83,7 +83,7 @@ export function App() {
         <CardContent className="space-y-3">
           <Row icon={Globe} label="Tenzro RPC" value="rpc.tenzro.xyz" />
           <Row icon={Cpu} label="Chain id" value="read from the node" />
-          <Row icon={Shield} label="Approvals" value="passkey + ML-DSA-65, on this device" />
+          <Row icon={Shield} label="Approvals" value="passkey, on this device" />
         </CardContent>
       </Card>
 

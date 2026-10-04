@@ -101,15 +101,14 @@ function CreateOrSignIn({ onDone }: { onDone: () => void }) {
         <h1 className="text-3xl font-semibold tracking-tight mb-3">Your wallet is a passkey.</h1>
         <p className="text-foreground-muted leading-relaxed mb-8 max-w-lg mx-auto">
           Your identity and account are created from a passkey on this device. Every approval is
-          signed on the device, twice: with the passkey and with a post-quantum ML-DSA-65 key
-          derived from it. Nothing is stored and there is nothing to write down.
+          signed by the passkey, inside this device's secure hardware. Nothing is stored and there is nothing to write down.
         </p>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-left mb-8">
         {[
           { icon: KeyRound, title: 'Non-custodial', body: 'Keys stay in your devices.' },
           { icon: Smartphone, title: 'Link devices', body: 'Any enrolled device can approve.' },
-          { icon: Lock, title: 'Quantum-safe', body: 'Every approval carries ML-DSA-65.' },
+          { icon: Lock, title: 'Hardware-held', body: 'The key never leaves the authenticator.' },
         ].map((f) => (
           <div key={f.title} className="rounded-xl bg-surface-1/60 p-4 border border-border-subtle">
             <f.icon className="size-5 text-brand mb-2" />

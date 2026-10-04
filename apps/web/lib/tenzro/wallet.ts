@@ -1,8 +1,8 @@
 /**
  * The web wallet's passkey account.
  *
- * Non-custodial: the passkey lives in the user's authenticator and the
- * post-quantum key is re-derived from it for each signature. The only thing
+ * Non-custodial: the passkey lives in the user's authenticator and signs
+ * every approval; no other key exists. The only thing
  * stored on this device is public: the DID, the account address and which
  * passkey this device uses.
  */
@@ -103,8 +103,7 @@ export async function signIn(opts: PasskeyEntryOptions = {}): Promise<EnteredWal
 
 /**
  * Sends TNZO from the passkey account: an ERC-4337 UserOperation calling
- * `execute(to, value)`, signed on this device by the passkey and its
- * ML-DSA-65 key, submitted with `eth_sendUserOperation`.
+ * `execute(to, value)`, signed on this device by the passkey, submitted with `eth_sendUserOperation`.
  */
 export async function sendTnzo(
   wallet: StoredWallet,
@@ -139,11 +138,11 @@ export async function sendTnzo(
     did: wallet.did as never,
     surfaceKey: {
       surface: 'tenzro-native',
-      scheme: 'webauthn-p256+ml-dsa-65',
+      scheme: 'webauthn-p256',
       address: wallet.account,
       credentialIds: [wallet.credentialId],
     },
-    scheme: 'webauthn-p256+ml-dsa-65',
+    scheme: 'webauthn-p256',
     preimage: hash,
   });
   const signature = signatures[0];

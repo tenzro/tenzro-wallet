@@ -4,8 +4,8 @@
  * A person has exactly one root DID, derived from their first passkey
  * (`did:tenzro:human:<uuid>`, see `custody/passkey/derive.ts`). Their account
  * is a smart account guarded by the WebAuthn validator: every enrolled
- * passkey (one per device) can authorise it with a hybrid P-256 + ML-DSA-65
- * signature. Machines (agents) are `did:tenzro:machine:...` identities rooted
+ * passkey (one per device) can authorise it with a P-256 WebAuthn
+ * assertion. Machines (agents) are `did:tenzro:machine:...` identities rooted
  * in a TPM / Secure Enclave device key.
  *
  * Spec refs:
@@ -96,8 +96,8 @@ export interface CantonPartyKey {
 export type SurfaceKey =
   | {
       readonly surface: 'tenzro-native';
-      /** Passkey smart account: WebAuthn P-256 assertion + ML-DSA-65 leg. */
-      readonly scheme: 'webauthn-p256+ml-dsa-65';
+      /** Passkey smart account: WebAuthn P-256 assertions. */
+      readonly scheme: 'webauthn-p256';
       /** Smart-account address (`0x`-prefixed hex), as returned at enrolment. */
       readonly address: string;
       /** Credential ids (`0x` hex) of the passkeys enrolled on the account. */

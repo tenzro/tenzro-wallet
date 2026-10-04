@@ -10,16 +10,17 @@
  *   addGuardian / startRecovery / finalizeRecovery
  *
  * Every change goes through the custody gate (`gate.ts`). The wallet stores
- * no secret: the passkey lives in the authenticator, and the ML-DSA-65 key is
- * re-derived from the passkey's PRF output whenever it is needed.
+ * no secret and derives no key: the passkey lives in the authenticator and
+ * its assertions are the only signatures.
  *
  * Request shapes mirror `crates/tenzro-node/src/passkey_rpc.rs` field for field.
  */
 
 import { sha256 } from '@noble/hashes/sha2.js';
 
-import { concatBytes, fromHex, normalizeHex, randomBytes, toHex } from './bytes.ts';
-import { deriveCustodyKey, humanDidFromPasskey, recoverAssertionPublicKeys } from './derive.ts';
+import { fromHex, normalizeHex, randomBytes, toHex } from './bytes.ts';
+import { type CompositeSignatureJson, SignatureContext, compositeSignatureJson, signingDigest } from './composite.ts';
+import { humanDidFromPasskey, recoverAssertionPublicKeys } from './derive.ts';
 import {
   type CustodyAuthorization,
   type CustodyOperation,
@@ -28,9 +29,11 @@ import {
 } from './gate.ts';
 import {
   type GuardianCard,
-  type GuardianRole,
   type GuardianSource,
-  deriveGuardianKeys,
+  MAX_GUARDIAN_LABEL_BYTES,
+  guardianRole,
+  guardianTarget,
+  recoveryApprovalChallenge,
   recoveryOpHash,
 } from './guardian.ts';
 import { type DeviceSummary, type WalletReadiness, assessReadiness } from './readiness.ts';
@@ -67,7 +70,6 @@ export interface EnrollPasskeyResult {
 export interface AccountRecordCredential {
   readonly credential_id_hex: string;
   readonly p256_public_key_hex?: string;
-  readonly ml_dsa_public_key_hex?: string;
   readonly label?: string | null;
   /** The passkey's provider, from its registration (16 bytes hex). */
   readonly aaguid?: string | null;
@@ -146,16 +148,6 @@ export interface SessionKeyGrant {
   readonly label?: string;
 }
 
-export interface GuardianInput {
-  /** Composite key of the guardian identity. */
-  readonly ed25519PublicKeyHex: string;
-  readonly mlDsaPublicKeyHex: string;
-  /** From `guardianRole(source)`; sets how long a recovery it approves waits. */
-  readonly role: GuardianRole;
-  readonly label?: string;
-  readonly threshold?: number;
-}
-
 /** A recovery waiting on the account, as the node lists it. */
 export interface PendingRecovery {
   readonly recovery_id: string;
@@ -170,13 +162,22 @@ export interface PendingRecovery {
   readonly cancelled: boolean;
 }
 
-/** The custody target for adding a guardian: its keys and its role. */
-export function guardianTarget(guardian: GuardianInput): Uint8Array {
-  return concatBytes(
-    fromHex(guardian.ed25519PublicKeyHex),
-    fromHex(guardian.mlDsaPublicKeyHex),
-    new Uint8Array([guardian.role === 'recovery_key' ? 0x01 : 0x03]),
-  );
+/** One guardian of an account, as the node lists it. */
+export interface GuardianMember {
+  readonly index: number;
+  readonly p256_pubkey_hex: string;
+  readonly role: string;
+  readonly label?: string;
+  readonly aaguid: string;
+  readonly backup_eligible: boolean;
+  readonly backup_state: boolean;
+}
+
+/** An account's recovery quorum, as the node lists it. */
+export interface GuardianSet {
+  readonly threshold: number;
+  readonly independent_roots: number;
+  readonly members: readonly GuardianMember[];
 }
 
 export interface RecoveryStarted {
@@ -193,10 +194,49 @@ export interface RecoveryRequest {
   readonly account: string;
   readonly recoveryId: string;
   readonly newPasskeyPublicKeyHex: string;
-  readonly newMlDsaPublicKeyHex: string;
   readonly newCredentialIdHex: string;
   readonly expiresAtMs: number;
   readonly guardiansTotal: number;
+}
+
+const REQUEST_FORMAT = 'tenzro-recovery-request';
+
+/** A recovery request as text a guardian can open (link fragment or paste). */
+export function encodeRecoveryRequest(r: RecoveryRequest): string {
+  const bytes = new TextEncoder().encode(JSON.stringify({ format: REQUEST_FORMAT, ...r }));
+  let bin = '';
+  for (const b of bytes) bin += String.fromCharCode(b);
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+export function decodeRecoveryRequest(text: string): RecoveryRequest {
+  let r: RecoveryRequest & { format?: string };
+  try {
+    const b64 = text.trim().replace(/-/g, '+').replace(/_/g, '/');
+    const bin = atob(b64 + '='.repeat((4 - (b64.length % 4)) % 4));
+    r = JSON.parse(new TextDecoder().decode(Uint8Array.from(bin, (c) => c.charCodeAt(0))));
+  } catch {
+    throw new PasskeyError('This is not a recovery request.', 'invalid');
+  }
+  if (
+    r?.format !== REQUEST_FORMAT ||
+    typeof r.recoveryId !== 'string' ||
+    fromHex(r.account).length === 0 ||
+    fromHex(r.newPasskeyPublicKeyHex).length !== 64 ||
+    fromHex(r.newCredentialIdHex).length === 0 ||
+    !Number.isSafeInteger(r.expiresAtMs) ||
+    !Number.isSafeInteger(r.guardiansTotal)
+  ) {
+    throw new PasskeyError('This is not a recovery request.', 'invalid');
+  }
+  return {
+    account: r.account,
+    recoveryId: r.recoveryId,
+    newPasskeyPublicKeyHex: r.newPasskeyPublicKeyHex,
+    newCredentialIdHex: r.newCredentialIdHex,
+    expiresAtMs: r.expiresAtMs,
+    guardiansTotal: r.guardiansTotal,
+  };
 }
 
 export interface PasskeyCustodyOptions {
@@ -218,14 +258,12 @@ export class PasskeyCustody {
   // ── Create ────────────────────────────────────────────────────────────
 
   /**
-   * First device: create a passkey, derive the DID from it and the ML-DSA-65
-   * key from its PRF output, prove possession of both, and enrol. The node
-   * creates the smart account and the human identity.
+   * First device: create a passkey, derive the DID from its public key, prove
+   * possession of it, and enrol. The node creates the smart account and the
+   * human identity.
    *
-   * Two approvals when the authenticator returns the PRF output at creation,
-   * three when it does not. With `challenge`, the PRF read signs it and doubles
-   * as the ownership proof; only an authenticator that returned the PRF at
-   * creation needs one more approval for the proof.
+   * Two approvals: creating the passkey and signing the enrolment challenge.
+   * With `challenge`, one more signs the relying party's ownership proof.
    */
   async createWallet(
     opts: { readonly displayName: string } & PasskeyEntryOptions,
@@ -253,24 +291,14 @@ export class PasskeyCustody {
       id: toHex(created.credentialId),
       transports: created.transports,
     };
-    let proofSignature: PasskeySignature | undefined;
-    let prf = created.prf;
-    if (!prf) {
-      const read = await this.#readPrf(credential, opts.challenge, hints);
-      prf = read.prf;
-      if (opts.challenge) proofSignature = read.signed;
-    }
-    const { publicKey: mlDsaPublicKey, secretKey } = deriveCustodyKey(prf);
-    secretKey.fill(0);
-
     // Enrolment challenge: the "account" is the P-256 key being enrolled and
-    // the target binds the credential id and the ML-DSA key.
+    // the target its credential id.
     const xyHex = toHex(created.publicKey, true);
     const challenge = await requestCustodyChallenge(
       this.rpc,
       xyHex,
       'enroll_passkey',
-      concatBytes(created.credentialId, mlDsaPublicKey),
+      created.credentialId,
     );
     const { authorization } = await authorizeChallenge(
       this.authenticator,
@@ -283,7 +311,7 @@ export class PasskeyCustody {
       display_name: opts.displayName,
       passkey_public_key_hex: xyHex,
       credential_id_hex: toHex(created.credentialId, true),
-      ml_dsa_public_key_hex: toHex(mlDsaPublicKey, true),
+      registration_authenticator_data_hex: toHex(created.registrationAuthenticatorData, true),
       salt: 0,
       authorization,
     });
@@ -295,7 +323,8 @@ export class PasskeyCustody {
         'invalid',
       );
     }
-    if (opts.challenge && !proofSignature) {
+    let proofSignature: PasskeySignature | undefined;
+    if (opts.challenge) {
       proofSignature = await this.authenticator.get({
         challenge: opts.challenge,
         allow: [credential],
@@ -497,16 +526,10 @@ export class PasskeyCustody {
         already_linked: true,
       };
     }
-    // The new device's post-quantum leg, derived from its own PRF. The node
-    // records it with the credential and never mints it.
     const newCredential: CredentialRef = {
       id: toHex(created.credentialId),
       transports: created.transports,
     };
-    const newPrf = created.prf ?? (await this.#readPrf(newCredential, undefined, opts.hints)).prf;
-    const { publicKey: newMlDsaPublicKey, secretKey: newSecret } = deriveCustodyKey(newPrf);
-    newSecret.fill(0);
-
     const challenge = await requestCustodyChallenge(
       this.rpc,
       opts.account,
@@ -520,14 +543,22 @@ export class PasskeyCustody {
     if (stripped(authorization.credential_id_hex) === toHex(created.credentialId)) {
       throw new PasskeyError('The new passkey cannot approve its own addition.', 'invalid');
     }
+    // The new passkey signs the same challenge: its signed flags prove what
+    // its registration claims about syncing.
+    const own = await this.authenticator.get({
+      challenge: signingDigest(SignatureContext.AccountOwner, fromHex(challenge.challenge_hex)),
+      allow: [newCredential],
+      ...(opts.hints ? { hints: opts.hints } : {}),
+    });
 
     return this.rpc.call('tenzro_addPasskey', {
       account_address: opts.account,
       new_passkey_public_key_hex: toHex(created.publicKey, true),
       new_credential_id_hex: toHex(created.credentialId, true),
-      new_pq_verifying_key_hex: toHex(newMlDsaPublicKey, true),
+      new_registration_authenticator_data_hex: toHex(created.registrationAuthenticatorData, true),
       label: opts.label,
       authorization,
+      new_credential_proof: { assertion: own.assertion },
     });
   }
 
@@ -597,23 +628,13 @@ export class PasskeyCustody {
       );
     }
     const credential: CredentialRef = { id: stripped(root.credential_id_hex) };
-    const prf = await this.#prfFor(credential);
-    const { publicKey: mlDsaPublicKey, secretKey } = deriveCustodyKey(prf);
-    secretKey.fill(0);
-
     const xyHex = `0x${stripped(root.p256_public_key_hex)}`;
     const credentialId = fromHex(root.credential_id_hex);
-    const challenge = await requestCustodyChallenge(
-      this.rpc,
-      xyHex,
-      'enroll_passkey',
-      concatBytes(credentialId, mlDsaPublicKey),
-    );
+    const challenge = await requestCustodyChallenge(this.rpc, xyHex, 'enroll_passkey', credentialId);
     const { authorization } = await authorizeChallenge(this.authenticator, challenge, [credential]);
     const enrolled = await this.rpc.call<EnrollPasskeyResult>('tenzro_enrollPasskey', {
       passkey_public_key_hex: xyHex,
       credential_id_hex: toHex(credentialId, true),
-      ml_dsa_public_key_hex: toHex(mlDsaPublicKey, true),
       salt: opts.salt,
       authorization,
     });
@@ -746,82 +767,92 @@ export class PasskeyCustody {
 
   // ── Recovery ──────────────────────────────────────────────────────────
 
+  /** The account's guardians and threshold. Public. */
+  async listGuardians(account: string): Promise<GuardianSet> {
+    const r = await this.rpc.call<GuardianSet>('tenzro_listGuardians', { account_address: account });
+    return { threshold: r.threshold, independent_roots: r.independent_roots, members: r.members ?? [] };
+  }
+
   /**
-   * Registers a guardian (a composite Ed25519 + ML-DSA-65 key) of a kind. The
-   * approval names the guardian's keys and kind, so it cannot be spent on a
-   * different guardian.
+   * Adds a guardian from its card. The approval names the guardian's key,
+   * provider, backup flags, role and label, so it cannot be spent on a
+   * different guardian. `threshold` sets the quorum; the network refuses one
+   * above the guardians' independent roots.
    */
   async addGuardian(opts: {
     readonly account: string;
-    readonly guardian: GuardianInput;
+    readonly card: GuardianCard;
+    readonly threshold?: number;
     readonly approver: CredentialRef;
   }): Promise<{ guardian_count: number; threshold: number }> {
+    const card = opts.card;
     const authorization = await this.#authorize(
       opts.account,
       'add_guardian',
-      guardianTarget(opts.guardian),
+      guardianTarget(card),
       opts.approver,
     );
-    const g = opts.guardian;
+    const label = card.label.trim();
     return this.rpc.call('tenzro_addGuardian', {
       account_address: opts.account,
-      guardian_ed25519_pubkey_hex: g.ed25519PublicKeyHex,
-      guardian_ml_dsa_pubkey_hex: g.mlDsaPublicKeyHex,
-      role: g.role,
-      ...(g.label ? { label: g.label } : {}),
-      ...(g.threshold !== undefined ? { threshold: g.threshold } : {}),
+      guardian_p256_pubkey_hex: card.p256,
+      guardian_registration_authenticator_data_hex: card.registrationAuthenticatorData,
+      guardian_credential_id_hex: card.credentialId,
+      role: card.role,
+      ...(label ? { label } : {}),
+      ...(opts.threshold !== undefined ? { threshold: opts.threshold } : {}),
       authorization,
     });
   }
 
   /**
    * Starts recovery from a new device after losing the others: creates a
-   * passkey here, derives its ML-DSA-65 key, and asks the account's guardians
-   * to approve. The guardians sign the returned hash with their own keys.
+   * passkey here and asks the account's guardians to approve adding it.
    */
   async startRecovery(opts: {
     readonly account: string;
     readonly label: string;
     readonly ttlSecs?: number;
+    readonly hints?: readonly PasskeyHint[];
   }): Promise<RecoveryStarted & { readonly credentialId: string; readonly request: RecoveryRequest }> {
     const created = await this.authenticator.create({
       userId: fromHex(opts.account).slice(-20),
       userName: opts.label,
+      ...(opts.hints ? { hints: opts.hints } : {}),
     });
-    const credential: CredentialRef = {
-      id: toHex(created.credentialId),
-      transports: created.transports,
-    };
-    const prf = created.prf ?? (await this.#prfFor(credential));
-    const { publicKey, secretKey } = deriveCustodyKey(prf);
-    secretKey.fill(0);
     const started = await this.rpc.call<RecoveryStarted>('tenzro_initiateRecovery', {
       account_address: opts.account,
       new_passkey_public_key_hex: toHex(created.publicKey, true),
       new_credential_id_hex: toHex(created.credentialId, true),
-      new_ml_dsa_public_key_hex: toHex(publicKey, true),
+      new_registration_authenticator_data_hex: toHex(created.registrationAuthenticatorData, true),
       ...(opts.ttlSecs !== undefined ? { ttl_secs: opts.ttlSecs } : {}),
     });
     const request: RecoveryRequest = {
       account: opts.account,
       recoveryId: started.recovery_id,
       newPasskeyPublicKeyHex: toHex(created.publicKey, true),
-      newMlDsaPublicKeyHex: toHex(publicKey, true),
       newCredentialIdHex: toHex(created.credentialId, true),
       expiresAtMs: started.expires_at_ms,
       guardiansTotal: started.guardians_total,
     };
-    return { ...started, credentialId: credential.id, request };
+    const expected = recoveryOpHash({
+      account: opts.account,
+      newPasskeyPublicKey: created.publicKey,
+      newCredentialId: created.credentialId,
+      recoveryId: started.recovery_id,
+      expiresAtMs: started.expires_at_ms,
+    });
+    if (stripped(started.recovery_op_hash_hex) !== toHex(expected)) {
+      throw new PasskeyError('The network started a recovery for a different passkey.', 'invalid');
+    }
+    return { ...started, credentialId: toHex(created.credentialId), request };
   }
 
-  /**
-   * Submits one guardian's approval of a recovery: `signature` is the composite
-   * signature over the recovery's `recovery_op_hash_hex` (see `RecoveryKey`).
-   */
+  /** Submits one guardian's approval of a recovery. */
   async submitRecoverySignature(opts: {
     readonly recoveryId: string;
     readonly guardianIndex: number;
-    readonly signatureHex: string;
+    readonly signature: CompositeSignatureJson;
   }): Promise<{
     guardian_signatures_collected: number;
     guardians_required: number;
@@ -832,7 +863,7 @@ export class PasskeyCustody {
     return this.rpc.call('tenzro_submitRecoverySignature', {
       recovery_id: opts.recoveryId,
       guardian_index: opts.guardianIndex,
-      composite_signature_hex: opts.signatureHex,
+      signature: opts.signature,
     });
   }
 
@@ -877,29 +908,30 @@ export class PasskeyCustody {
 
   /**
    * Guardian side: creates the guardian passkey on this device and returns the
-   * card to hand to the account holder. Only public halves leave the device.
+   * card to hand to the account holder. Only public data leaves the device.
    */
   async createGuardian(opts: {
     readonly label: string;
     readonly source: GuardianSource;
+    readonly hints?: readonly PasskeyHint[];
   }): Promise<GuardianCard> {
+    const label = opts.label.trim();
+    if (new TextEncoder().encode(label).length > MAX_GUARDIAN_LABEL_BYTES) {
+      throw new PasskeyError(`A guardian label is at most ${MAX_GUARDIAN_LABEL_BYTES} bytes.`, 'invalid');
+    }
     const created = await this.authenticator.create({
       userId: randomBytes(16),
-      userName: `Guardian: ${opts.label}`,
+      userName: `Tenzro guardian: ${label}`,
+      ...(opts.hints ? { hints: opts.hints, crossPlatform: opts.hints.includes('security-key') } : {}),
     });
-    const credential: CredentialRef = { id: toHex(created.credentialId), transports: created.transports };
-    const keys = deriveGuardianKeys(created.prf ?? (await this.#prfFor(credential)));
-    keys.wipe();
     return {
       format: 'tenzro-guardian',
-      version: 1,
-      label: opts.label,
-      source: opts.source,
-      ed25519: toHex(keys.ed25519PublicKey, true),
-      mlDsa65: toHex(keys.mlDsaPublicKey, true),
-      tier: created.tier,
-      ...(created.aaguid ? { aaguid: created.aaguid } : {}),
+      version: 2,
+      label,
+      role: guardianRole(opts.source),
+      p256: toHex(created.publicKey, true),
       credentialId: toHex(created.credentialId, true),
+      registrationAuthenticatorData: toHex(created.registrationAuthenticatorData, true),
     };
   }
 
@@ -907,7 +939,8 @@ export class PasskeyCustody {
    * Guardian side: approves a recovery with the guardian passkey on this
    * device. The approval is computed here from the request and checked against
    * the recovery the node lists for the account, so a guardian never signs a
-   * hash it was merely handed.
+   * hash it was merely handed. The guardian's index is found by matching the
+   * key that signed against the account's listed guardians.
    */
   async approveRecovery(request: RecoveryRequest): Promise<{
     guardian_signatures_collected: number;
@@ -927,39 +960,33 @@ export class PasskeyCustody {
     ) {
       throw new PasskeyError('This request does not match the recovery the network holds.', 'invalid');
     }
+    const { members } = await this.listGuardians(request.account);
+    if (members.length === 0) {
+      throw new PasskeyError('This account has no guardians.', 'not-found');
+    }
     const opHash = recoveryOpHash({
       account: request.account,
       newPasskeyPublicKey: fromHex(request.newPasskeyPublicKeyHex),
-      newMlDsaPublicKey: fromHex(request.newMlDsaPublicKeyHex),
       newCredentialId: fromHex(request.newCredentialIdHex),
       recoveryId: request.recoveryId,
       expiresAtMs: request.expiresAtMs,
     });
-    const signed = await this.authenticator.get({ challenge: opHash, allow: [] });
-    if (!signed.prf) {
-      throw new PasskeyError('This passkey cannot derive keys (PRF), so it cannot act as a guardian.', 'no-prf');
+    const signed = await this.authenticator.get({ challenge: recoveryApprovalChallenge(opHash), allow: [] });
+    const a = signed.assertion;
+    const candidates = recoverAssertionPublicKeys(
+      new Uint8Array(a.authenticator_data),
+      new Uint8Array(a.client_data_json),
+      new Uint8Array(a.signature),
+    ).map((k) => toHex(k));
+    const member = members.find((m) => candidates.includes(stripped(m.p256_pubkey_hex)));
+    if (!member) {
+      throw new PasskeyError('This passkey is not a guardian of the account.', 'invalid');
     }
-    const keys = deriveGuardianKeys(signed.prf);
-    let signatureHex: string;
-    try {
-      signatureHex = toHex(keys.approve(opHash), true);
-    } finally {
-      keys.wipe();
-    }
-    // The node does not publish which index a guardian holds; an approval
-    // verifies only at its own index, and a mismatch changes nothing.
-    for (let i = 0; i < request.guardiansTotal; i++) {
-      try {
-        return await this.submitRecoverySignature({
-          recoveryId: request.recoveryId,
-          guardianIndex: i,
-          signatureHex,
-        });
-      } catch (e) {
-        if (!/is not guardian \d+'s approval/.test(String((e as Error)?.message ?? e))) throw e;
-      }
-    }
-    throw new PasskeyError('This passkey is not a guardian of the account.', 'invalid');
+    return this.submitRecoverySignature({
+      recoveryId: request.recoveryId,
+      guardianIndex: member.index,
+      signature: compositeSignatureJson(signed),
+    });
   }
 
   // ── internals ─────────────────────────────────────────────────────────
@@ -973,30 +1000,5 @@ export class PasskeyCustody {
     const challenge = await requestCustodyChallenge(this.rpc, account, operation, target);
     const { authorization } = await authorizeChallenge(this.authenticator, challenge, [approver]);
     return authorization;
-  }
-
-  /** One extra assertion to read the PRF when the authenticator did not return it at creation. */
-  async #prfFor(credential: CredentialRef): Promise<Uint8Array> {
-    return (await this.#readPrf(credential)).prf;
-  }
-
-  /** Reads the PRF with an assertion over `challenge` (random when omitted), and returns both. */
-  async #readPrf(
-    credential: CredentialRef,
-    challenge?: Uint8Array,
-    hints?: readonly PasskeyHint[],
-  ): Promise<{ prf: Uint8Array; signed: PasskeySignature }> {
-    const signed = await this.authenticator.get({
-      challenge: challenge ?? randomBytes(32),
-      allow: [credential],
-      ...(hints ? { hints } : {}),
-    });
-    if (!signed.prf) {
-      throw new PasskeyError(
-        'This passkey provider cannot derive keys (PRF). Try a phone, a security key, or a different browser.',
-        'no-prf',
-      );
-    }
-    return { prf: signed.prf, signed };
   }
 }

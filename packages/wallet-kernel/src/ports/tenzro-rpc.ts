@@ -4,7 +4,7 @@
  *
  * A person's account is an ERC-4337 smart account guarded by the WebAuthn
  * validator. The node never signs for it: the wallet builds a
- * UserOperation, the user's passkey (plus its ML-DSA-65 leg) signs the
+ * UserOperation, the user's passkey signs the
  * operation hash on the device, and the node validates and executes it.
  *
  * Real builds inject `TenzroJsonRpcAdapter` (plain JSON-RPC over fetch);

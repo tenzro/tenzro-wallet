@@ -6,8 +6,7 @@
  *            `execute(to, value, data)`, with the nonce, gas price, chain id
  *            and EntryPoint read from the node, and computes its hash;
  *   sign     hands the 32-byte hash to the signing driver: the passkey signs
- *            it on the device (user verification required) and the ML-DSA-65
- *            key derived from the passkey signs the same hash;
+ *            it on the device (user verification required);
  *   submit   `eth_sendUserOperation`;
  *   watch    `eth_getUserOperationReceipt`.
  *
@@ -145,7 +144,7 @@ export function tenzroNativeSurface(deps: TenzroNativeDeps): SurfaceModule {
       const result = await deps.signingDriver.sign({
         did: body.from,
         surfaceKey,
-        scheme: 'webauthn-p256+ml-dsa-65',
+        scheme: 'webauthn-p256',
         preimage: fromHex(body.userOpHash),
         purpose: 'tenzro-native-send',
       });

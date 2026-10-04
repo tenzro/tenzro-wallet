@@ -9,15 +9,15 @@
  *   - P-256 (ES256) only: the network verifies P-256 assertions only.
  *   - User verification is required (PIN or biometric), and the UV flag must
  *     be set in the returned authenticator data.
- *   - The PRF extension is always requested with the canonical Tenzro salt, so
- *     the post-quantum key can be derived without an extra prompt.
+ *   - No key is ever derived from a passkey: no PRF or other extension output
+ *     is requested. The passkey's own assertion is the signature.
  *   - The backup flags set the trust tier: a synced passkey (BE = 1) is a
  *     lower tier and can never be the only root of an account.
  */
 
 import { asBytes, fromHex, randomBytes, toArrayBuffer, toHex, toNumberArray } from './bytes.ts';
 import { COSE_ES256, DEFAULT_RP_ID, DEFAULT_RP_NAME } from './constants.ts';
-import { custodyPrfSalt, normalizeP256PublicKey } from './derive.ts';
+import { normalizeP256PublicKey } from './derive.ts';
 
 /** `device-bound` (BE = 0) or `synced` (BE = 1, the credential can move between devices). */
 export type PasskeyTier = 'device-bound' | 'synced';
@@ -42,8 +42,12 @@ export interface CreatedPasskey {
   readonly publicKey: Uint8Array;
   readonly transports: readonly string[];
   readonly tier: PasskeyTier;
-  /** PRF output, when the authenticator returned it at creation. */
-  readonly prf?: Uint8Array;
+  /**
+   * The registration `authenticatorData`: it names the relying party, the
+   * credential, its key, its provider (AAGUID) and its backup flags. The node
+   * checks it on enrolment.
+   */
+  readonly registrationAuthenticatorData: Uint8Array;
   /** The provider's AAGUID, hex, when the authenticator reported one. */
   readonly aaguid?: string;
 }
@@ -51,7 +55,6 @@ export interface CreatedPasskey {
 export interface PasskeySignature {
   readonly credentialId: Uint8Array;
   readonly assertion: WebAuthnAssertionWire;
-  readonly prf?: Uint8Array;
   readonly userHandle?: Uint8Array;
 }
 
@@ -99,7 +102,6 @@ export type PasskeyErrorKind =
   | 'unsupported'
   | 'cancelled'
   | 'no-user-verification'
-  | 'no-prf'
   | 'already-enrolled'
   | 'not-found'
   | 'last-device'
@@ -150,7 +152,7 @@ export function checkAuthenticatorFlags(authenticatorData: Uint8Array): PasskeyT
   return flags.backupEligible ? 'synced' : 'device-bound';
 }
 
-/** Whether this runtime can run passkey custody at all (secure context, WebAuthn, PRF). */
+/** Whether this runtime can run passkey custody at all (secure context, WebAuthn). */
 export async function passkeySupport(): Promise<{ ok: boolean; reason?: string }> {
   const g = globalThis as {
     isSecureContext?: boolean;
@@ -162,14 +164,6 @@ export async function passkeySupport(): Promise<{ ok: boolean; reason?: string }
     return {
       ok: false,
       reason: 'Passkeys need an up-to-date browser on a secure (HTTPS) page.',
-    };
-  }
-  const caps = await g.PublicKeyCredential.getClientCapabilities?.().catch(() => undefined);
-  if (caps && caps['extension:prf'] === false) {
-    return {
-      ok: false,
-      reason:
-        'This browser cannot derive keys from passkeys. Use a current browser, a phone, or a security key.',
     };
   }
   return { ok: true };
@@ -188,14 +182,6 @@ function wrapError(err: unknown): never {
   }
   if (err instanceof PasskeyError) throw err;
   throw new PasskeyError((err as Error)?.message || 'The passkey request failed.', 'unsupported');
-}
-
-function prfResult(cred: PublicKeyCredential): Uint8Array | undefined {
-  const ext = cred.getClientExtensionResults() as {
-    prf?: { results?: { first?: ArrayBuffer | ArrayBufferView } };
-  };
-  const first = ext.prf?.results?.first;
-  return first ? asBytes(first) : undefined;
 }
 
 function descriptors(
@@ -268,10 +254,7 @@ export class BrowserPasskeyAuthenticator implements PasskeyAuthenticator {
           attestation: 'none',
           timeout: this.#timeout,
           ...(opts.hints?.length ? { hints: [...opts.hints] } : {}),
-          extensions: {
-            prf: { eval: { first: toArrayBuffer(custodyPrfSalt()) } },
-            credProps: true,
-          } as AuthenticationExtensionsClientInputs,
+          extensions: { credProps: true } as AuthenticationExtensionsClientInputs,
         },
       })) as PublicKeyCredential;
     } catch (err) {
@@ -285,14 +268,13 @@ export class BrowserPasskeyAuthenticator implements PasskeyAuthenticator {
     if (!spki) throw new PasskeyError('The passkey has no readable public key.', 'unsupported');
     const authData = asBytes(res.getAuthenticatorData());
     const tier = checkAuthenticatorFlags(authData);
-    const prf = prfResult(cred);
     const aaguid = authData.length >= 53 ? toHex(authData.slice(37, 53)) : '';
     return {
       credentialId: asBytes(cred.rawId),
       publicKey: normalizeP256PublicKey(asBytes(spki)),
       transports: res.getTransports?.() ?? [],
       tier,
-      ...(prf ? { prf } : {}),
+      registrationAuthenticatorData: authData,
       ...(/^0*$/.test(aaguid) ? {} : { aaguid }),
     };
   }
@@ -322,9 +304,6 @@ export class BrowserPasskeyAuthenticator implements PasskeyAuthenticator {
           ),
           timeout: this.#timeout,
           ...(opts.hints?.length ? { hints: [...opts.hints] } : {}),
-          extensions: {
-            prf: { eval: { first: toArrayBuffer(custodyPrfSalt()) } },
-          } as AuthenticationExtensionsClientInputs,
         },
       })) as PublicKeyCredential;
     } catch (err) {
@@ -334,7 +313,6 @@ export class BrowserPasskeyAuthenticator implements PasskeyAuthenticator {
     const authData = asBytes(res.authenticatorData);
     checkAuthenticatorFlags(authData);
     const userHandle = res.userHandle ? asBytes(res.userHandle) : undefined;
-    const prf = prfResult(cred);
     return {
       credentialId: asBytes(cred.rawId),
       assertion: {
@@ -343,7 +321,6 @@ export class BrowserPasskeyAuthenticator implements PasskeyAuthenticator {
         signature: toNumberArray(asBytes(res.signature)),
         user_handle: userHandle ? toNumberArray(userHandle) : null,
       },
-      ...(prf ? { prf } : {}),
       ...(userHandle ? { userHandle } : {}),
     };
   }

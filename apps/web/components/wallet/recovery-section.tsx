@@ -17,6 +17,7 @@ import {
 } from 'tenzro-wallet/custody';
 
 import { TENZRO_NETWORK_NAME, TENZRO_RP_ID } from '@/lib/tenzro/config';
+import { GuardiansPanel } from '@/components/wallet/guardians';
 import { useWallet } from '@/lib/tenzro/hooks';
 import { custody } from '@/lib/tenzro/wallet';
 
@@ -78,11 +79,16 @@ export function RecoverySection() {
         <CardTitle>Recovery</CardTitle>
         <CardDescription>
           Your wallet is your passkeys. Link a second device so that losing one never locks you
-          out.
+          out, and add guardians for the day every device is gone.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-5 text-sm">
         <PendingRecoveries
+          account={w.account}
+          approver={{ id: w.credentialId, transports: w.transports }}
+        />
+
+        <GuardiansPanel
           account={w.account}
           approver={{ id: w.credentialId, transports: w.transports }}
         />

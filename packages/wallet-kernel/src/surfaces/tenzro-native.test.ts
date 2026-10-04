@@ -105,7 +105,7 @@ describe('tenzroNativeSurface (passkey account)', () => {
 
     expect(requests).toHaveLength(1);
     const req = requests[0]!;
-    expect(req.scheme).toBe('webauthn-p256+ml-dsa-65');
+    expect(req.scheme).toBe('webauthn-p256');
     const body = prepared.body as { userOp: UserOperation };
     expect(toHex(req.preimage, true)).toBe(
       toHex(userOperationHash(body.userOp, 20_260_901n, ENTRY_POINT), true),

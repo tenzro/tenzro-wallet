@@ -12,10 +12,9 @@
 import type { SurfaceKey, TdipDid } from './identity.ts';
 
 /**
- * - `webauthn-p256+ml-dsa-65` — the Tenzro account scheme. A WebAuthn
- *   assertion from an enrolled passkey plus an ML-DSA-65 signature from the
- *   post-quantum key derived on the device from that passkey (PRF). The
- *   driver returns ONE entry: the encoded signature bundle the account's
+ * - `webauthn-p256` — the Tenzro account scheme. A WebAuthn assertion from
+ *   an enrolled passkey; the passkey is the only key. The driver returns ONE
+ *   entry: the encoded signature bundle the account's
  *   WebAuthn validator verifies (`userOp.signature`).
  * - `ed25519` — single Ed25519 signature (SVM, Canton, machine keys).
  * - `secp256k1` — single ECDSA signature (external EVM keys).
@@ -23,7 +22,7 @@ import type { SurfaceKey, TdipDid } from './identity.ts';
  *   device key signs both legs. Returns two entries.
  */
 export type SigningScheme =
-  | 'webauthn-p256+ml-dsa-65'
+  | 'webauthn-p256'
   | 'ed25519'
   | 'secp256k1'
   | 'ed25519+ml-dsa-65';
@@ -44,7 +43,7 @@ export interface SigningResult {
 }
 
 export interface SigningDriver {
-  readonly id: /** Passkey driver: WebAuthn assertion + passkey-derived ML-DSA-65. */
+  readonly id: /** Passkey driver: WebAuthn assertion. */
     | 'passkey'
     /** A TPM / Secure Enclave device key supplied by the host. */
     | 'device-key'
