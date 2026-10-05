@@ -14,7 +14,7 @@
   "dependencies": {
     "@tanstack/react-query": "5.100.8",
     "@tenzro/ui": "workspace:*",
-    "tenzro-sdk": "file:../../../harness-sdk/sdk/tenzro-ts-sdk",
+    "tenzro-sdk": "0.8.0",
     "tenzro-wallet": "workspace:*",
     "lucide-react": "1.14.0",
     "motion": "12.38.0",

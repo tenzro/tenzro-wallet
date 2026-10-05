@@ -1,228 +1,108 @@
 # Tenzro Wallet
 
-**One wallet for AI agents, payments, and on-chain assets across every chain that matters.**
+**The wallet for people and the agents that act for them on Tenzro Network.**
 
-Tenzro Wallet is the official wallet for [Tenzro Network](https://tenzro.com) — an AI-native blockchain that runs Ethereum smart contracts, Solana programs, Canton's regulated-finance ledger, and its own native VM under one roof. This wallet is how a person, an app, or an autonomous agent holds money and identity across all of them at once.
+Tenzro Wallet is the official wallet for [Tenzro Network](https://tenzro.com), which runs its native VM, EVM contracts, SVM programs and a Canton/DAML view over one ledger. This wallet is how a person holds TNZO and their identity, and decides what their agents may do.
 
-## Why it exists
+## What it is
 
-If you've held crypto before, you know the drill: one wallet for Ethereum, another for Solana, a third for the chain you bridged to last week, a recovery phrase you're scared to lose, and a different signing flow every time. Agents make it worse — every autonomous workflow needs its own keys, its own gas, its own spending limits.
+A wallet is the person's devices plus their account on the Tenzro ledger. Tenzro websites and RPC providers only carry messages: the wallet keeps working if any of them disappears, holds no secret, and stores only public data (DID, account address, which passkey this device uses).
 
-Tenzro Wallet collapses that into:
+- **Passkeys only.** The passkey (Touch ID, Face ID, Windows Hello, a phone over QR, a security key) signs every approval itself. There is no seed phrase and no exportable key. The relying party is `tenzro.com`.
+- **Linked devices are redundancy.** Any linked device opens the account; guardians (their own passkeys) approve a recovery onto a new device, with a waiting period the owner can cancel.
+- **Agents act under Terms the owner approved.** An agent's Terms (limits, operations, networks, counterparties, step-up rules) live in consensus, signed by the passkey the identity was created with. The wallet shows each agent's Terms, spend and bond, changes its limits, revokes it, and approves the actions its Terms hold for the owner.
 
-- **One identity, four chains.** Your Tenzro identity (a [DID](https://www.w3.org/TR/did-1.0/)) controls native TNZO, EVM contracts, Solana programs, and Canton/DAML assets at the same time. Move TNZO between an Ethereum-compatible app and a Solana-style app on Tenzro and it's a pointer op, not a bridge — no waiting, no risk of stuck funds.
-- **No seed phrase to lose.** Your passkey (Touch ID, Face ID, Windows Hello, a hardware security key) signs every approval itself. The wallet derives, wraps and stores no key; the device keeps only public data. Lose your phone? Make a new passkey and have your guardians approve the recovery with their own passkeys. No twelve-word backup card.
-- **Built for agents, not just humans.** First-class support for [AP2](https://github.com/google/agent-payments-protocol) (Google), x402 (Coinbase), Visa TAP, Mastercard Agent Pay, OpenAI ACP, and ERC-8004 trustless agent identity. Set spending limits per agent. Stream micropayments per inference call. Revoke a compromised agent without rotating your main keys.
-- **Capital markets and multi-party workflows.** Sign Capital Intents (the capital-markets analog of an AP2 mandate) for regulated tokenized assets. Drive saga workflows — Execute → Verify → Compensate → Settle — with optional per-step escrow, Canton DAML mirroring, and AP2 / x402 / MPP / Stripe SPT / Visa TAP / Mastercard Agent Pay mandate binding so every receipt threads back to the off-chain intent that authorized it.
-- **EVM primitives, first-class.** EIP-7702 (Pectra Type-4) delegation lets an EOA temporarily delegate its code to a smart-contract address — the wallet derives the signing hash, signs it with your passkey, and decodes incoming delegation designators. Permit2 SignatureTransfer (with optional ERC-7683 witness binding) gives one-signature gasless flows. The Secure-Mint registry enforces a per-token 1:1 reserve-attestation invariant for tokenized real-world assets. ERC-7683 cross-chain intents surface origin orders and destination fill records.
-- **Bridge to anywhere outside Tenzro.** Eight bridge vendors plug into one router — LI.FI, Chainlink CCIP, LayerZero, Wormhole, deBridge, Canton's HTLC escrow for regulated assets, Hyperlane V3 with Tenzro's sovereign validator-set ISM, and Axelar GMP for reach into Cosmos / Move / Stellar / XRPL chains. The router shows you all eight quotes; you pick.
-- **Chain-agnostic discovery.** Every dApp connect and agent handshake returns CAIP-2 / CAIP-10 / CAIP-19 identifiers per the submitted `tenzro` CASA namespace, so consuming UIs never have to guess which chain or asset a balance belongs to.
+## Flows (Network 1)
 
-## Who this is for
+| Flow | Where | Node methods |
+|---|---|---|
+| Create a wallet | `/onboarding`, popup `tenzro_connect` | `tenzro_createCustodyChallenge`, `tenzro_enrollPasskey` |
+| Sign in | any page, popup | `tenzro_resolveIdentity`, `tenzro_getAccountRecord` |
+| Link a device (QR or this device) | Settings, popup `tenzro_linkDevice` | `tenzro_addPasskey` (new passkey signs its own addition) |
+| Remove a device | Settings | `tenzro_removePasskey` |
+| Guardians and recovery | Settings, `/guardian`, `/recover` | `tenzro_addGuardian`, `tenzro_initiateRecovery`, `tenzro_submitRecoverySignature`, `tenzro_finalizeRecovery`, `tenzro_cancelRecovery` |
+| Send TNZO | `/send`, popup `tenzro_sendTransaction` | `eth_sendUserOperation` (ERC-7579 `execute(bytes32,bytes)`) |
+| Receive, balances | `/dashboard` | `tenzro_getTokenBalance`, `eth_getBalance` |
+| History | `/activity` | `tenzro_getTransactionHistory` |
+| Further wallets under one identity | popup `tenzro_addWallet` | `tenzro_enrollPasskey` (salt > 0) |
+| Settlement plan (x402 `plan`) | popup `tenzro_signSettlementPlan` | signed `SettlementPlan` open, submitted by the site |
+| Publisher split and payouts | `/publisher` | `tenzro_getPayeeSplit`, `tenzro_previewSplit`, `tenzro_listPayments` |
+| Create an agent | popup `tenzro_approveAgentTerms` (`delegate_agent`) | the site calls `tenzro_onboardDelegatedAgent` with the approval |
+| Agent Terms, spend, bond | `/agents` | `tenzro_getAgentTerms`, `tenzro_getAgentBond` |
+| Change an agent's limits | `/agents`, popup `tenzro_approveAgentTerms` (`update_agent_terms`) | `tenzro_updateAgentTerms` |
+| Approve a held agent action (step-up) | `/agents` (paste), popup `tenzro_approveAgentAction` | the agent resends `tenzro_agentAct` with `step_up` |
+| Revoke an agent or machine | `/agents` | `tenzro_revokeIdentity` with the passkey approval |
+| Machines under the identity | `/agents` | `tenzro_resolveIdentity` |
 
-- **Builders** shipping multi-chain apps who don't want to ask users "which wallet?" every time.
-- **Agent developers** who need scoped spending, revocable session keys, and a payment rail that works for both human-instructed and autonomous flows.
-- **Institutions** moving regulated assets — Canton/DAML support means you can hold tokenised securities and stablecoin payments in the same wallet without moving custody between vendors. The wallet **always signs Canton submissions locally** with your passkey — it never delegates signing to a node — and **content-verifies** every prepared transaction against your intent (`actAs` authorization, transfer amount, recipient) before signing, failing closed on any mismatch. Connect to Canton two ways: bring your own Canton node, or point at a Tenzro-network-provided Canton surface with a single API key.
-- **End users** who want a wallet that doesn't feel like 1990s software — biometric auth, no seed phrases, recovery that actually works.
+Not in the wallet: paying an x402 or MPP challenge from the wallet's own account (`tenzro_payX402` / `tenzro_payMpp` with a signed credential) and bridging to other chains. Agent and machine approvals are signed by the passkey the identity was created with; a linked device's passkey cannot root an agent, so the wallet asks for that passkey (on this device or over QR).
+
+### Popup API for sites and agents
+
+A site opens `https://wallet.tenzro.com/approve` (`createPopupProvider` in `tenzro-wallet`) and sends one request at a time:
+
+| Method | Params | Result |
+|---|---|---|
+| `tenzro_connect` | `{ challenge? }` | `{ account, did, proof? }` |
+| `tenzro_sendTransaction` | `{ to, value }` | `{ userOpHash }` |
+| `tenzro_addWallet` | `{ salt }` | `{ account, did, salt }` |
+| `tenzro_linkDevice` | `{ label? }` | `{ credentialsTotal }` |
+| `tenzro_signSettlementPlan` | `{ plan }` | `{ signedTx }` |
+| `tenzro_approveAgentTerms` | `{ operation, terms, rotate_tokens?, challenge }` | `{ authorization }` |
+| `tenzro_approveAgentAction` | `{ action, step_up }` | `{ step_up }` |
+| `tenzro_disconnect` | none | `null` |
+
+The wallet signs only what it can check: Terms are compared with what the node completed, and a held action's digest and custody challenge are recomputed from the action shown.
 
 ## What's in this repo
 
-The wallet is built in layers so the same code runs in a browser extension, a hosted web wallet, a mobile app, and a service worker for agents. This repo ships:
+- **`packages/wallet-kernel/`** (`tenzro-wallet` on npm): passkey custody, ERC-4337 user operations, agent Terms and step-up checks, the popup protocol, surfaces for native, EVM, SVM and Canton.
+- **`packages/ui/`** (`@tenzro/ui`): the design system.
+- **`apps/web/`**: the hosted wallet at `wallet.tenzro.com` (Next.js, static export).
+- **`apps/extension/`**, **`apps/wallet/`**: browser extension and host scaffold.
 
-- **`packages/wallet-kernel/`** — the engine. Pure TypeScript, no Node dependencies, runs anywhere a browser does. Handles identity, custody, signing across all four VMs, balance aggregation, route selection, agent payment policies, and the bridge router. **426 unit tests, live on testnet today.**
-- **`apps/wallet/`** — the host scaffold. Wires the kernel into a real page: EIP-1193 provider on `window.tenzro`, EIP-6963 announcement so dApps discover it, and the onboarding UI for new wallets.
-
-The full architecture and design rationale lives in [`docs/DESIGN.md`](./docs/DESIGN.md).
-
-## Architecture at a glance
-
-```
-                  ┌─────────────────────────────┐
-                  │   one TDIP did:tenzro:…      │
-                  │   passkey custody            │
-                  └──────────────┬───────────────┘
-                                 │
-        ┌────────────┬───────────┼───────────┬────────────┐
-        ▼            ▼           ▼           ▼            ▼
-  Tenzro native  EVM-on-      SVM-on-     Canton/DAML   Bridge to
-  (Ed25519,      Tenzro       Tenzro      MainNet       external
-   18-dec)       (secp256k1,  (Ed25519,   (Canton       chains
-                  18-dec)      9-dec)      external)
-```
-
-Cross-VM moves *on Tenzro* (the first three columns) are pointer ops through a precompile — instant, no bridge risk. Cross-chain moves *off Tenzro* (the last two columns) go through the bridge router. The kernel never picks a vendor for you; it surfaces all available quotes.
-
-## Status
-
-The kernel is testnet-functional today against the live Tenzro testnet at `rpc.tenzro.xyz`. Production readiness is **gated on M4b** (Canton MainNet surface, post-Splice 0.5.x baseline). See `docs/DESIGN.md §10` for the full milestone table.
-
-| Milestone | What | State |
-|---|---|---|
-| M1 | Kernel skeleton, ports + adapters | Done |
-| M2 | Tenzro native surface | Done — live on testnet |
-| M3 | EVM + SVM on-Tenzro surfaces, cross-VM pointer ops | Done — live on testnet |
-| M4a | Canton ports + adapters (design + interfaces) + sign-time content verification (`verifyPreparedContent`) + dual-mode provider (`resolveCantonAdapterConfig`: BYO-node / Tenzro-network-provided) | Done |
-| M4b | Canton MainNet surface | Gated on Splice 0.5.x baseline (post-2026-05-05) |
-| M5 | Passkey custody | Done — passkeys only (`custody/passkey/`); the earlier threshold/share design was removed |
-| M6 | `window.tenzro` injection (extension + web embed) | Kernel ready; `apps/wallet/` scaffolds the host-side wiring |
-| M7 | Settlement (Visa TAP, Mastercard Agent Pay, x402, AP2) | x402 + AP2 + `payVisaTap` + `payMastercard` live on SDK; `signVisaTap` / `issueMastercardToken` issuance hooks SDK-pending |
-| M8 | Bridge router (LI.FI, CCIP, LayerZero, Wormhole, deBridge, Canton) | Live on testnet — all six adapters wired against `client.bridge.{getRoutes,bridgeTokens}` |
-| M9 | TDIP integration (delegate sets, recovery flows) | Kernel orchestrators shipped |
-
-`pnpm test` runs **426 unit tests** across the kernel; four env-gated integration smokes exercise the live testnet end-to-end (1-wei native self-transfer, EVM `eth_*` reads, SVM views via the unified `tenzro_*` namespace, Canton validator reachability).
+Design notes: [`docs/DESIGN.md`](./docs/DESIGN.md).
 
 ## Layout
 
 ```
-docs/DESIGN.md                     # architecture + milestones (authoritative)
-.env.example                       # integration-test env template
-
 packages/
-  wallet-kernel/                   # tenzro-wallet — the kernel
-    src/
-      kernel.ts                    # assembles surfaces, custody, ports, agent stack
-      identity/                    # TDIP did:tenzro:
-      custody/passkey/             # passkey custody: PasskeyCustody, signing digest,
-                                   #   custody gate, guardians, ERC-4337 user ops, recovery kit
-      consent/                     # policy engine + consent receipts
-      balance/                     # cross-VM aggregator
-      router/                      # intent → route decision
-      surfaces/                    # tenzro-native, evm-on-tenzro, svm-on-tenzro,
-                                   #   canton-internal, canton-external, canton-onboarding
-      crypto/                      # eip1559 RLP, solana message compile, keccak256, base58
-      settlement/                  # nanopayment-flow
-      dapp/                        # EIP-6963 announcement + SDK browser-support re-exports
-      ports/                       # external-system seams + adapters
-        adapters/                  # tenzro-sdk-adapter, tenzro-identity-adapter
-        agent/                     # agent ports: ap2, acp, erc8004, erc7802, htlc-escrow,
-                                   #   nanopayment, lifecycle, principal-chain,
-                                   #   fee-estimator, payment-rails,
-                                   #   tee-attestation, escrow, insurance, agent-bond,
-                                   #   session-key
-        bridge/                    # eight vendor adapters (LI.FI / CCIP / LayerZero /
-                                   #   Wormhole / deBridge / Canton / Hyperlane / Axelar)
-                                   #   → one shared client.bridge
-        canton/                    # ledger-api-adapter, http port, hash, fingerprint
-        capital/                   # Capital Intents + reserve attestations + attested mints
-        workflow/                  # multi-party saga workflows w/ Canton DAML mirroring
-        eip7702/                   # Pectra Type-4 EOA delegation helpers
-        permit2/                   # EIP-712 SignatureTransfer (with optional ERC-7683 witness)
-        secure-mint/               # per-token 1:1 reserve-attestation invariant for RWAs
-        hyperlane/                 # Hyperlane V3 with sovereign Tenzro-validator-set ISM
-        axelar/                    # Axelar GMP (Cosmos / Move / Stellar / XRPL reach)
-        erc7683/                   # cross-chain intents origin-side reads + fill records
-        caip/                      # CAIP-2 / CAIP-10 / CAIP-19 chain-agnostic discovery
-        babylon/                   # Babylon BTC-secured staking surface (finality providers,
-                                   #   delegations, EOTS submission)
-        training/                  # Tenzro Train protocol port — read-side run/receipt/manifest
-                                   #   inspection + write-side post-task / enroll-trainer
-                                   #   (Confidential-tier TEE-attested) / submit-gradient /
-                                   #   finalize-round / install-sealed-manifest
-      integration/                 # env-gated smoke tests (skip without env)
-
+  wallet-kernel/src/
+    custody/passkey/   # PasskeyCustody: create, sign in, link, recover, guardians,
+                       #   custody challenges, agent Terms and step-up approvals, user ops
+    dapp/              # popup protocol, EIP-6963
+    ports/agent/       # Terms target, agent payments, bonds, escrow, fee estimates
+    ports/canton/      # Canton ledger API, content verification
+    surfaces/          # tenzro-native, evm-on-tenzro, svm-on-tenzro, canton
+    identity/ balance/ consent/ router/ crypto/ types/
+  ui/
 apps/
-  wallet/                          # @tenzro/wallet-app — host scaffold
-    src/
-      dispatch/window-tenzro.ts    # KernelEip1193Provider + EIP-6963 announcement
-      ui/onboarding.ts             # onboarding UI
-      main.ts                      # load order + start function
+  web/                 # wallet.tenzro.com
+  extension/
+  wallet/
 ```
 
-## Install
+## Build
 
 ```bash
 pnpm install
-pnpm typecheck    # whole repo
-pnpm test         # whole repo (unit only — integration smokes skip without env)
-pnpm lint         # biome
+pnpm turbo run build typecheck test
+pnpm lint
 ```
 
-Toolchain: pnpm 10.33.2, Node ≥ 22, TypeScript 5.7.3, Vitest 4.1.5, Turborepo 2.3.3, Biome 1.9.4.
+Toolchain: pnpm 10.33.2, Node 22 or later, TypeScript 5.7.3, Vitest 4.1.5, Turborepo 2.3.3, Biome 1.9.4.
 
-### Use it as a library
+The wallet depends on **`tenzro-sdk` 0.8.0** exactly (the SDK on node main: payments signed against a node challenge, `getAgentTerms`, chain bond records, step-ups that follow the Terms root). Until 0.8.0 is on npm, `pnpm install` cannot resolve it; once it is, run `pnpm install` once and commit the refreshed `pnpm-lock.yaml`.
 
-The wallet ships on npm as [`tenzro-wallet`](https://www.npmjs.com/package/tenzro-wallet) — browser-clean, ESM-only:
-
-```bash
-npm install tenzro-wallet tenzro-sdk
-```
-
-```typescript
-import {
-  WalletKernel,
-  TenzroSdkAdapter,
-  PasskeyCustody,
-  buildEip6963Announcement,
-} from 'tenzro-wallet';
-import { TenzroClient, TESTNET_CONFIG } from 'tenzro-sdk';
-
-// Build a wallet against the live testnet via the SDK adapter:
-const sdkClient = new TenzroClient(TESTNET_CONFIG);
-const tenzroPort = TenzroSdkAdapter.fromClient(sdkClient);
-// … assemble surfaces + identity + agentPorts, then construct WalletKernel.
-```
-
-dApps that just want to *consume* an injected provider don't need `tenzro-wallet` — install `tenzro-sdk` and call `TenzroClient.fromInjected()`.
-
-### Run the integration smokes
-
-Smokes skip cleanly when their env vars are absent (so CI stays green). To run them, create a `.env` file in the repo root with the values you need:
-
-```dotenv
-# ─── Tenzro RPC ──────────────────────────────────────────────────────────────
-# Base URL for the Tenzro JSON-RPC node (multi-VM ledger: native / EVM / SVM).
-# Defaults to the public testnet; self-hosted nodes work too.
-TENZRO_RPC_URL=https://rpc.tenzro.xyz
-
-# DPoP-bound bearer JWT issued by Tenzro auth. Required by the native-VM
-# `testnet.test.ts` smoke (the EVM/SVM smokes are read-only and don't need it).
-# TENZRO_BEARER_JWT=replace-with-jwt
-
-# An EVM-shaped address (0x… 20 bytes) you own on the network. Used by:
-#   - `testnet.test.ts`        — 1-wei self-transfer (also needs the JWT)
-#   - `evm-on-tenzro.test.ts`  — read-only EVM nonce/balance probes
-#   - `svm-on-tenzro.test.ts`  — read-only SVM balance probe (pointer model
-#                                 means one address covers both views)
-# TENZRO_TEST_ADDRESS=0x0000000000000000000000000000000000000000
-
-# Optional smoke-test timeout, ms.
-# TENZRO_TEST_TIMEOUT_MS=60000
-
-# ─── Canton: BYO node ────────────────────────────────────────────────────────
-# Bring your own Canton participant. It exposes two HTTP roots that share an
-# Auth0 JWT (audience must equal `https://canton.network.global`). Operators
-# supply the URLs through host config; they're intentionally omitted from this
-# template to keep deployment-specific endpoints out of the repo. The wallet
-# holds the party key and signs locally; auth is the operator's own Canton JWT.
-
-# CANTON_LEDGER_BASE_URL=...        # JSON Ledger API root
-# CANTON_VALIDATOR_BASE_URL=...     # Splice validator-app root
-# CANTON_AUTH0_TOKEN=replace-with-jwt
-# CANTON_USER_ID=replace-with-user-id
-# CANTON_TEST_PARTY=replace-with-party-id
-# CANTON_TEST_TIMEOUT_MS=30000
-
-# ─── Canton: Tenzro-network-provided ─────────────────────────────────────────
-# Alternatively, point at a Tenzro node's Canton surface. One base URL fronts
-# both the ledger and validator seams; auth is a single `tnz_…` API key. The
-# node resolves the key to a tenant and server-mints that tenant's Canton JWT —
-# the wallet never holds the Canton JWT. The wallet still signs locally.
-
-# CANTON_BASE_URL=...               # Tenzro node Canton surface (single origin)
-# CANTON_API_KEY=tnz_replace-with-api-key
-# CANTON_USER_ID=replace-with-user-id
-```
-
-Nothing in `src/` reads these directly at runtime — host apps and tests pass values through the kernel's dep-injected ports. Keep secrets out of git.
+The hosted wallet is a static export: `TENZRO_STATIC_EXPORT=1 pnpm --filter @tenzro/web build` writes `apps/web/out`. The static host must send the headers `next.config.ts` lists.
 
 ## Architectural rules
 
 These are load-bearing and described in detail in `docs/DESIGN.md §3` and `§4`:
 
 1. **Ports + adapters.** Surfaces and the kernel only depend on port interfaces. The only files allowed to import `tenzro-sdk` are adapters under `src/ports/*/adapters/`. SDK shape changes break exactly one file.
-2. **Four surfaces, one identity.** TDIP `did:tenzro:` is the root; each surface has a derived `SurfaceKey` (Ed25519 native, secp256k1 EVM, Ed25519 SVM, Canton external party).
-3. **Cross-VM moves on Tenzro are pointer ops, not bridges.** Pointer ops flow through precompile `0x1003` / the `tenzro_cross_vm` SVM program. Tenzro↔Canton-MainNet and Tenzro↔external chains go through the bridge router. Don't conflate these in code or comments.
-4. **Custody is passkeys only.** No seed phrases. The user's WebAuthn P-256 passkey signs every approval itself; the wallet derives, wraps and stores no key and keeps only public data (DID, account address, which credential). Passkeys that sync through one provider count as one root; high-risk ops need distinct-provider roots.
+2. **Four surfaces, one identity.** TDIP `did:tenzro:` is the root; native, EVM and SVM are views of one balance on Tenzro.
+3. **Cross-VM moves on Tenzro are pointer ops, not bridges.** Native, EVM and SVM are views of one balance; moving between them never leaves Tenzro.
+4. **Custody is passkeys only.** No seed phrases. The user's WebAuthn P-256 passkey signs every approval itself; the wallet derives, wraps and stores no key and keeps only public data (DID, account address, which credential). Passkeys that sync through one provider count as one root.
 5. **Decimals are not interchangeable.** Native + EVM = 18 decimals; SVM = 9 decimals; Canton CC = `Numeric 10`. The router surfaces dust-truncation warnings; surfaces enforce per-view precision.
 6. **Browser-clean kernel.** No `node:` imports, no `process.env` reads in `src/` outside `integration/`. Use Web Crypto, `fetch`, `TextEncoder`.
 
@@ -234,10 +114,10 @@ These are load-bearing and described in detail in `docs/DESIGN.md §3` and `§4`
 
 ## Contributing
 
-Before opening a PR:
+Before merging:
 
 ```bash
-pnpm typecheck && pnpm test && pnpm lint
+pnpm turbo run build typecheck test && pnpm lint
 ```
 
 Tests are co-located with source (`*.test.ts` next to `*.ts`); integration smokes live under `src/integration/`. Keep adapters narrow — if the SDK shape changes, exactly one file should break.
