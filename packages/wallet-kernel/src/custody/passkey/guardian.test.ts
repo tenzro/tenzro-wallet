@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { concatBytes, toHex, utf8 } from './bytes.ts';
-import { SignatureContext, signingDigest } from './composite.ts';
+import { concatBytes, toHex } from './bytes.ts';
 import {
   type GuardianCard,
   type QuorumMember,
@@ -10,9 +9,6 @@ import {
   decodeGuardianCard,
   encodeGuardianCard,
   guardianRole,
-  guardianTarget,
-  recoveryApprovalChallenge,
-  recoveryOpHash,
   registrationProvenance,
 } from './guardian.ts';
 
@@ -43,27 +39,6 @@ function card(over: Partial<GuardianCard> = {}, flags = 0x18): GuardianCard {
   };
 }
 
-describe('recoveryOpHash', () => {
-  it('matches the network derivation', () => {
-    const h = recoveryOpHash({
-      account: `0x${'11'.repeat(20)}`,
-      newPasskeyPublicKey: concatBytes(new Uint8Array(32).fill(2), new Uint8Array(32).fill(3)),
-      newCredentialId: new Uint8Array([4, 5]),
-      recoveryId: 'rec-1',
-      expiresAtMs: 1_700_000_000_000,
-    });
-    // Reference: python hashlib over the same preimage.
-    expect(toHex(h)).toBe('7136490488210343c2c3a15e2e3d995c39ba80ec155740323426cd73d750a377');
-  });
-
-  it('is approved under the recovery-approval context', () => {
-    const op = new Uint8Array(32).fill(9);
-    expect(recoveryApprovalChallenge(op)).toEqual(
-      signingDigest(SignatureContext.RecoveryApproval, op),
-    );
-  });
-});
-
 describe('guardian cards', () => {
   it('round-trip and refuse anything else', () => {
     const c = card();
@@ -81,23 +56,6 @@ describe('guardian cards', () => {
     expect(registrationProvenance(regData(0, aaguidA, new Uint8Array([1]))).backupEligible).toBe(
       false,
     );
-  });
-
-  it('name key, no pq key, provider, flags, role and label in the target', () => {
-    const t = guardianTarget(card());
-    expect(toHex(t)).toBe(
-      toHex(
-        concatBytes(
-          new Uint8Array(64).fill(1),
-          new Uint8Array(32),
-          aaguidA,
-          new Uint8Array([0b11, 0x01]),
-          utf8('Backup key'),
-        ),
-      ),
-    );
-    expect(toHex(guardianTarget(card({ role: 'device' })))).not.toBe(toHex(t));
-    expect(toHex(guardianTarget(card({ label: 'Phone' })))).not.toBe(toHex(t));
   });
 
   it('maps sources to node roles', () => {

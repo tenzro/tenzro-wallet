@@ -6,12 +6,10 @@ import { describe, expect, it } from 'vitest';
 
 import { fromHex, toHex } from './bytes.ts';
 import { PasskeyCustody } from './custody.ts';
-import { humanDidFromPasskey, recoverAssertionPublicKeys } from './derive.ts';
-import { FakeAuthenticator, MockRpc, issuedChallenge } from './fake-authenticator.fixture.ts';
+import { recoverAssertionPublicKeys, smartAccountAddress } from './derive.ts';
+import { FakeAuthenticator } from './fake-authenticator.fixture.ts';
+import { network } from './keystore-network.fixture.ts';
 import { PasskeyError } from './webauthn.ts';
-
-const FIRST = '0x00000000000000000000000000000000000a11ce';
-const SECOND = '0x00000000000000000000000000000000000b0b00';
 
 function b64url(bytes: Uint8Array): string {
   let s = '';
@@ -19,47 +17,15 @@ function b64url(bytes: Uint8Array): string {
   return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
-function setup(recordCredentials?: () => unknown[]) {
-  let n = 0;
-  let firstXy = '';
-  let firstCred = '';
-  const rpc = new MockRpc({
-    tenzro_createCustodyChallenge: (p: {
-      account_address: string;
-      operation: string;
-      target_hex?: string;
-    }) => {
-      n += 1;
-      return issuedChallenge(n, p);
-    },
-    tenzro_enrollPasskey: (p: {
-      passkey_public_key_hex: string;
-      credential_id_hex: string;
-      salt: number;
-    }) => {
-      if (!firstXy) {
-        firstXy = p.passkey_public_key_hex;
-        firstCred = p.credential_id_hex;
-      }
-      return {
-        did: humanDidFromPasskey(fromHex(p.passkey_public_key_hex)),
-        smart_account_address: p.salt === 0 ? FIRST : SECOND,
-        credential_id_hex: p.credential_id_hex,
-        webauthn_validator_address: '0x0000000000000000000000000000000000001020',
-        installed_validators: ['webauthn'],
-      };
-    },
-    tenzro_getAccountRecord: () => ({
-      record: {
-        account_address: FIRST,
-        credentials: recordCredentials
-          ? recordCredentials()
-          : [{ credential_id_hex: firstCred, p256_public_key_hex: firstXy }],
-      },
-    }),
-  });
+function setup() {
+  const net = network();
   const authenticator = new FakeAuthenticator();
-  return { rpc, authenticator, custody: new PasskeyCustody({ rpc, authenticator }) };
+  return {
+    net,
+    rpc: net.rpc,
+    authenticator,
+    custody: new PasskeyCustody({ rpc: net.rpc, authenticator, sender: net.sender }),
+  };
 }
 
 describe('ownership proof', () => {
@@ -97,11 +63,12 @@ describe('ownership proof', () => {
 
 describe('addWallet', () => {
   it('enrols the first passkey again with the next salt, approved by that passkey', async () => {
-    const { custody, rpc } = setup();
+    const { custody, rpc, authenticator } = setup();
     const account = await custody.createWallet({ displayName: 'Ada' });
     const added = await custody.addWallet(account, { salt: 1 });
 
-    expect(added.account).toBe(SECOND);
+    const first = authenticator.credentials[0]!;
+    expect(added.account).toBe(`0x${toHex(smartAccountAddress(first.publicKey, first.id, 1))}`);
     expect(added.did).toBe(account.did);
     expect(added.salt).toBe(1);
 
@@ -119,16 +86,13 @@ describe('addWallet', () => {
     expect(c.target_hex).toBe(last.credential_id_hex);
   });
 
-  it('refuses salt 0 and an account whose record does not show the first passkey', async () => {
+  it('refuses salt 0 and an identity whose first passkey the account does not hold', async () => {
     const a = setup();
     const account = await a.custody.createWallet({ displayName: 'Ada' });
     await expect(a.custody.addWallet(account, { salt: 0 })).rejects.toBeInstanceOf(PasskeyError);
-
-    const b = setup(() => []);
-    const other = await b.custody.createWallet({ displayName: 'Ada' });
-    await expect(b.custody.addWallet(other, { salt: 1 })).rejects.toMatchObject({
-      kind: 'not-found',
-    });
+    await expect(
+      a.custody.addWallet({ ...account, did: 'did:tenzro:human:other' }, { salt: 1 }),
+    ).rejects.toMatchObject({ kind: 'not-found' });
   });
 });
 
@@ -189,18 +153,15 @@ describe('connecting a site while creating or signing in', () => {
     expect(account.proof).toBeUndefined();
   });
 
-  it('signs in and proves with one approval', async () => {
-    const { custody, authenticator, rpc } = setup();
-    await custody.createWallet({ displayName: 'Ada' });
-    const did = humanDidFromPasskey(authenticator.credentials[0]!.publicKey);
-    rpc.handlers.tenzro_resolveIdentity = (() => ({
-      did,
-      metadata: { smart_account_address: FIRST },
-    })) as (params: never) => unknown;
+  it('signs in and proves with one approval once the keystore is on chain', async () => {
+    const { custody, authenticator } = setup();
+    const account = await custody.createWallet({ displayName: 'Ada' });
+    await custody.linkDevice({ account, label: 'Key', approver: { id: account.credentialId } });
+    authenticator.preferred = account.credentialId;
     const seen = counted(authenticator);
     const found = await custody.signIn({ challenge: code });
     expect(seen).toHaveLength(1);
-    expect(found.proof?.account).toBe(FIRST);
+    expect(found.proof?.account).toBe(account.account);
     provesFor(found.proof!, code, authenticator);
   });
 
@@ -222,86 +183,8 @@ describe('connecting a site while creating or signing in', () => {
 });
 
 describe('linking a phone from the first device', () => {
-  it('asks the phone to create over QR and this device to approve', async () => {
-    const auth = new FakeAuthenticator();
-    const ids: string[] = [];
-    let n = 0;
-    const rpc = new MockRpc({
-      tenzro_createCustodyChallenge: (p: {
-        account_address: string;
-        operation: string;
-        target_hex?: string;
-      }) => {
-        n += 1;
-        return issuedChallenge(n, p);
-      },
-      tenzro_enrollPasskey: (p: { passkey_public_key_hex: string; credential_id_hex: string }) => {
-        ids.push(p.credential_id_hex.replace(/^0x/, ''));
-        return {
-          did: humanDidFromPasskey(fromHex(p.passkey_public_key_hex)),
-          smart_account_address: FIRST,
-        };
-      },
-      tenzro_listPasskeys: () => ({ credential_ids: ids }),
-      tenzro_addPasskey: (p: { new_credential_id_hex: string }) => ({
-        account_address: FIRST,
-        credential_id_hex: p.new_credential_id_hex,
-        credentials_total: 2,
-      }),
-    });
-    const custody = new PasskeyCustody({ rpc, authenticator: auth });
-    const first = await custody.createWallet({ displayName: 'Ada' });
-    auth.preferred = first.credentialId;
-    const seen = counted(auth);
-    await custody.linkDevice({
-      account: FIRST,
-      label: 'Phone',
-      crossPlatform: true,
-      hints: ['hybrid'],
-      approver: { id: first.credentialId },
-    });
-    // The phone creates, this device approves, the phone signs its own proof.
-    expect(seen).toEqual([
-      { kind: 'create', hints: ['hybrid'] },
-      { kind: 'get' },
-      { kind: 'get', hints: ['hybrid'] },
-    ]);
-    const [added] = rpc.paramsOf('tenzro_addPasskey') as Array<{
-      authorization: { credential_id_hex: string };
-      new_credential_proof: { assertion: unknown };
-    }>;
-    expect(added?.authorization.credential_id_hex.replace(/^0x/, '')).toBe(first.credentialId);
-    expect(added?.new_credential_proof.assertion).toBeDefined();
-  });
-
-  it('has this device approve before the new passkey signs its own proof', async () => {
-    const auth = new FakeAuthenticator();
-    const ids: string[] = [];
-    let n = 0;
-    const rpc = new MockRpc({
-      tenzro_createCustodyChallenge: (p: {
-        account_address: string;
-        operation: string;
-        target_hex?: string;
-      }) => {
-        n += 1;
-        return issuedChallenge(n, p);
-      },
-      tenzro_enrollPasskey: (p: { passkey_public_key_hex: string; credential_id_hex: string }) => {
-        ids.push(p.credential_id_hex.replace(/^0x/, ''));
-        return {
-          did: humanDidFromPasskey(fromHex(p.passkey_public_key_hex)),
-          smart_account_address: FIRST,
-        };
-      },
-      tenzro_listPasskeys: () => ({ credential_ids: ids }),
-      tenzro_addPasskey: (p: { new_credential_id_hex: string }) => ({
-        account_address: FIRST,
-        credential_id_hex: p.new_credential_id_hex,
-        credentials_total: 2,
-      }),
-    });
-    const custody = new PasskeyCustody({ rpc, authenticator: auth });
+  it('asks the phone to create over QR, the phone to prove it, and this device to send', async () => {
+    const { custody, authenticator: auth, net } = setup();
     const first = await custody.createWallet({ displayName: 'Ada' });
     const seen = counted(auth);
     const allowSeen: string[][] = [];
@@ -311,14 +194,16 @@ describe('linking a phone from the first device', () => {
       return get(o);
     };
     await custody.linkDevice({
-      account: FIRST,
+      account: first,
       label: 'Phone',
       crossPlatform: true,
       hints: ['hybrid'],
       approver: { id: first.credentialId },
     });
     expect(seen.map((s) => s.kind)).toEqual(['create', 'get', 'get']);
-    expect(allowSeen[0]).toEqual([first.credentialId]);
-    expect(allowSeen[1]).toEqual([toHex(auth.credentials[1]!.id)]);
+    expect(seen[0]?.hints).toEqual(['hybrid']);
+    expect(allowSeen[0]).toEqual([toHex(auth.credentials[1]!.id)]);
+    expect(allowSeen[1]).toEqual([first.credentialId]);
+    expect(toHex(net.sent[0]!.key)).toBe(toHex(auth.credentials[0]!.publicKey));
   });
 });

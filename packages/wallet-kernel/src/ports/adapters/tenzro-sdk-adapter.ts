@@ -61,7 +61,7 @@ export class TenzroSdkAdapter {
    * The SDK's `fromInjected` wires `Eip1193Transport` internally, so
    * neither this adapter nor the rest of the kernel needs to know that
    * the underlying transport is a `provider.request(...)` call rather
-   * than a `fetch` to `rpc.tenzro.xyz`.
+   * than a `fetch` to a node.
    *
    * Re-exports `TenzroNotInstalledError` so callers don't need a second
    * dependency on `tenzro-sdk` purely to type the catch arm.

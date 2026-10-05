@@ -25,19 +25,16 @@ export interface CantonHttpConfig {
    * Async token getter. Called per-request — the implementation can cache
    * and refresh as it likes. Throwing here surfaces as a request failure.
    *
-   * In the default (BYO Canton node) auth model this is the Canton JWT,
-   * sent as `Authorization: Bearer <token>`. When `authHeaders` is set it
-   * takes precedence and `token` is ignored — that's the Tenzro-provided
-   * model, where the auth is a `tnz_...` API key in `X-Tenzro-Api-Key` and
-   * the node server-mints the Canton JWT.
+   * This is the operator's Canton JWT, sent as `Authorization: Bearer
+   * <token>` unless `authHeaders` is set.
    */
   readonly token: () => Promise<string>;
   /**
    * Optional per-request auth header builder. When present it FULLY replaces
    * the default `Authorization: Bearer` behaviour — the returned record is
-   * spread into the request headers verbatim. Use this for the Tenzro-
-   * provided model (`X-Tenzro-Api-Key`) or the BYO-issuer escape hatch
-   * (`X-Canton-Auth`). Called per-request; may cache/refresh internally.
+   * spread into the request headers verbatim. Used for an operator whose
+   * issuer differs from the participant's default (`X-Canton-Auth`). Called
+   * per-request; may cache/refresh internally.
    */
   readonly authHeaders?: () => Promise<Record<string, string>>;
   /**
@@ -48,9 +45,9 @@ export interface CantonHttpConfig {
 }
 
 /**
- * Resolve the auth headers for a request. `authHeaders` wins when set
- * (Tenzro-provided / BYO-issuer escape hatch); otherwise fall back to the
- * default `Authorization: Bearer <token>` (BYO Canton node, self-minted JWT).
+ * Resolve the auth headers for a request. `authHeaders` wins when set (an
+ * operator's own issuer); otherwise the default `Authorization: Bearer
+ * <token>`.
  */
 async function resolveAuthHeaders(cfg: CantonHttpConfig): Promise<Record<string, string>> {
   if (cfg.authHeaders) return cfg.authHeaders();

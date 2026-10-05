@@ -1,45 +1,58 @@
 /**
  * Browser test of the guardian screens against a built wallet and a mocked
- * node. Chromium's virtual WebAuthn authenticator (CDP) holds every passkey,
- * so each ceremony is a real navigator.credentials call.
+ * node that holds the account's keystore. Chromium's virtual WebAuthn
+ * authenticator (CDP) holds every passkey, so each ceremony is a real
+ * navigator.credentials call.
  *
  * Covers: making a guardian passkey (/guardian), adding it from settings with
  * the quorum preview, starting a recovery (/recover), the guardian approving
- * it from the request link, and completing it.
+ * it from the request link with an approval code, sending the recovery with
+ * the approvals, and completing it.
  *
- * Every request the mock node receives is checked against what the node
- * verifies: the custody target and digest, and the passkey signatures over
- * them (P-256 over authenticatorData || SHA-256(clientDataJSON)).
+ * Every keystore change reaches the mock node as a transaction from the
+ * account, and is checked as the node checks it: the passkey signature over
+ * the transaction digest, and each guardian approval over the change's digest
+ * (P-256 over authenticatorData || SHA-256(clientDataJSON)).
  *
  * Needs the app built with NEXT_PUBLIC_TENZRO_RP_ID=localhost and
- * NEXT_PUBLIC_TENZRO_RPC_URL=http://rpc.test.invalid/ and served at BASE_URL
+ * NEXT_PUBLIC_TENZRO_RPC_URL=http://rpc.test.invalid/ and
+ * NEXT_PUBLIC_TENZRO_CHAIN_ID=1337, and served at BASE_URL
  * (`pnpm build && pnpm start -p 3917`). Run: `pnpm test:e2e`.
  */
 
 import assert from 'node:assert/strict';
-import { createHash, createPublicKey, generateKeyPairSync, randomBytes, verify } from 'node:crypto';
+import {
+  createHash,
+  createPrivateKey,
+  createPublicKey,
+  generateKeyPairSync,
+  randomBytes,
+  sign,
+  verify,
+} from 'node:crypto';
 
 import { chromium } from 'playwright';
+import { TRANSACTION_SIGNATURE_CONTEXT, compositeMessageRepresentative } from 'tenzro-sdk';
 import {
   SignatureContext,
-  base64Url,
   bytesToHex,
-  custodyChallengeDigest,
   decodeGuardianCard,
-  guardianTarget,
+  decodeRecoveryRequest,
+  encodeRecoveryApproval,
   hexToBytes,
-  recoveryApprovalChallenge,
-  recoveryOpHash,
+  keystoreDigest,
   webauthnChallenge,
 } from 'tenzro-wallet/custody';
 
 const BASE = process.env.BASE_URL ?? 'http://localhost:3917';
 const RPC = 'http://rpc.test.invalid/';
 const ACCOUNT = `0x${'ac'.repeat(20)}`;
-const SYNCED_AAGUID = `0x${'a1'.repeat(16)}`;
+const ACCOUNT_SLOT = `${ACCOUNT}${'00'.repeat(12)}`;
+const SYNCED_AAGUID = 'a1'.repeat(16);
 
 const hex = (b) => bytesToHex(b, true);
 const strip = (h) => h.replace(/^0x/, '').toLowerCase();
+const b64u = (b) => Buffer.from(b).toString('base64url');
 
 function randomP256() {
   const { publicKey, privateKey } = generateKeyPairSync('ec', { namedCurve: 'P-256' });
@@ -76,149 +89,212 @@ function verifyAssertion({ authenticatorData, clientDataJson, signature }, xy, c
   assert.ok(verify('sha256', signed, key, Buffer.from(signature)), `${what}: signature`);
 }
 
-/** The mocked node: answers the wallet's JSON-RPC and records each call. */
-function mockNode(accountKey) {
+/** A WebAuthn assertion made outside the browser, as another guardian's device makes one. */
+function assertOutside(pkcs8, challenge) {
+  const ad = Buffer.concat([
+    createHash('sha256').update('localhost').digest(),
+    Buffer.from([0x05, 0, 0, 0, 1]),
+  ]);
+  const cd = Buffer.from(
+    JSON.stringify({
+      type: 'webauthn.get',
+      challenge,
+      origin: new URL(BASE).origin,
+      crossOrigin: false,
+    }),
+  );
+  const key = createPrivateKey({ key: pkcs8, format: 'der', type: 'pkcs8' });
+  const sig = sign('sha256', Buffer.concat([ad, createHash('sha256').update(cd).digest()]), key);
+  return {
+    classical: {
+      form: 'web_authn',
+      authenticator_data: ad.toString('hex'),
+      client_data_json: cd.toString('hex'),
+      signature: sig.toString('hex'),
+    },
+  };
+}
+
+const credentialOf = (key, credId, label, extra = {}) => ({
+  rp_id: 'localhost',
+  credential_id: credId.toString('hex'),
+  public_key: key.xy.toString('hex'),
+  aaguid: '00'.repeat(16),
+  backup_eligible: false,
+  backup_state: false,
+  counts_as_root_from_ms: 0,
+  label,
+  ...extra,
+});
+
+/**
+ * The mocked node: holds the account's keystore, answers the wallet's
+ * JSON-RPC, and applies each keystore change sent to it once it checks.
+ */
+function mockNode(accountKey, accountCredId, phone, laptop) {
   const calls = [];
-  const challenges = new Map();
-  let n = 0;
+  const payloads = new Map();
+  const signer = (key, label) => ({
+    rp_id: 'localhost',
+    public_key: key.xy.toString('hex'),
+    aaguid: SYNCED_AAGUID,
+    backup_eligible: true,
+    backup_state: true,
+    role: 'device',
+    label,
+  });
   const node = {
     calls,
-    members: [
+    sent: [],
+    record: {
+      account: ACCOUNT.slice(2),
+      owner_did: 'did:tenzro:human:e2e',
+      salt: 0,
+      version: 1,
+      credentials: [credentialOf(accountKey, accountCredId, 'Laptop')],
+      policy: 'single_credential',
+      recovery_signers: [signer(phone, 'Phone'), signer(laptop, 'Laptop')],
+      recovery_threshold: 1,
+      pending_recovery: null,
+    },
+  };
+  node.commitment = () => createHash('sha256').update(JSON.stringify(node.record)).digest('hex');
+  const keyOf = (pk) => Buffer.from(pk, 'hex');
+  /** Checks the transaction's passkey signature by `publicKey` over its payload digest. */
+  const checkTx = async (p, what) => {
+    const digest = [...payloads.keys()].find((d) => payloads.get(d).timestamp === p.timestamp);
+    assert.ok(digest, `${what}: a payload the node issued`);
+    assert.equal(p.from, ACCOUNT_SLOT, `${what}: sent from the account`);
+    const c = p.signature.classical;
+    assert.equal(c.form, 'web_authn', `${what}: passkey form`);
+    const mPrime = await compositeMessageRepresentative(
+      TRANSACTION_SIGNATURE_CONTEXT,
+      hexToBytes(digest),
+    );
+    verifyAssertion(
       {
-        index: 0,
-        p256_pubkey_hex: hex(randomP256().xy),
-        role: 'device',
-        aaguid: SYNCED_AAGUID,
-        backup_eligible: true,
-        backup_state: true,
-        label: 'Phone',
+        authenticatorData: Buffer.from(c.authenticator_data, 'hex'),
+        clientDataJson: Buffer.from(c.client_data_json, 'hex'),
+        signature: Buffer.from(c.signature, 'hex'),
       },
-      {
-        index: 1,
-        p256_pubkey_hex: hex(randomP256().xy),
-        role: 'device',
-        aaguid: SYNCED_AAGUID,
-        backup_eligible: true,
-        backup_state: true,
-        label: 'Laptop',
-      },
-    ],
-    threshold: 1,
-    pending: null,
-    newCredentialIds: [],
-    challenges,
+      keyOf(strip(p.public_key)),
+      b64u(createHash('sha256').update(mPrime).digest()),
+      what,
+    );
   };
   const handlers = {
-    tenzro_listGuardians: () => ({
-      threshold: node.threshold,
-      independent_roots: 1,
-      members: node.members,
-    }),
-    tenzro_listPendingRecoveries: () => ({
-      pending_recoveries: node.pending ? [node.pending] : [],
-    }),
-    tenzro_createCustodyChallenge: (p) => {
-      n += 1;
-      const nonce = randomBytes(16);
-      const target = hexToBytes(p.target_hex ?? '0x');
-      const digest = custodyChallengeDigest(
-        hexToBytes(p.account_address),
-        p.operation,
-        target,
-        nonce,
-      );
-      const id = `c${n}`;
-      challenges.set(id, { ...p, digest });
+    eth_chainId: () => '0x539',
+    tenzro_listRoleEndpoints: () => ({ endpoints: [] }),
+    tenzro_getCheckpointCertificate: () => ({ index: 1, digest: 'cd'.repeat(32) }),
+    tenzro_getNonce: () => `0x${node.sent.length.toString(16)}`,
+    tenzro_getKeystore: (p) => {
+      assert.equal(strip(p.account), ACCOUNT.slice(2), 'keystore of the account');
       return {
-        challenge_id: id,
-        challenge_hex: hex(digest),
-        webauthn_challenge: webauthnChallenge(SignatureContext.AccountOwner, digest),
-        nonce_hex: hex(nonce),
-        target_hex: hex(target),
-        expires_in_secs: 300,
+        account: ACCOUNT.slice(2),
+        on_chain: true,
+        keystore: node.record,
+        commitment: node.commitment(),
       };
     },
-    tenzro_addGuardian: (p) => {
-      node.members = [
-        ...node.members,
-        {
-          index: node.members.length,
-          p256_pubkey_hex: p.guardian_p256_pubkey_hex,
-          role: p.role,
-          aaguid: '0x',
-          backup_eligible: false,
-          backup_state: false,
-          label: p.label ?? '',
-        },
-      ];
-      node.threshold = p.threshold;
-      return { guardian_count: node.members.length, threshold: p.threshold };
-    },
-    tenzro_initiateRecovery: (p) => {
-      const pub = hexToBytes(p.new_passkey_public_key_hex);
-      const cred = hexToBytes(p.new_credential_id_hex);
-      const expires = Date.now() + 3_600_000;
-      node.pending = {
-        recovery_id: 'rec-1',
-        new_credential_id_hex: p.new_credential_id_hex,
-        new_passkey_public_key_hex: p.new_passkey_public_key_hex,
-        created_at_ms: Date.now(),
-        expires_at_ms: expires,
-        ready_at_ms: null,
-        guardian_signatures_collected: 0,
-        finalized: false,
-        cancelled: false,
-      };
-      node.newCredentialIds.push(strip(p.new_credential_id_hex));
-      return {
-        recovery_id: 'rec-1',
-        account_address: p.account_address,
-        recovery_op_hash_hex: hex(
-          recoveryOpHash({
-            account: p.account_address,
-            newPasskeyPublicKey: pub,
-            newCredentialId: cred,
-            recoveryId: 'rec-1',
-            expiresAtMs: expires,
-          }),
-        ),
-        expires_at_ms: expires,
-        guardians_required: node.threshold,
-        guardians_total: node.members.length,
-      };
-    },
-    tenzro_submitRecoverySignature: () => {
-      node.pending = {
-        ...node.pending,
-        guardian_signatures_collected: 2,
-        ready_at_ms: Date.now() - 1000,
-      };
-      return {
-        guardian_signatures_collected: 2,
-        guardians_required: 2,
-        quorum_reached: true,
-        ready_at_ms: node.pending.ready_at_ms,
-      };
-    },
-    tenzro_finalizeRecovery: () => {
-      node.pending = { ...node.pending, finalized: true };
-      return { recovery_id: 'rec-1', finalized: true };
-    },
-    tenzro_listPasskeys: () => ({
-      account_address: ACCOUNT,
-      count: 1,
-      credential_ids: node.newCredentialIds,
+    tenzro_resolveCredential: (p) => ({
+      accounts: node.record.credentials.some(
+        (c) => c.credential_id === strip(p.credential_id) && c.rp_id === p.rp_id,
+      )
+        ? [ACCOUNT.slice(2)]
+        : [],
     }),
-    tenzro_getAccountRecord: () => ({
-      record: { account_address: ACCOUNT, owner_did: 'did:tenzro:human:e2e', credentials: [] },
-    }),
+    tenzro_getSigningPayload: (p) => {
+      const preimage = JSON.stringify({
+        chain_id: p.chain_id,
+        from: p.from.slice(2),
+        to: p.to.slice(2),
+        nonce: p.nonce,
+        gas_limit: p.gas_limit,
+        gas_price: p.gas_price,
+        timestamp: p.timestamp,
+        valid_until: p.valid_until,
+        action: p.tx_type,
+      });
+      const digest = createHash('sha256').update(preimage).digest('hex');
+      payloads.set(digest, p);
+      return { kind: 'typed_action', digest, preimage };
+    },
+    tenzro_sendRawTransaction: async (p) => {
+      const u = p.tx_type?.KeystoreUpdate?.update;
+      assert.ok(u, 'a keystore change');
+      assert.equal(strip(u.account), ACCOUNT.slice(2));
+      assert.equal(strip(u.previous_commitment), node.commitment(), 'names the current keystore');
+      await checkTx(p, 'keystore change');
+      const signerKey = strip(p.public_key);
+      const linked = node.record.credentials.some((c) => c.public_key === signerKey);
+      const op = u.op;
+      if (op.set_recovery) {
+        assert.ok(linked, 'sent by a linked passkey');
+        node.record = {
+          ...node.record,
+          recovery_signers: op.set_recovery.signers,
+          recovery_threshold: op.set_recovery.threshold,
+        };
+      } else if (op.start_recovery) {
+        assert.equal(
+          signerKey,
+          op.start_recovery.credential.public_key,
+          'sent by the joining passkey',
+        );
+        const digest = keystoreDigest(u.account, u.previous_commitment, op);
+        const want = webauthnChallenge(SignatureContext.RecoveryApproval, digest);
+        const approvers = u.approvals.map((a) => {
+          const i = node.record.recovery_signers.findIndex(
+            (s) => s.public_key === strip(a.public_key),
+          );
+          assert.ok(i >= 0, 'approved by a recovery signer');
+          const c = a.signature.classical;
+          verifyAssertion(
+            {
+              authenticatorData: Buffer.from(c.authenticator_data, 'hex'),
+              clientDataJson: Buffer.from(c.client_data_json, 'hex'),
+              signature: Buffer.from(c.signature, 'hex'),
+            },
+            keyOf(strip(a.public_key)),
+            want,
+            `recovery approval ${i}`,
+          );
+          return i;
+        });
+        node.approvers = approvers;
+        node.record = {
+          ...node.record,
+          pending_recovery: {
+            credential: op.start_recovery.credential,
+            approvers,
+            started_at_ms: Date.now(),
+            ready_at_ms: Date.now() - 1000,
+          },
+        };
+      } else if (op === 'finish_recovery') {
+        assert.equal(
+          signerKey,
+          node.record.pending_recovery?.credential.public_key,
+          'sent by the joining passkey',
+        );
+        node.record = {
+          ...node.record,
+          credentials: [...node.record.credentials, node.record.pending_recovery.credential],
+          pending_recovery: null,
+        };
+      } else {
+        throw new Error(`unexpected change ${JSON.stringify(op)}`);
+      }
+      node.record = { ...node.record, version: node.record.version + 1 };
+      node.sent.push(p);
+      return `0x${'34'.repeat(32)}`;
+    },
   };
-  node.answer = (method, params) => {
+  node.answer = async (method, params) => {
     calls.push({ method, params });
     const h = handlers[method];
     return h ? h(params) : null;
   };
-  node.accountKey = accountKey;
   return node;
 }
 
@@ -234,7 +310,11 @@ async function withNode(context, node) {
     const body = req.postDataJSON();
     let payload;
     try {
-      payload = { jsonrpc: '2.0', id: body.id, result: node.answer(body.method, body.params) };
+      payload = {
+        jsonrpc: '2.0',
+        id: body.id,
+        result: await node.answer(body.method, body.params),
+      };
     } catch (e) {
       payload = { jsonrpc: '2.0', id: body.id, error: { code: -32000, message: String(e) } };
     }
@@ -286,7 +366,8 @@ async function main() {
   try {
     const accountKey = randomP256();
     const accountCredId = randomBytes(16);
-    const node = mockNode(accountKey);
+    const phone = randomP256();
+    const node = mockNode(accountKey, accountCredId, phone, randomP256());
 
     // ── Guardian device: make a guardian passkey ───────────────────────────
     const gctx = await browser.newContext();
@@ -303,6 +384,7 @@ async function main() {
       const card = decodeGuardianCard(cardText);
       assert.equal(card.label, 'Sam');
       assert.equal(card.role, 'device');
+      assert.equal(card.rpId, 'localhost', 'the card names its wallet provider');
       const { credentials } = await g.cdp.send('WebAuthn.getCredentials', {
         authenticatorId: g.authenticatorId,
       });
@@ -366,39 +448,24 @@ async function main() {
     });
 
     await step(
-      'settings: adds the guardian with a passkey approval bound to its card',
+      'settings: adds the guardian in a keystore change sent with the passkey',
       async () => {
         await h.page.getByRole('button', { name: 'Approve and add' }).click();
         await h.page.getByText('Guardian added.').waitFor();
         const card = decodeGuardianCard(cardText);
-        const add = node.calls.find((c) => c.method === 'tenzro_addGuardian').params;
-        assert.deepEqual(Object.keys(add).sort(), [
-          'account_address',
-          'authorization',
-          'guardian_credential_id_hex',
-          'guardian_p256_pubkey_hex',
-          'guardian_registration_authenticator_data_hex',
-          'label',
-          'role',
-          'threshold',
-        ]);
-        assert.equal(add.label, 'Sam');
-        assert.equal(add.threshold, 2);
-        const ch = node.challenges.get(add.authorization.challenge_id);
-        assert.equal(ch.operation, 'add_guardian');
-        assert.equal(strip(ch.target_hex), strip(hex(guardianTarget(card))));
-        assert.equal(strip(add.authorization.credential_id_hex), accountCredId.toString('hex'));
-        const a = add.authorization.assertion;
-        verifyAssertion(
-          {
-            authenticatorData: a.authenticator_data,
-            clientDataJson: a.client_data_json,
-            signature: a.signature,
-          },
-          accountKey.xy,
-          webauthnChallenge(SignatureContext.AccountOwner, ch.digest),
-          'add_guardian authorization',
+        const sent = node.sent.at(-1);
+        assert.equal(
+          strip(sent.public_key),
+          accountKey.xy.toString('hex'),
+          'signed by the account passkey',
         );
+        const op = sent.tx_type.KeystoreUpdate.update.op.set_recovery;
+        assert.equal(op.threshold, 2);
+        const sam = op.signers.at(-1);
+        assert.equal(sam.public_key, strip(card.p256));
+        assert.equal(sam.rp_id, 'localhost');
+        assert.equal(sam.label, 'Sam');
+        assert.equal(op.signers.length, 3, 'the existing signers kept');
         await h.page.getByText('Sam').first().waitFor();
       },
     );
@@ -418,13 +485,7 @@ async function main() {
         () => /https?:\/\/\S+\/guardian#r=[A-Za-z0-9_-]+/.exec(document.body.innerHTML)?.[0] ?? '',
       );
       assert.ok(link, 'request link shown');
-      const init = node.calls.find((c) => c.method === 'tenzro_initiateRecovery').params;
-      assert.deepEqual(Object.keys(init).sort(), [
-        'account_address',
-        'new_credential_id_hex',
-        'new_passkey_public_key_hex',
-        'new_registration_authenticator_data_hex',
-      ]);
+      assert.equal(node.sent.length, 1, 'nothing sent before the guardians approve');
       const { credentials } = await r.cdp.send('WebAuthn.getCredentials', {
         authenticatorId: r.authenticatorId,
       });
@@ -436,61 +497,62 @@ async function main() {
     });
 
     // ── Guardian device: approve from the link ─────────────────────────────
+    let samCode = '';
+    await step('guardian: approves the recovery from the link and hands back a code', async () => {
+      // Opened fresh, as a guardian opens the link they were sent.
+      await g.page.goto('about:blank');
+      await g.page.goto(link);
+      await g.page.getByText('New passkey').first().waitFor();
+      await g.page.getByRole('button', { name: 'Approve with my guardian passkey' }).click();
+      await g.page.getByRole('button', { name: 'Copy approval code' }).waitFor();
+      samCode = await longToken(g.page);
+      assert.ok(samCode, 'approval code shown');
+    });
+
+    // ── New device: send with the approvals, then complete ─────────────────
     await step(
-      'guardian: approves the recovery from the link with its guardian passkey',
+      'recover: sends the recovery with the approvals, signed by the new passkey',
       async () => {
-        // Opened fresh, as a guardian opens the link they were sent.
-        await g.page.goto('about:blank');
-        await g.page.goto(link);
-        await g.page.getByText('New passkey').first().waitFor();
-        await g.page.getByRole('button', { name: 'Approve with my guardian passkey' }).click();
-        await g.page.getByText(/Approved\. 2 of 2/).waitFor();
-        const sub = node.calls.find((c) => c.method === 'tenzro_submitRecoverySignature').params;
-        assert.equal(sub.recovery_id, 'rec-1');
-        assert.equal(sub.guardian_index, 2, 'the index the guardian key holds');
-        assert.equal(sub.signature.pq, undefined);
-        const p = node.pending;
-        const opHash = recoveryOpHash({
-          account: ACCOUNT,
-          newPasskeyPublicKey: hexToBytes(p.new_passkey_public_key_hex),
-          newCredentialId: hexToBytes(p.new_credential_id_hex),
-          recoveryId: 'rec-1',
-          expiresAtMs: p.expires_at_ms,
-        });
-        const c = sub.signature.classical;
-        assert.equal(c.form, 'web_authn');
-        verifyAssertion(
-          {
-            authenticatorData: hexToBytes(c.authenticator_data),
-            clientDataJson: hexToBytes(c.client_data_json),
-            signature: hexToBytes(c.signature),
-          },
-          Buffer.from(hexToBytes(decodeGuardianCard(cardText).p256)),
-          base64Url(recoveryApprovalChallenge(opHash)),
-          'recovery approval',
+        const send = r.page.getByRole('button', { name: 'Send the recovery' });
+        await r.page.getByLabel('Guardian approval code').fill(samCode);
+        await r.page.getByRole('button', { name: 'Add', exact: true }).click();
+        await r.page.getByText(/1 of 2 approvals needed/).waitFor();
+        assert.ok(await send.isDisabled(), 'one provider is not enough');
+        // The second approval comes from a guardian on another provider's device.
+        const request = new URL(link).hash.slice(3);
+        const u = decodeRecoveryRequest(request).update;
+        const challenge = webauthnChallenge(
+          SignatureContext.RecoveryApproval,
+          keystoreDigest(u.account, u.previous_commitment, u.op),
         );
+        const phoneCode = encodeRecoveryApproval({
+          account: u.account,
+          public_key: phone.xy.toString('hex'),
+          signature: assertOutside(phone.pkcs8, challenge),
+        });
+        await r.page.getByLabel('Guardian approval code').fill(phoneCode);
+        await r.page.getByRole('button', { name: 'Add', exact: true }).click();
+        await r.page.getByText(/2 of 2 approvals needed/).waitFor();
+        await send.click();
+        await r.page.getByText(/The wait is over/).waitFor({ timeout: 60_000 });
+        const sent = node.sent.at(-1);
+        const op = sent.tx_type.KeystoreUpdate.update.op.start_recovery;
+        assert.ok(op, 'a recovery start');
+        assert.equal(strip(sent.public_key), op.credential.public_key, 'signed by the new passkey');
+        assert.deepEqual([...node.approvers].sort(), [0, 2], 'approved by the phone and by Sam');
       },
     );
 
-    // ── New device: complete and sign in ───────────────────────────────────
     await step('recover: completes once ready and signs in with the new passkey', async () => {
-      const done = r.page.getByRole('button', { name: 'Complete recovery' });
-      await r.page.waitForFunction(
-        () =>
-          [...document.querySelectorAll('button')].some(
-            (b) => b.textContent?.includes('Complete recovery') && !b.disabled,
-          ),
-        null,
-        { timeout: 60_000 },
-      );
-      await done.click();
+      await r.page.getByRole('button', { name: 'Complete recovery' }).click();
       await r.page.waitForURL(/\/dashboard/, { timeout: 30_000 });
-      assert.ok(node.calls.some((c) => c.method === 'tenzro_finalizeRecovery'));
+      assert.equal(node.sent.at(-1).tx_type.KeystoreUpdate.update.op, 'finish_recovery');
+      const joined = node.record.credentials.at(-1);
       const stored = JSON.parse(
         await r.page.evaluate(() => localStorage.getItem('tenzro.wallet.v2')),
       );
       assert.equal(stored.account, ACCOUNT);
-      assert.equal(stored.credentialId, node.newCredentialIds[0]);
+      assert.equal(stored.credentialId, joined.credential_id);
     });
 
     for (const [name, x] of [

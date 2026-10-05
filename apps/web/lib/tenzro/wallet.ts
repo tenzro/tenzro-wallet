@@ -7,23 +7,18 @@
  * passkey this device uses.
  */
 
+import { type HybridSigner, WalletClient } from 'tenzro-sdk';
 import {
   BrowserPasskeyAuthenticator,
-  DEFAULT_USER_OP_GAS,
   type OwnershipProof,
   type PasskeyAccount,
   PasskeyCustody,
   type PasskeyEntryOptions,
-  encodeExecuteSingle,
   hexToBytes,
-  parseQuantity,
-  passkeySigningDriver,
-  userOperationHash,
-  userOperationToJson,
 } from 'tenzro-wallet/custody';
 
 import { TENZRO_RP_ID } from './config';
-import { transport } from './rpc';
+import { sdkRpc, transport } from './rpc';
 
 const STORAGE_KEY = 'tenzro.wallet.v2';
 
@@ -99,56 +94,24 @@ export async function signIn(opts: PasskeyEntryOptions = {}): Promise<EnteredWal
 }
 
 /**
- * Sends TNZO from the passkey account: an ERC-4337 UserOperation calling
- * `execute(to, value)`, signed on this device by the passkey, submitted with `eth_sendUserOperation`.
+ * Sends TNZO from the passkey account: a native `Transfer` sent from the
+ * account itself, signed on this device by its passkey. The network accepts
+ * it from any passkey the account's keystore links, through any node.
  */
 export async function sendTnzo(
   wallet: StoredWallet,
   to: string,
   valueWei: bigint,
-): Promise<{ userOpHash: string }> {
-  const [chainIdHex, entryPoints, gasPriceHex, account] = await Promise.all([
-    transport.call<string>('eth_chainId', []),
-    transport.call<string[]>('eth_supportedEntryPoints', []),
-    transport.call<string>('eth_gasPrice', []),
-    transport.call<{ nonce: number }>('tenzro_getSmartAccount', {
-      account_address: wallet.account,
-    }),
-  ]);
-  const entryPoint = entryPoints[0];
-  if (!entryPoint) throw new Error('This node serves no EntryPoint.');
-  const gasPrice = parseQuantity(gasPriceHex);
-  const op = {
-    sender: wallet.account,
-    nonce: parseQuantity(account.nonce),
-    callData: encodeExecuteSingle({ to, value: valueWei }),
-    ...DEFAULT_USER_OP_GAS,
-    maxFeePerGas: gasPrice,
-    maxPriorityFeePerGas: gasPrice,
-  };
-  const hash = userOperationHash(op, parseQuantity(chainIdHex), entryPoint);
-  const driver = passkeySigningDriver({
-    authenticator: custody().authenticator,
-    credentials: () => [{ id: wallet.credentialId, transports: wallet.transports }],
+): Promise<{ txHash: string }> {
+  const signer = (await custody().transactionSigner(wallet)) as unknown as HybridSigner;
+  const recipient = to.replace(/^0x/, '');
+  const txHash = await new WalletClient(sdkRpc()).sendSelfCustody({
+    signer,
+    from: wallet.account,
+    to: recipient.length === 40 ? `0x${recipient}${'00'.repeat(12)}` : `0x${recipient}`,
+    value: valueWei,
   });
-  const { signatures } = await driver.sign({
-    did: wallet.did as never,
-    surfaceKey: {
-      surface: 'tenzro-native',
-      scheme: 'webauthn-p256',
-      address: wallet.account,
-      credentialIds: [wallet.credentialId],
-    },
-    scheme: 'webauthn-p256',
-    preimage: hash,
-  });
-  const signature = signatures[0];
-  if (!signature) throw new Error('The passkey did not sign.');
-  const userOpHash = await transport.call<string>('eth_sendUserOperation', [
-    userOperationToJson({ ...op, signature }),
-    entryPoint,
-  ]);
-  return { userOpHash };
+  return { txHash };
 }
 
 export { hexToBytes };

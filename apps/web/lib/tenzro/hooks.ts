@@ -20,6 +20,7 @@ import {
   getTokenBalance,
   getTransactionHistory,
 } from './methods';
+import { currentEndpoint } from './rpc';
 
 import {
   type EnteredWallet,
@@ -136,6 +137,18 @@ export function useBlockNumber() {
   });
 }
 
+/**
+ * The endpoint calls go to now: one of the network's staked RPC operators,
+ * or a bootstrap hint, whichever answered for this chain. Follows failover.
+ */
+export function useEndpoint(): string | null {
+  const block = useBlockNumber();
+  return React.useMemo(() => {
+    const url = block.dataUpdatedAt || block.errorUpdatedAt ? currentEndpoint() : null;
+    return url ? new URL(url).host : null;
+  }, [block.dataUpdatedAt, block.errorUpdatedAt]);
+}
+
 export interface SendInput {
   readonly to: string;
   /** Wei, decimal string. */
@@ -199,12 +212,21 @@ export function usePlatformPasskey(): boolean | null {
 
 export function useDeviceActions(wallet: StoredWallet | null) {
   const qc = useQueryClient();
-  const refresh = () => qc.invalidateQueries({ queryKey: ['tenzro', 'devices', wallet?.account] });
+  // After its first change the account's keystore is on chain: the anchor
+  // that named it until then is no longer needed.
+  const refresh = () => {
+    const stored = getStoredWallet();
+    if (stored?.anchor && stored.account === wallet?.account) {
+      const { anchor: _, ...onChain } = stored;
+      saveWallet(onChain);
+    }
+    return qc.invalidateQueries({ queryKey: ['tenzro', 'devices', wallet?.account] });
+  };
   const approver = wallet ? { id: wallet.credentialId, transports: wallet.transports } : undefined;
   const link = useMutation({
     mutationFn: async (input: { label: string; via: DeviceToLink }) => {
       if (!wallet || !approver) throw new Error('Wallet not initialized');
-      const base = { account: wallet.account, label: input.label };
+      const base = { account: wallet, label: input.label };
       switch (input.via) {
         // The phone makes its passkey over a QR code; this device approves.
         case 'phone':
@@ -240,7 +262,7 @@ export function useDeviceActions(wallet: StoredWallet | null) {
   const remove = useMutation({
     mutationFn: async (credentialIdHex: string) => {
       if (!wallet || !approver) throw new Error('Wallet not initialized');
-      return custody().removeDevice({ account: wallet.account, credentialIdHex, approver });
+      return custody().removeDevice({ account: wallet, credentialIdHex, approver });
     },
     onSuccess: refresh,
   });

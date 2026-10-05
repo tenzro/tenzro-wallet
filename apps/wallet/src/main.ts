@@ -3,8 +3,10 @@
  * UI and the `window.tenzro` provider.
  *
  * Load order:
- *   1. Build a JSON-RPC transport (default https://rpc.tenzro.xyz) and a
- *      WebAuthn authenticator (RP ID configurable, default "tenzro.com").
+ *   1. Build a JSON-RPC transport over the network's staked RPC operators
+ *      (found from bootstrap hints, each checked against the chain, with
+ *      failover) and a WebAuthn authenticator (RP ID configurable, default
+ *      "tenzro.com").
  *   2. Mount onboarding: create a wallet from a passkey, or sign in with an
  *      existing passkey on this device or a phone (hybrid / QR).
  *   3. Build the kernel from the resulting account (embedder-specific).
@@ -16,10 +18,11 @@
  */
 
 import {
+  BOOTSTRAP_RPC_URLS,
   BrowserPasskeyAuthenticator,
-  DEFAULT_RPC_URL,
   DEFAULT_RP_ID,
-  HttpJsonRpcTransport,
+  NETWORK_1_CHAIN_ID,
+  NetworkTransport,
   PasskeyCustody,
   type WalletKernel,
   readChainId,
@@ -29,8 +32,10 @@ import { KernelEip1193Provider, installTenzroProvider } from './dispatch/window-
 import { mountOnboarding } from './ui/onboarding.ts';
 
 export interface WalletAppOptions {
-  /** JSON-RPC endpoint. Defaults to https://rpc.tenzro.xyz. */
-  readonly rpcUrl?: string;
+  /** Endpoints to start from (hints only). Defaults to Tenzro Network 1's. */
+  readonly bootstrapRpcUrls?: readonly string[];
+  /** The chain every endpoint must answer for. Defaults to Tenzro Network 1. */
+  readonly chainId?: number;
   /** WebAuthn relying party id. Must match the node's. Defaults to "tenzro.com". */
   readonly rpId?: string;
   /** Mount point for the onboarding UI. Omit for headless, dispatch-only embeds. */
@@ -48,7 +53,10 @@ export async function startWalletApp(opts: WalletAppOptions = {}): Promise<{
   readonly mountOnboarding: () => Promise<void>;
   readonly installProvider: (kernel: WalletKernel) => { dispose: () => void };
 }> {
-  const rpc = new HttpJsonRpcTransport({ url: opts.rpcUrl ?? DEFAULT_RPC_URL });
+  const rpc = new NetworkTransport({
+    bootstrap: opts.bootstrapRpcUrls ?? BOOTSTRAP_RPC_URLS,
+    chainId: opts.chainId ?? NETWORK_1_CHAIN_ID,
+  });
   const custody = new PasskeyCustody({
     rpc,
     authenticator: new BrowserPasskeyAuthenticator({ rpId: opts.rpId ?? DEFAULT_RP_ID }),

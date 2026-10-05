@@ -34,6 +34,7 @@ import { PlanReview } from '@/components/wallet/plan-review';
 import { StepUpReview } from '@/components/wallet/step-up-review';
 import { TermsReview } from '@/components/wallet/terms-review';
 import { approveStepUp } from '@/lib/tenzro/agents';
+import { ensureAgentBond } from '@/lib/tenzro/agents';
 import { addConnection, isConnected, removeConnection } from '@/lib/tenzro/connections';
 import { TNZO_DECIMALS, formatBaseUnits, shortAddress } from '@/lib/tenzro/format';
 import { usePlatformPasskey, useWallet } from '@/lib/tenzro/hooks';
@@ -171,11 +172,18 @@ export default function ApprovePage() {
           throw new Error('The site asked for an invalid wallet.');
         }
         const added = await custody().addWallet(wallet, { salt });
-        respond({ result: { account: added.account, did: added.did, salt } });
+        respond({
+          result: {
+            account: added.account,
+            did: added.did,
+            salt,
+            ...(added.anchor ? { anchor: added.anchor } : {}),
+          },
+        });
       } else if (method === 'tenzro_sendTransaction') {
         if (!isSend(params)) throw new Error('The site sent an invalid transaction.');
-        const { userOpHash } = await sendTnzo(wallet, params.to, BigInt(params.value));
-        respond({ result: { userOpHash } });
+        const { txHash } = await sendTnzo(wallet, params.to, BigInt(params.value));
+        respond({ result: { txHash } });
       } else if (method === 'tenzro_signSettlementPlan') {
         if (!isPlan(params)) throw new Error('The site sent an invalid settlement plan.');
         const signedTx = await signTransaction(wallet, {
@@ -185,6 +193,12 @@ export default function ApprovePage() {
         respond({ result: { signedTx } });
       } else if (method === 'tenzro_approveAgentTerms') {
         if (!isTerms(params)) throw new Error('The site sent invalid Terms.');
+        // The network refuses Terms the agent's bond does not cover: post or
+        // top it up from this account first, signed by this passkey.
+        const agentDid = (params.challenge as { agent_did?: string }).agent_did;
+        if (agentDid) {
+          await ensureAgentBond(wallet, agentDid, params.terms.delegation_scope ?? {});
+        }
         const authorization = await custody().approveAgentTerms(wallet, {
           operation: params.operation,
           terms: params.terms,

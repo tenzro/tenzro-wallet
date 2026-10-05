@@ -5,7 +5,7 @@ import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Input } from '
 import * as React from 'react';
 import type { RawAgentTermsView } from 'tenzro-wallet/custody';
 
-import { getAgentBond, updateAgentLimits } from '@/lib/tenzro/agents';
+import { type AgentBondView, getAgentBond, updateAgentLimits } from '@/lib/tenzro/agents';
 import {
   TNZO_DECIMALS,
   formatBaseUnits,
@@ -13,6 +13,7 @@ import {
   tnzoToBaseUnits,
   usdEstimate,
 } from '@/lib/tenzro/format';
+import { increaseAgentBond, postAgentBond, withdrawAgentBond } from '@/lib/tenzro/native-tx';
 import { type StoredWallet, custody } from '@/lib/tenzro/wallet';
 
 type Scope = {
@@ -67,6 +68,81 @@ function limitWei(text: string): string | null {
 const asTnzo = (wei: string | null | undefined) =>
   wei ? formatBaseUnits(wei, TNZO_DECIMALS, 18) : '';
 
+/**
+ * Adds to an agent's bond, or withdraws it (the first withdrawal starts its
+ * cooldown, one after the cooldown returns it), from the wallet's account,
+ * signed by this device's passkey.
+ */
+function BondActions({
+  view,
+  wallet,
+  bond,
+  onDone,
+}: {
+  readonly view: RawAgentTermsView;
+  readonly wallet: StoredWallet;
+  readonly bond: AgentBondView | null | undefined;
+  readonly onDone: () => void;
+}) {
+  const [amount, setAmount] = React.useState('');
+  const active = bond?.state === 'Active';
+  const add = useMutation({
+    mutationFn: async () => {
+      const wei = BigInt(limitWei(amount) ?? '0');
+      if (wei === 0n) throw new Error('Enter an amount in TNZO.');
+      return active
+        ? increaseAgentBond(wallet, view.agent_did, wei)
+        : postAgentBond(wallet, view.agent_did, wei);
+    },
+    onSuccess: () => {
+      setAmount('');
+      onDone();
+    },
+  });
+  const withdraw = useMutation({
+    mutationFn: () => withdrawAgentBond(wallet, view.agent_did),
+    onSuccess: onDone,
+  });
+  const cooling = bond?.state === 'Cooldown';
+  return (
+    <div className="space-y-2 rounded-md border border-border p-3">
+      <div className="flex gap-2">
+        <Input
+          inputMode="decimal"
+          placeholder="Add to bond, TNZO"
+          aria-label="Add to bond"
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+        />
+        <Button size="sm" disabled={add.isPending || !amount.trim()} onClick={() => add.mutate()}>
+          {add.isPending ? 'Approve with your passkey…' : active ? 'Add' : 'Post bond'}
+        </Button>
+      </div>
+      {bond && (active || cooling) ? (
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={withdraw.isPending}
+          onClick={() => withdraw.mutate()}
+        >
+          {withdraw.isPending
+            ? 'Approve with your passkey…'
+            : cooling
+              ? 'Return the bond'
+              : 'Withdraw the bond (stops the agent)'}
+        </Button>
+      ) : null}
+      {cooling && bond?.cooldown_until_ms ? (
+        <p className="text-xs text-foreground-muted">
+          Returnable from {new Date(bond.cooldown_until_ms).toLocaleString()}.
+        </p>
+      ) : null}
+      {add.error ? <p className="text-sm text-danger">{add.error.message}</p> : null}
+      {withdraw.error ? <p className="text-sm text-danger">{withdraw.error.message}</p> : null}
+    </div>
+  );
+}
+
 /** Edits the three spend limits; the passkey approves the new Terms. */
 function LimitsEditor({
   view,
@@ -108,8 +184,8 @@ function LimitsEditor({
       {field('Per hour', perHour, setPerHour)}
       {field('Per day', perDay, setPerDay)}
       <p className="text-xs text-foreground-muted">
-        Raising a limit may need a larger bond for this agent; the network refuses Terms its bond
-        does not cover.
+        The agent's bond must cover its limits: when a new limit needs more, the difference is
+        posted from this wallet first, with the same passkey.
       </p>
       <div className="flex gap-2">
         <Button size="sm" disabled={save.isPending} onClick={() => save.mutate()}>
@@ -251,6 +327,14 @@ export function AgentTermsCard({
               setEditing(false);
               if (changed) onChanged();
             }}
+          />
+        ) : null}
+        {rootedHere && !editing ? (
+          <BondActions
+            view={view}
+            wallet={wallet}
+            bond={bond.data}
+            onDone={() => void bond.refetch()}
           />
         ) : null}
         {live && rootedHere && !editing ? (

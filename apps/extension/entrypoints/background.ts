@@ -13,6 +13,7 @@
  * methods are stubbed so the extension can be loaded and tested.
  */
 
+import { BOOTSTRAP_RPC_URLS, NETWORK_1_CHAIN_ID, NetworkTransport } from 'tenzro-wallet/custody';
 import { defineBackground } from '#imports';
 
 export default defineBackground(() => {
@@ -62,17 +63,18 @@ export default defineBackground(() => {
  * the SVM/Canton equivalents are mounted. For now it returns sensible
  * stubs so the inpage script can verify the message bus is alive.
  */
-const RPC_URL = 'https://rpc.tenzro.xyz';
+/**
+ * The network's endpoints: found from its staked RPC operators, starting
+ * from a bootstrap hint, each checked against Tenzro Network 1's chain id,
+ * with failover between the ones that answer.
+ */
+const network = new NetworkTransport({
+  bootstrap: BOOTSTRAP_RPC_URLS,
+  chainId: NETWORK_1_CHAIN_ID,
+});
 
-async function nodeCall(method: string, params: unknown[]): Promise<unknown> {
-  const res = await fetch(RPC_URL, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
-  });
-  const body = (await res.json()) as { result?: unknown; error?: { message: string } };
-  if (body.error) throw new Error(body.error.message);
-  return body.result;
+function nodeCall(method: string, params: unknown[]): Promise<unknown> {
+  return network.call(method, params);
 }
 
 async function dispatch(method: string, params: unknown[] = []): Promise<unknown> {
@@ -83,7 +85,7 @@ async function dispatch(method: string, params: unknown[] = []): Promise<unknown
         version: '0.3.0',
         network: 'Tenzro Network 1',
         surfaces: ['native', 'evm', 'svm', 'canton'],
-        rpc: RPC_URL,
+        rpc: network.endpoints()[0] ?? null,
       };
     // Chain id is always read from the node.
     case 'eth_chainId':

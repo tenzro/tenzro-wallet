@@ -288,12 +288,9 @@ export default function LandingPage() {
             <button type="button" className="hover:text-foreground transition-colors">
               GitHub
             </button>
-            <button
-              type="button"
-              className="hover:text-foreground transition-colors flex items-center gap-1.5"
-            >
-              <Cpu className="size-3.5" /> rpc.tenzro.xyz
-            </button>
+            <span className="flex items-center gap-1.5">
+              <Cpu className="size-3.5" /> Any staked RPC operator
+            </span>
           </div>
         </div>
       </footer>

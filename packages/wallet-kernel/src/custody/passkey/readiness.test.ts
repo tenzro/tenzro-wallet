@@ -54,11 +54,39 @@ describe('assessReadiness', () => {
     expect(r.guidance).toMatch(/one password manager/);
   });
 
-  it('accepts one root plus guardians', () => {
-    expect(assessReadiness([dev('01', 'device-bound')], { guardians: 2 }).ready).toBe(true);
+  it('guardians recover but do not open sending', () => {
+    expect(assessReadiness([dev('01', 'device-bound')], { guardians: 2 }).ready).toBe(false);
   });
 
   it('reports an empty account', () => {
     expect(assessReadiness([]).blocker).toBe('no-devices');
+  });
+});
+
+describe('device states', () => {
+  it('a passkey still waiting to count does not open sending', () => {
+    const waiting = { ...dev('02', 'device-bound'), status: 'waiting' as const, countsFromMs: 10 };
+    const r = assessReadiness([dev('01', 'device-bound'), waiting]);
+    expect(r.ready).toBe(false);
+    expect(r.independentRoots).toBe(1);
+    expect(r.guidance).toMatch(/counts once its wait is over/);
+  });
+
+  it('a passkey joining by recovery does not count', () => {
+    const joining = {
+      ...dev('03', 'device-bound'),
+      status: 'recovering' as const,
+      countsFromMs: 10,
+    };
+    expect(assessReadiness([dev('01', 'device-bound'), joining]).ready).toBe(false);
+  });
+
+  it('two devices on the wallet open sending', () => {
+    const r = assessReadiness([
+      dev('01', 'device-bound'),
+      { ...dev('02', 'device-bound'), status: 'on-wallet' as const },
+    ]);
+    expect(r.ready).toBe(true);
+    expect(r.guidance).toMatch(/2 independent roots/);
   });
 });

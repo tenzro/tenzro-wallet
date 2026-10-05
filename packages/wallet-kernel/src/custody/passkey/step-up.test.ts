@@ -79,5 +79,8 @@ describe('checkStepUp', () => {
     expect(parseStepUpRequest({ action, step_up: { step_up } }).step_up).toEqual(step_up);
     expect(parseStepUpRequest(JSON.stringify({ action, step_up })).step_up).toEqual(step_up);
     expect(() => parseStepUpRequest({ step_up })).toThrow(PasskeyError);
+    // The node's data carries the held action itself: nothing else is needed.
+    const held = parseStepUpRequest({ step_up: { step_up: { ...step_up, action } } });
+    expect(held.action).toEqual(action);
   });
 });

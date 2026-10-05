@@ -1,14 +1,17 @@
 /**
- * Minimal JSON-RPC 2.0 transport for the custody flows. Every call goes
- * straight to a Tenzro node; there is no wallet backend.
+ * JSON-RPC 2.0 transport for the custody flows. Every call goes straight to
+ * a Tenzro node; there is no wallet backend, and no one endpoint the wallet
+ * depends on.
  *
- * Custody challenges are issued and consumed by the node that answers, so
- * all calls of one ceremony must reach the same node. Hosts that talk to a
- * load-balanced endpoint can pin a node (`url`) or add an affinity header
- * (`headers`).
+ * The endpoints are the network's staked RPC operators, found on chain from
+ * the bootstrap hints with the SDK's discovery: each must answer for the
+ * expected chain and agree with the others on its history, and calls fail
+ * over between the ones that pass. A hint is only a way in. Calls stay on the
+ * endpoint that last answered, so the calls of one custody ceremony reach
+ * the node that issued its challenge unless that node stops answering.
  */
 
-import { DEFAULT_RPC_URL } from './constants.ts';
+import { FailoverTransport, RpcCallError, type RpcTransport, discoverEndpoints } from 'tenzro-sdk';
 
 export interface JsonRpcTransport {
   call<T>(method: string, params?: unknown): Promise<T>;
@@ -25,50 +28,79 @@ export class JsonRpcError extends Error {
   }
 }
 
-export interface HttpJsonRpcTransportOptions {
-  /** Defaults to `https://rpc.tenzro.xyz`. */
-  readonly url?: string;
-  readonly headers?: Readonly<Record<string, string>>;
-  readonly fetch?: typeof fetch;
+export interface NetworkTransportOptions {
+  /** Endpoints to start from: hints only, checked like any other endpoint. */
+  readonly bootstrap: readonly string[];
+  /** The chain every endpoint must answer for. */
+  readonly chainId: number;
+  /** Per-request timeout, ms. */
+  readonly timeoutMs?: number;
 }
 
-export class HttpJsonRpcTransport implements JsonRpcTransport {
-  readonly url: string;
-  readonly #headers: Readonly<Record<string, string>>;
-  readonly #fetch: typeof fetch;
-  #nextId = 1;
+export class NetworkTransport implements JsonRpcTransport {
+  readonly #opts: NetworkTransportOptions;
+  #endpoints: string[] = [];
+  #transport: FailoverTransport | null = null;
+  #discovering: Promise<FailoverTransport> | null = null;
 
-  constructor(opts: HttpJsonRpcTransportOptions = {}) {
-    this.url = opts.url ?? DEFAULT_RPC_URL;
-    this.#headers = opts.headers ?? {};
-    this.#fetch = opts.fetch ?? ((input, init) => globalThis.fetch(input, init));
+  constructor(opts: NetworkTransportOptions) {
+    if (opts.bootstrap.length === 0)
+      throw new Error('the network transport needs at least one bootstrap endpoint');
+    this.#opts = opts;
+  }
+
+  /** The endpoints calls may go to, the one in use first. Empty before the first call. */
+  endpoints(): readonly string[] {
+    const t = this.#transport;
+    return t ? [t.endpoint, ...this.#endpoints.filter((e) => e !== t.endpoint)] : [];
+  }
+
+  /** The same endpoints as an SDK transport, for SDK clients. */
+  get sdkTransport(): RpcTransport {
+    return { call: (method, params) => this.#raw(method, params ?? []) };
   }
 
   async call<T>(method: string, params: unknown = []): Promise<T> {
-    const id = this.#nextId++;
-    let res: Response;
     try {
-      res = await this.#fetch(this.url, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', ...this.#headers },
-        body: JSON.stringify({ jsonrpc: '2.0', id, method, params }),
-      });
-    } catch (err) {
+      return await this.#raw<T>(method, params as unknown[] | Record<string, unknown>);
+    } catch (e) {
+      if (e instanceof RpcCallError) {
+        throw new JsonRpcError(e.code, e.message.replace(/^RPC Error -?\d+: /, ''), e.data);
+      }
       throw new JsonRpcError(
         -32000,
-        `The Tenzro node could not be reached: ${(err as Error)?.message ?? String(err)}`,
+        `The Tenzro network could not be reached: ${(e as Error)?.message ?? String(e)}`,
       );
     }
-    if (!res.ok) {
-      const text = await res.text().catch(() => '');
-      throw new JsonRpcError(res.status, `HTTP ${res.status}: ${text || res.statusText}`);
+  }
+
+  async #raw<T>(method: string, params: unknown[] | Record<string, unknown>): Promise<T> {
+    const transport = await this.#ready();
+    try {
+      return await transport.call<T>(method, params);
+    } catch (e) {
+      // Every endpoint failed: find the network again on the next call.
+      if (!(e instanceof RpcCallError)) this.#transport = null;
+      throw e;
     }
-    const body = (await res.json()) as {
-      result?: T;
-      error?: { code: number; message: string; data?: unknown };
-    };
-    if (body.error) throw new JsonRpcError(body.error.code, body.error.message, body.error.data);
-    return body.result as T;
+  }
+
+  #ready(): Promise<FailoverTransport> {
+    if (this.#transport) return Promise.resolve(this.#transport);
+    this.#discovering ??= discoverEndpoints({
+      seeds: [...this.#opts.bootstrap],
+      chainId: this.#opts.chainId,
+      ...(this.#opts.timeoutMs ? { timeout: this.#opts.timeoutMs } : {}),
+    })
+      .then((found) => {
+        this.#endpoints = found.map((e) => e.url);
+        this.#transport = new FailoverTransport(this.#endpoints, this.#opts.timeoutMs ?? 30_000);
+        return this.#transport;
+      })
+      .finally(() => {
+        this.#discovering = null;
+      });
+    return this.#discovering;
   }
 }
 

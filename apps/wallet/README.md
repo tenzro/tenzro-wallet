@@ -10,7 +10,10 @@ Framework-free host that wires the wallet kernel into a page:
 
 Custody is non-custodial and passkey-based: the passkey stays in the device's authenticator, is the
 only signing key, and nothing secret is stored. The chain id is always read from the
-node (`eth_chainId`).
+node (`eth_chainId`) and must match the chain the wallet expects. The wallet depends on no single
+endpoint: it starts from bootstrap hints, reads the network's staked RPC operators from consensus
+state (`tenzro_listRoleEndpoints`), checks each endpoint answers for the chain and agrees with the others on its history, and fails
+over between the ones that do.
 
 ## Wire-up
 
@@ -18,7 +21,8 @@ node (`eth_chainId`).
 import { startWalletApp } from '@tenzro/wallet-app';
 
 const app = await startWalletApp({
-  rpcUrl: 'https://rpc.tenzro.xyz', // default
+  // bootstrapRpcUrls: ['https://rpc.example'], // hints only; default: Tenzro Network 1's
+  // chainId: 13380, // default: Tenzro Network 1
   rpId: 'tenzro.com', // WebAuthn relying party id; must match the node's
   onboardingContainer: document.getElementById('mount')!,
   providerAnnouncement: { uuid: crypto.randomUUID(), icon: 'data:image/svg+xml;base64,...' },

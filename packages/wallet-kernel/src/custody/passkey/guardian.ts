@@ -15,13 +15,9 @@
  * roots is refused. `checkGuardianQuorum` previews that rule.
  */
 
-import { sha256 } from '@noble/hashes/sha2.js';
-
-import { concatBytes, fromHex, normalizeHex, toHex, utf8 } from './bytes.ts';
-import { SignatureContext, signingDigest } from './composite.ts';
+import { fromHex, normalizeHex, toHex, utf8 } from './bytes.ts';
 import { parseAuthenticatorFlags } from './webauthn.ts';
 
-const RECOVERY_DOMAIN = 'tenzro/recovery/v1\0';
 const CARD_FORMAT = 'tenzro-guardian';
 const CARD_VERSION = 2;
 
@@ -72,6 +68,8 @@ export interface GuardianCard {
   readonly version: typeof CARD_VERSION;
   readonly label: string;
   readonly role: GuardianRole;
+  /** The relying party the guardian passkey is registered on (its wallet provider's domain). */
+  readonly rpId?: string;
   /** The guardian passkey's P-256 key, raw `x || y`, `0x` hex. */
   readonly p256: string;
   /** The guardian passkey's credential id, `0x` hex. */
@@ -114,58 +112,6 @@ export function decodeGuardianCard(text: string): GuardianCard {
     throw new Error(`A guardian label is at most ${MAX_GUARDIAN_LABEL_BYTES} bytes.`);
   }
   return card;
-}
-
-/**
- * The custody target that names a guardian:
- * `p256 || 32 zero bytes || aaguid || (BE << 1 | BS) || role || label`.
- * The approval to add it cannot be spent on any other guardian.
- */
-export function guardianTarget(card: GuardianCard, role: GuardianRole = card.role): Uint8Array {
-  const p = registrationProvenance(fromHex(card.registrationAuthenticatorData));
-  return concatBytes(
-    fromHex(card.p256),
-    new Uint8Array(32),
-    p.aaguid,
-    new Uint8Array([(Number(p.backupEligible) << 1) | Number(p.backupState), ROLE_BYTE[role]]),
-    utf8(card.label.trim()),
-  );
-}
-
-/** What a recovery's guardians approve, recomputed from its parts. */
-export function recoveryOpHash(r: {
-  readonly account: string;
-  /** The new passkey, raw `x || y`. */
-  readonly newPasskeyPublicKey: Uint8Array;
-  readonly newCredentialId: Uint8Array;
-  readonly recoveryId: string;
-  readonly expiresAtMs: number;
-}): Uint8Array {
-  if (r.newPasskeyPublicKey.length !== 64)
-    throw new Error('the new passkey key must be raw x || y');
-  const h = sha256.create();
-  h.update(utf8(RECOVERY_DOMAIN));
-  for (const part of [
-    fromHex(r.account),
-    r.newPasskeyPublicKey.slice(0, 32),
-    r.newPasskeyPublicKey.slice(32),
-    r.newCredentialId,
-    utf8(r.recoveryId),
-  ]) {
-    const len = new Uint8Array(4);
-    new DataView(len.buffer).setUint32(0, part.length, false);
-    h.update(len);
-    h.update(part);
-  }
-  const exp = new Uint8Array(8);
-  new DataView(exp.buffer).setBigUint64(0, BigInt(r.expiresAtMs), false);
-  h.update(exp);
-  return h.digest();
-}
-
-/** The WebAuthn challenge a guardian passkey signs to approve the recovery `opHash`. */
-export function recoveryApprovalChallenge(opHash: Uint8Array): Uint8Array {
-  return signingDigest(SignatureContext.RecoveryApproval, opHash);
 }
 
 /** A guardian as far as independence is concerned. */

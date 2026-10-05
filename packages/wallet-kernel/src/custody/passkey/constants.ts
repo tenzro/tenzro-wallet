@@ -8,9 +8,14 @@
 export const DEFAULT_RP_ID = 'tenzro.com';
 export const DEFAULT_RP_NAME = 'Tenzro';
 
-/** Public JSON-RPC and Web API endpoints of Tenzro Network 1. */
-export const DEFAULT_RPC_URL = 'https://rpc.tenzro.xyz';
-export const DEFAULT_API_URL = 'https://api.tenzro.xyz';
+/** Tenzro Network 1's chain id: every endpoint must answer `eth_chainId` with it. */
+export const NETWORK_1_CHAIN_ID = 13380;
+/**
+ * Where a wallet starts looking for Tenzro Network 1. Hints only: the
+ * endpoints in use are the network's staked RPC operators, read from
+ * consensus state, and every endpoint is checked against the chain first.
+ */
+export const BOOTSTRAP_RPC_URLS: readonly string[] = ['https://rpc.tenzro.xyz'];
 
 /** Domain tag of the human DID derivation (`did:tenzro:human:<uuid v8>`). */
 export const HUMAN_DID_DOMAIN = 'tenzro/human-did';

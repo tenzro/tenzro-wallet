@@ -16,6 +16,7 @@ import {
   Building2,
   Cable,
   Compass,
+  CreditCard,
   Send,
   Settings,
   Split,
@@ -33,6 +34,7 @@ const groups = [
     items: [
       { href: '/dashboard', label: 'Dashboard', icon: Wallet },
       { href: '/send', label: 'Send', icon: Send },
+      { href: '/pay', label: 'Pay', icon: CreditCard },
       { href: '/activity', label: 'Activity', icon: Activity },
     ],
   },

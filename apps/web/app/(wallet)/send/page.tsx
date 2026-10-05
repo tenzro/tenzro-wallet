@@ -53,7 +53,7 @@ export default function SendPage() {
         to: route.recipient,
         amount: tnzoToBaseUnits(amount),
       });
-      toast.success(`Sent · ${result.userOpHash.slice(0, 18)}…`);
+      toast.success(`Sent · ${result.txHash.slice(0, 18)}…`);
       setAmount('');
       setRecipient('');
     } catch (e) {

@@ -3,15 +3,15 @@
 import { Badge, Button, IdentityCard } from '@tenzro/ui';
 import { Globe } from 'lucide-react';
 import Link from 'next/link';
+import { devicesOnWallet } from 'tenzro-wallet/custody';
 
-import { TENZRO_RPC_URL } from '@/lib/tenzro/config';
-import { useBlockNumber, useDevices, useWallet } from '@/lib/tenzro/hooks';
+import { useBlockNumber, useDevices, useEndpoint, useWallet } from '@/lib/tenzro/hooks';
 
 export function Topbar() {
   const { wallet } = useWallet();
   const block = useBlockNumber();
   const devices = useDevices(wallet);
-  const host = new URL(TENZRO_RPC_URL).host;
+  const host = useEndpoint() ?? 'Finding the network';
 
   return (
     <header className="sticky top-0 z-30 flex items-center justify-end gap-3 px-6 lg:px-8 py-3 border-b border-border-subtle bg-background/80 backdrop-blur">
@@ -31,7 +31,7 @@ export function Topbar() {
           did={wallet.did}
           compact
           {...(wallet.displayName ? { label: wallet.displayName } : {})}
-          {...(devices.data ? { devices: devices.data.length } : {})}
+          {...(devices.data ? { devices: devicesOnWallet(devices.data).length } : {})}
         />
       ) : (
         <Button asChild size="sm">

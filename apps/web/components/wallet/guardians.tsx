@@ -8,6 +8,7 @@ import {
   type CredentialRef,
   type GuardianCard,
   type GuardianMember,
+  type PasskeyAccount,
   type QuorumMember,
   cardQuorumMember,
   checkGuardianQuorum,
@@ -40,12 +41,12 @@ export function GuardiansPanel({
   account,
   approver,
 }: {
-  readonly account: string;
+  readonly account: PasskeyAccount;
   readonly approver: CredentialRef;
 }) {
   const qc = useQueryClient();
   const guardians = useQuery({
-    queryKey: ['tenzro', 'guardians', account],
+    queryKey: ['tenzro', 'guardians', account.account],
     queryFn: () => custody().listGuardians(account),
   });
   const [cardText, setCardText] = React.useState('');
@@ -68,8 +69,12 @@ export function GuardiansPanel({
         m.p256_pubkey_hex.replace(/^0x/, '').toLowerCase() ===
         card.card!.p256.replace(/^0x/, '').toLowerCase(),
     );
+  // The quorum is previewed against the account's signers as the network
+  // holds them, so nothing is shown until they are read.
   const after =
-    card.card && !duplicate ? [...members.map(memberQuorum), cardQuorumMember(card.card)] : null;
+    guardians.data && card.card && !duplicate
+      ? [...members.map(memberQuorum), cardQuorumMember(card.card)]
+      : null;
   const wanted =
     threshold ?? Math.max(guardians.data?.threshold ?? 0, Math.min(2, after?.length ?? 0));
   const preview = after ? checkGuardianQuorum(after, wanted) : null;
@@ -80,7 +85,7 @@ export function GuardiansPanel({
     onSuccess: () => {
       setCardText('');
       setThreshold(null);
-      void qc.invalidateQueries({ queryKey: ['tenzro', 'guardians', account] });
+      void qc.invalidateQueries({ queryKey: ['tenzro', 'guardians', account.account] });
     },
   });
 

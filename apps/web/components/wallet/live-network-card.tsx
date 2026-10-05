@@ -19,9 +19,9 @@ import * as React from 'react';
 
 import { Badge, Button, Card, CardContent, ChainBadge, cn } from '@tenzro/ui';
 
-import { TENZRO_NETWORK_NAME, TENZRO_RPC_URL } from '@/lib/tenzro/config';
+import { TENZRO_NETWORK_NAME } from '@/lib/tenzro/config';
 import { formatBaseUnits, shortAddress } from '@/lib/tenzro/format';
-import { useTokenBalances, useWallet } from '@/lib/tenzro/hooks';
+import { useEndpoint, useTokenBalances, useWallet } from '@/lib/tenzro/hooks';
 
 function tnzoDecimalToBase(decimal: string): string {
   const [whole = '0', frac = ''] = (decimal || '0').split('.');
@@ -70,6 +70,7 @@ function sumProjectionsBaseUnits(b: ReturnType<typeof useTokenBalances>['data'])
 }
 
 export function LiveNetworkCard() {
+  const endpoint = useEndpoint();
   const { wallet, loading } = useWallet();
   const balances = useTokenBalances(wallet?.account);
   const [copied, setCopied] = React.useState(false);
@@ -126,9 +127,7 @@ export function LiveNetworkCard() {
           <Badge variant="success" size="xs" dot>
             {TENZRO_NETWORK_NAME}
           </Badge>
-          <span className="text-xs text-foreground-subtle ml-auto font-mono">
-            {new URL(TENZRO_RPC_URL).host}
-          </span>
+          <span className="text-xs text-foreground-subtle ml-auto font-mono">{endpoint ?? ''}</span>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">

@@ -62,12 +62,6 @@ export function getTransactionHistory(address: string): Promise<TenzroTransactio
   return rpcCall<TenzroTransaction[]>('tenzro_getTransactionHistory', [address]);
 }
 
-export function getUserOperationReceipt(
-  hash: string,
-): Promise<{ success: boolean; userOpHash: string } | null> {
-  return rpcCall('eth_getUserOperationReceipt', [hash]);
-}
-
 /** The TNZO/USD rate fees are priced at, from consensus (`tenzro_getFeeRate`). */
 export interface FeeRate {
   /** USD per TNZO, in nano-USD, decimal string. */

@@ -7,14 +7,13 @@ import {
   humanDidFromPasskey,
   normalizeP256PublicKey,
   recoverAssertionPublicKeys,
+  smartAccountAddress,
 } from './derive.ts';
 
 describe('humanDidFromPasskey', () => {
-  it('matches the network derivation (SHA-256("tenzro/human-did" || x || y), UUIDv8)', () => {
-    // Independent vector: python3 hashlib over the same preimage, version and
-    // variant bits as crates/tenzro-identity/src/did.rs human_id_from_passkey.
+  it('matches the network derivation (the shared vector in the node repository)', () => {
     expect(humanDidFromPasskey(new Uint8Array(64).fill(0x11))).toBe(
-      'did:tenzro:human:a828941c-fe91-8250-af8b-a16527305188',
+      'did:tenzro:human:f7ee7b699f1ecc0948fc09b1f084f3b1740e645c242e245442f6b8899f0d8360',
     );
   });
 
@@ -22,9 +21,7 @@ describe('humanDidFromPasskey', () => {
     const a = humanDidFromPasskey(new Uint8Array(64).fill(0xa1));
     expect(humanDidFromPasskey(new Uint8Array(64).fill(0xa1))).toBe(a);
     expect(humanDidFromPasskey(new Uint8Array(64).fill(0x22))).not.toBe(a);
-    expect(a).toMatch(
-      /^did:tenzro:human:[0-9a-f]{8}-[0-9a-f]{4}-8[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
-    );
+    expect(a).toMatch(/^did:tenzro:human:[0-9a-f]{64}$/);
   });
 
   it('accepts SEC1 and SPKI encodings of the same key', () => {
@@ -46,5 +43,18 @@ describe('recoverAssertionPublicKeys', () => {
     const sig = p256.sign(concatBytes(authData, sha256(clientData)), sk, { format: 'der' });
     const candidates = recoverAssertionPublicKeys(authData, clientData, sig).map((k) => toHex(k));
     expect(candidates).toContain(toHex(xy));
+  });
+});
+
+describe('smartAccountAddress', () => {
+  it('matches the network derivation for each wallet of an identity', () => {
+    const key = new Uint8Array(64).fill(0x11);
+    const credential = new Uint8Array(16).fill(0x22);
+    expect(toHex(smartAccountAddress(key, credential, 0))).toBe(
+      '584cea8771076642829ddfab5ef731a3c3df9a92',
+    );
+    expect(toHex(smartAccountAddress(key, credential, 1))).toBe(
+      '3727a36a5d0491d76eb580c9c6307e6d65764f19',
+    );
   });
 });

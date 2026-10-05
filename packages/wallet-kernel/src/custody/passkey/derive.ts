@@ -26,16 +26,43 @@ export function normalizeP256PublicKey(key: Uint8Array): Uint8Array {
 }
 
 /**
- * `did:tenzro:human:` + UUIDv8 of `SHA-256("tenzro/human-did" || x || y)[0..16]`,
- * version bits `(b6 & 0x0f) | 0x80`, variant bits `(b8 & 0x3f) | 0x80`.
+ * `did:tenzro:human:` + lowercase hex of
+ * `SHA-256("tenzro/human-did" || u32be(64) || x || y)`: the network's
+ * derivation of a human identity from its passkey.
  */
 export function humanDidFromPasskey(publicKey: Uint8Array): string {
   const xy = normalizeP256PublicKey(publicKey);
-  const h = sha256(concatBytes(utf8(HUMAN_DID_DOMAIN), xy)).slice(0, 16);
-  h[6] = ((h[6] ?? 0) & 0x0f) | 0x80;
-  h[8] = ((h[8] ?? 0) & 0x3f) | 0x80;
-  const s = toHex(h);
-  return `did:tenzro:human:${s.slice(0, 8)}-${s.slice(8, 12)}-${s.slice(12, 16)}-${s.slice(16, 20)}-${s.slice(20)}`;
+  return `did:tenzro:human:${toHex(sha256(concatBytes(utf8(HUMAN_DID_DOMAIN), u32be(xy.length), xy)))}`;
+}
+
+/** The account factory every passkey account's address is derived under. */
+const FACTORY_ADDRESS = (() => {
+  const a = new Uint8Array(20);
+  a[18] = 0x04;
+  return a;
+})();
+
+/**
+ * The address of the passkey account whose first passkey is `credentialId`
+ * with key `publicKey`, as wallet number `salt` of its identity: the first 20
+ * bytes of `SHA-256(factory || SHA-256(key || credential id || DID) || salt_le)`.
+ */
+export function smartAccountAddress(
+  publicKey: Uint8Array,
+  credentialId: Uint8Array,
+  salt: number,
+): Uint8Array {
+  const xy = normalizeP256PublicKey(publicKey);
+  const owner = sha256(concatBytes(xy, credentialId, utf8(humanDidFromPasskey(xy))));
+  const saltLe = new Uint8Array(8);
+  new DataView(saltLe.buffer).setBigUint64(0, BigInt(salt), true);
+  return sha256(concatBytes(FACTORY_ADDRESS, owner, saltLe)).slice(0, 20);
+}
+
+function u32be(n: number): Uint8Array {
+  const b = new Uint8Array(4);
+  new DataView(b.buffer).setUint32(0, n, false);
+  return b;
 }
 
 /**

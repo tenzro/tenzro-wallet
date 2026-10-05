@@ -1,14 +1,14 @@
 /**
  * TenzroJsonRpcAdapter — `TenzroRpcPort` over plain JSON-RPC.
  *
- * Uses the custody module's transport, so a host configures one endpoint
- * (default `https://rpc.tenzro.xyz`) for custody ceremonies and for sending.
+ * Uses the custody module's transport, so custody ceremonies and sending go
+ * through the same discovered, checked endpoints.
  */
 
 import {
-  HttpJsonRpcTransport,
-  type HttpJsonRpcTransportOptions,
   type JsonRpcTransport,
+  NetworkTransport,
+  type NetworkTransportOptions,
   parseQuantity,
 } from '../../custody/passkey/rpc.ts';
 import type { TenzroRpcPort, UserOperationReceipt } from '../tenzro-rpc.ts';
@@ -20,8 +20,8 @@ export class TenzroJsonRpcAdapter implements TenzroRpcPort {
     this.#rpc = rpc;
   }
 
-  static fromUrl(opts: HttpJsonRpcTransportOptions = {}): TenzroJsonRpcAdapter {
-    return new TenzroJsonRpcAdapter(new HttpJsonRpcTransport(opts));
+  static fromNetwork(opts: NetworkTransportOptions): TenzroJsonRpcAdapter {
+    return new TenzroJsonRpcAdapter(new NetworkTransport(opts));
   }
 
   async getChainId(): Promise<bigint> {

@@ -10,6 +10,7 @@ export * from './custody.ts';
 export * from './derive.ts';
 export * from './driver.ts';
 export * from './gate.ts';
+export * from './keystore.ts';
 export * from './machines.ts';
 export * from './readiness.ts';
 export * from './guardian.ts';

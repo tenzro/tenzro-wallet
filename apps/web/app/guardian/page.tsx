@@ -22,6 +22,7 @@ import {
   type RecoveryRequest,
   decodeRecoveryRequest,
   encodeGuardianCard,
+  encodeRecoveryApproval,
 } from 'tenzro-wallet/custody';
 
 import { shortAddress } from '@/lib/tenzro/format';
@@ -180,7 +181,11 @@ function ApproveRecovery({ initial }: { readonly initial: string }) {
     mutationFn: (r: RecoveryRequest) => custody().approveRecovery(r),
   });
   const r = parsed.request;
-  const expired = !!r && r.expiresAtMs <= Date.now();
+  const joining =
+    r && typeof r.update.op === 'object' && 'start_recovery' in r.update.op
+      ? r.update.op.start_recovery.credential
+      : null;
+  const code = approve.data ? encodeRecoveryApproval(approve.data) : '';
 
   return (
     <Card variant="raised" className="p-6 space-y-4 text-sm">
@@ -200,38 +205,45 @@ function ApproveRecovery({ initial }: { readonly initial: string }) {
       {r && (
         <div className="space-y-1 rounded-xl bg-surface-1 border border-border-subtle p-3">
           <p>
-            Account <span className="font-mono">{shortAddress(r.account)}</span>
+            Account{' '}
+            <span className="font-mono">
+              {shortAddress(`0x${r.update.account.replace(/^0x/, '')}`)}
+            </span>
           </p>
           <p>
-            New passkey <span className="font-mono">{r.newCredentialIdHex.slice(0, 18)}…</span>
+            New passkey <span className="font-mono">{joining?.credential_id.slice(0, 16)}…</span>
+            {joining?.label ? ` (${joining.label})` : ''}
           </p>
-          <p>Expires {new Date(r.expiresAtMs).toLocaleString()}</p>
         </div>
       )}
-      {expired && <p className="text-danger">This request has expired.</p>}
       <Button
         variant="primary"
         size="md"
         leftIcon={<ShieldCheck className="size-4" />}
         pending={approve.isPending}
-        disabled={!r || expired || approve.isPending || approve.isSuccess}
+        disabled={!r || approve.isPending || approve.isSuccess}
         onClick={() => r && approve.mutate(r)}
       >
         Approve with my guardian passkey
       </Button>
       {approve.error && <p className="text-danger">{errorText(approve.error)}</p>}
       {approve.data && (
-        <p className="text-success">
-          Approved. {approve.data.guardian_signatures_collected} of{' '}
-          {approve.data.guardians_required}{' '}
-          {approve.data.quorum_reached
-            ? `reached; the recovery can complete ${
-                approve.data.ready_at_ms
-                  ? new Date(approve.data.ready_at_ms).toLocaleString()
-                  : 'after its wait'
-              }.`
-            : 'approvals so far.'}
-        </p>
+        <div className="space-y-2">
+          <p className="text-success">
+            Approved. Send this approval code back to the account holder; their new device sends the
+            recovery with it.
+          </p>
+          <p className="font-mono text-xs break-all rounded-xl bg-surface-1 border border-border-subtle p-3">
+            {code}
+          </p>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => void navigator.clipboard?.writeText(code)}
+          >
+            Copy approval code
+          </Button>
+        </div>
       )}
     </Card>
   );

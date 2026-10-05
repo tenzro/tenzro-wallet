@@ -1,8 +1,8 @@
 /**
  * The custody gate, client side.
  *
- * Every custody change (enrolment, adding or removing a device, the
- * second-factor policy, spending limits, session keys, guardians) is
+ * Every custody change the node gates (enrolment, spending limits, session
+ * keys, agents) is
  * authorised the same way:
  *
  *   1. the node issues a single-use challenge bound to the account, the
@@ -19,6 +19,7 @@
  */
 
 import { sha256 } from '@noble/hashes/sha2.js';
+import type { KeystoreAnchor } from './keystore.ts';
 
 import { concatBytes, equalBytes, fromHex, toHex, utf8 } from './bytes.ts';
 import { SignatureContext, signingDigest, webauthnChallenge } from './composite.ts';
@@ -34,15 +35,10 @@ import {
 
 export type CustodyOperation =
   | 'enroll_passkey'
-  | 'add_passkey'
-  | 'remove_passkey'
-  | 'set_passkey_policy'
   | 'grant_session_key'
   | 'revoke_session_key'
   | 'set_spending_limit'
   | 'add_hardware_signer'
-  | 'add_guardian'
-  | 'cancel_recovery'
   | 'revoke_delegated_agent';
 
 export interface CustodyChallenge {
@@ -65,6 +61,8 @@ export interface CustodyAuthorization {
   readonly challenge_id: string;
   readonly credential_id_hex: string;
   readonly assertion: WebAuthnAssertionWire;
+  /** For an account with no keystore on chain yet: its first passkey, which must derive it. */
+  readonly anchor?: KeystoreAnchor;
 }
 
 const CUSTODY_DOMAIN = 'tenzro/custody-challenge/v1';

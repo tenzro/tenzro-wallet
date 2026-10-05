@@ -5,13 +5,15 @@
  * navigator.credentials call, and every signature the mock node receives is
  * verified as the node verifies it.
  *
- * Covers: an agent's Terms in TNZO with a USD estimate, revoking it with the
- * passkey; publisher mode (standing split, preview, setting it with a
+ * Covers: an agent's Terms in TNZO with a USD estimate; raising its limits,
+ * which first tops its bond up to a tenth of the new ceiling; adding to and
+ * withdrawing the bond; revoking it with the passkey; publisher mode (standing split, preview, setting it with a
  * passkey-signed Payment transaction, payouts); and the plan review a site
  * asks for before the passkey signs a settlement plan's open transaction.
  *
  * Needs the app built with NEXT_PUBLIC_TENZRO_RP_ID=localhost and
- * NEXT_PUBLIC_TENZRO_RPC_URL=http://rpc.test.invalid/ and served at BASE_URL.
+ * NEXT_PUBLIC_TENZRO_RPC_URL=http://rpc.test.invalid/ and
+ * NEXT_PUBLIC_TENZRO_CHAIN_ID=1337, and served at BASE_URL.
  * Run: `node e2e/agents.e2e.mjs`.
  */
 
@@ -21,7 +23,6 @@ import { createHash, createPublicKey, generateKeyPairSync, randomBytes, verify }
 import { chromium } from 'playwright';
 import {
   TRANSACTION_SIGNATURE_CONTEXT,
-  accountAddress,
   compositeMessageRepresentative,
   previewSplit as localPreview,
 } from 'tenzro-sdk';
@@ -39,6 +40,9 @@ import {
 const BASE = process.env.BASE_URL ?? 'http://localhost:3917';
 const RPC = 'http://rpc.test.invalid/';
 const ACCOUNT = `0x${'ac'.repeat(20)}`;
+/** The account in its 32-byte ledger slot: what transactions name as `from` and payments pay. */
+const ACCOUNT_SLOT = `${ACCOUNT}${'00'.repeat(12)}`;
+const TNZO = 10n ** 18n;
 /** The identity the account passkey derives; set once the key exists. */
 let HUMAN = '';
 const AGENT = 'did:tenzro:machine:e2e:shopper';
@@ -96,7 +100,14 @@ function mockNode(accountKey, credId) {
   const challenges = new Map();
   const payloads = new Map();
   let n = 0;
-  const node = { calls, revoked: false, split: null, sent: [] };
+  const node = {
+    calls,
+    revoked: false,
+    split: null,
+    sent: [],
+    bond: 2n * TNZO,
+    bondState: 'Active',
+  };
   node.terms = {
     controller_did: HUMAN,
     agent_name: 'shopper',
@@ -111,6 +122,8 @@ function mockNode(accountKey, credId) {
   };
   const handlers = {
     eth_chainId: () => '0x539',
+    tenzro_listRoleEndpoints: () => ({ endpoints: [] }),
+    tenzro_getCheckpointCertificate: () => ({ index: 1, digest: 'cd'.repeat(32) }),
     tenzro_getNonce: () => '0x7',
     tenzro_resolveIdentity: () => ({
       record: { identity_data: { Human: { controlled_machines: [AGENT] } } },
@@ -139,8 +152,8 @@ function mockNode(accountKey, credId) {
     tenzro_getAgentBond: (p) => {
       assert.equal(p.agent_did, AGENT);
       return {
-        amount: '2000000000000000000',
-        state: 'Active',
+        amount: node.bond.toString(),
+        state: node.bondState,
         cooldown_until_ms: null,
         vault: 'cd'.repeat(20),
       };
@@ -165,13 +178,41 @@ function mockNode(accountKey, credId) {
       return { agent_did: AGENT, delegation: p.delegation, tokens_revoked: 0 };
     },
     tenzro_getFeeRate: () => ({ rate_nano_usd: RATE_NANO_USD, mode: 'oracle' }),
-    tenzro_getAccountRecord: () => ({
-      record: {
-        account_address: ACCOUNT,
-        credentials: [
-          { credential_id_hex: credId.toString('hex'), p256_public_key_hex: hex(accountKey.xy) },
-        ],
-      },
+    tenzro_getKeystore: (p) => {
+      assert.equal(p.account.replace(/^0x/, ''), ACCOUNT.slice(2), 'keystore of the account');
+      return {
+        account: ACCOUNT.slice(2),
+        on_chain: true,
+        commitment: 'ef'.repeat(32),
+        independent_roots: 1,
+        may_spend: true,
+        keystore: {
+          account: ACCOUNT.slice(2),
+          owner_did: HUMAN,
+          salt: 0,
+          version: 1,
+          credentials: [
+            {
+              rp_id: 'localhost',
+              credential_id: credId.toString('hex'),
+              public_key: accountKey.xy.toString('hex'),
+              aaguid: '00'.repeat(16),
+              backup_eligible: false,
+              backup_state: false,
+              counts_as_root_from_ms: 0,
+              label: 'This device',
+            },
+          ],
+          policy: 'single_credential',
+          recovery_signers: [],
+          recovery_threshold: 0,
+          pending_recovery: null,
+        },
+      };
+    },
+    tenzro_resolveCredential: (p) => ({
+      accounts:
+        p.credential_id.replace(/^0x/, '') === credId.toString('hex') ? [ACCOUNT.slice(2)] : [],
     }),
     tenzro_getPayeeSplit: () => ({ rule: node.split }),
     tenzro_listPayments: (p) => ({
@@ -255,6 +296,12 @@ function mockNode(accountKey, credId) {
     tenzro_sendRawTransaction: (p) => {
       node.sent.push(p);
       if (p.tx_type?.Payment?.op?.set_split) node.split = p.tx_type.Payment.op.set_split.rule;
+      const bond = p.tx_type?.IncreaseAgentBond ?? p.tx_type?.PostAgentBond;
+      if (bond) {
+        node.bond += BigInt(String(bond.amount));
+        node.bondState = 'Active';
+      }
+      if (p.tx_type?.WithdrawAgentBond) node.bondState = 'Cooldown';
       return `0x${'34'.repeat(32)}`;
     },
   };
@@ -297,11 +344,7 @@ async function verifyTx(node, sent, xy, what) {
   const sig = sent.signature.classical;
   assert.equal(sig.form, 'web_authn', `${what}: passkey form`);
   assert.equal(sent.public_key, xy.toString('hex'), `${what}: public key`);
-  assert.equal(
-    sent.from,
-    hex(await accountAddress(new Uint8Array(xy))),
-    `${what}: from the passkey's account`,
-  );
+  assert.equal(sent.from, ACCOUNT_SLOT, `${what}: from the wallet's account`);
   const digest = [...node.payloads.keys()].find(
     (d) => node.payloads.get(d).timestamp === sent.timestamp,
   );
@@ -403,15 +446,57 @@ async function main() {
       assert.match(text, /Bond\s*2 TNZO \(about \$5\.00\)/);
     });
 
-    await step('agents: limits changed with the passkey the identity derives from', async () => {
+    await step(
+      'agents: higher limits top the bond up first, then the passkey approves the Terms',
+      async () => {
+        const card = page.locator(`[data-agent="${AGENT}"]`);
+        await card.getByRole('button', { name: 'Change limits' }).click();
+        await card.getByLabel('Per day, TNZO').fill('30');
+        await card.getByRole('button', { name: 'Approve new limits' }).click();
+        await card.getByText(/Per day\s*30 TNZO/).waitFor({ timeout: 30_000 });
+        assert.equal(node.terms.delegation_scope.max_daily_spend, '30000000000000000000');
+        assert.equal(node.terms.delegation_scope.max_transaction_value, '4000000000000000000');
+        assert.equal(node.calls.filter((c) => c.method === 'tenzro_updateAgentTerms').length, 1);
+        const topUps = node.sent.filter((t) => t.tx_type?.IncreaseAgentBond);
+        assert.equal(topUps.length, 1, 'one bond top-up');
+        assert.equal(topUps[0].tx_type.IncreaseAgentBond.agent_did, AGENT);
+        assert.equal(
+          BigInt(String(topUps[0].tx_type.IncreaseAgentBond.amount)),
+          1n * TNZO,
+          'up to a tenth of 30 TNZO',
+        );
+        const sentAt = node.calls.findIndex((c) => c.method === 'tenzro_sendRawTransaction');
+        const termsAt = node.calls.findIndex((c) => c.method === 'tenzro_updateAgentTerms');
+        assert.ok(sentAt < termsAt, 'the bond is posted before the Terms are recorded');
+        await verifyTx(node, topUps[0], accountKey.xy, 'bond top-up');
+        assert.equal(node.bond, 3n * TNZO);
+      },
+    );
+
+    await step('agents: lowering limits posts no bond', async () => {
+      const before = node.sent.length;
       const card = page.locator(`[data-agent="${AGENT}"]`);
       await card.getByRole('button', { name: 'Change limits' }).click();
-      await card.getByLabel('Per day, TNZO').fill('30');
+      await card.getByLabel('Per day, TNZO').fill('25');
       await card.getByRole('button', { name: 'Approve new limits' }).click();
-      await card.getByText(/Per day\s*30 TNZO/).waitFor({ timeout: 30_000 });
-      assert.equal(node.terms.delegation_scope.max_daily_spend, '30000000000000000000');
-      assert.equal(node.terms.delegation_scope.max_transaction_value, '4000000000000000000');
-      assert.equal(node.calls.filter((c) => c.method === 'tenzro_updateAgentTerms').length, 1);
+      await card.getByText(/Per day\s*25 TNZO/).waitFor({ timeout: 30_000 });
+      assert.equal(node.sent.length, before, 'no transaction');
+    });
+
+    await step('agents: bond topped up and withdrawn with the passkey', async () => {
+      const card = page.locator(`[data-agent="${AGENT}"]`);
+      await card.getByLabel('Add to bond').fill('0.5');
+      await card.getByRole('button', { name: 'Add', exact: true }).click();
+      await card.getByText(/Bond\s*3\.5 TNZO/).waitFor({ timeout: 30_000 });
+      const added = node.sent.at(-1);
+      assert.equal(BigInt(String(added.tx_type.IncreaseAgentBond.amount)), TNZO / 2n);
+      await verifyTx(node, added, accountKey.xy, 'bond add');
+      await card.getByRole('button', { name: 'Withdraw the bond (stops the agent)' }).click();
+      await card.getByRole('button', { name: 'Return the bond' }).waitFor({ timeout: 30_000 });
+      const withdrawn = node.sent.at(-1);
+      assert.equal(withdrawn.tx_type.WithdrawAgentBond.agent_did, AGENT);
+      await verifyTx(node, withdrawn, accountKey.xy, 'bond withdraw');
+      node.bondState = 'Active';
     });
 
     await step('agents: a held action approved for exactly the action shown', async () => {
@@ -477,9 +562,9 @@ async function main() {
       await page.goto(`${BASE}/publisher`);
       await page.getByTestId('current-split').getByText('No split').waitFor();
       await page.getByTestId('payouts').getByText('3 TNZO').waitFor();
-      payee = hex(await accountAddress(new Uint8Array(accountKey.xy)));
+      payee = ACCOUNT_SLOT;
       const listed = node.calls.find((c) => c.method === 'tenzro_listPayments');
-      assert.equal(listed.params.payee, payee, 'payouts read for the passkey account');
+      assert.equal(listed.params.payee, payee, "payouts read for the wallet's account");
     });
 
     await step(

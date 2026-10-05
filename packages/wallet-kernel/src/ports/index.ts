@@ -54,11 +54,7 @@ export {
 export { verifyPreparedContent, CantonContentMismatchError } from './canton/verify-content.ts';
 export type { CantonTransferIntent } from './canton/verify-content.ts';
 export { resolveCantonAdapterConfig } from './canton/canton-provider.ts';
-export type {
-  CantonProviderConfig,
-  ByoCantonProviderConfig,
-  TenzroCantonProviderConfig,
-} from './canton/canton-provider.ts';
+export type { CantonProviderConfig } from './canton/canton-provider.ts';
 
 // ── Agent ports + adapters ──
 export * from './agent/index.ts';

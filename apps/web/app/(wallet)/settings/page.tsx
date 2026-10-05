@@ -4,7 +4,7 @@
 
 'use client';
 
-import { Cpu, Fingerprint, Globe, Shield, Smartphone } from 'lucide-react';
+import { Cpu, Fingerprint, Globe, Shield } from 'lucide-react';
 import type * as React from 'react';
 
 import {
@@ -18,10 +18,17 @@ import {
 } from '@tenzro/ui';
 import { assessReadiness } from 'tenzro-wallet/custody';
 
+import { DeviceRow } from '@/components/wallet/device-row';
 import { LinkDeviceActions } from '@/components/wallet/link-device';
 import { RecoverySection } from '@/components/wallet/recovery-section';
-import { TENZRO_NETWORK_NAME, TENZRO_RPC_URL, TENZRO_RP_ID } from '@/lib/tenzro/config';
-import { useChainId, useDeviceActions, useDevices, useWallet } from '@/lib/tenzro/hooks';
+import { TENZRO_CHAIN_ID, TENZRO_NETWORK_NAME, TENZRO_RP_ID } from '@/lib/tenzro/config';
+import {
+  useChainId,
+  useDeviceActions,
+  useDevices,
+  useEndpoint,
+  useWallet,
+} from '@/lib/tenzro/hooks';
 
 export default function SettingsPage() {
   return (
@@ -41,7 +48,7 @@ export default function SettingsPage() {
         </CardHeader>
         <CardContent className="space-y-3">
           <Row icon={Globe} label="Network" value={TENZRO_NETWORK_NAME} />
-          <Row icon={Globe} label="RPC" value={TENZRO_RPC_URL} />
+          <EndpointRow />
           <ChainIdRow />
           <Row icon={Shield} label="Passkey domain" value={TENZRO_RP_ID} />
         </CardContent>
@@ -52,7 +59,13 @@ export default function SettingsPage() {
 
 function ChainIdRow() {
   const chainId = useChainId();
-  return <Row icon={Cpu} label="Chain id" value={chainId.data ?? '…'} />;
+  return <Row icon={Cpu} label="Chain id" value={chainId.data ?? String(TENZRO_CHAIN_ID)} />;
+}
+
+/** The endpoint in use: found from the network's staked RPC operators, checked against the chain. */
+function EndpointRow() {
+  const endpoint = useEndpoint();
+  return <Row icon={Globe} label="Endpoint" value={endpoint ?? 'Finding the network'} />;
 }
 
 function DevicesCard() {
@@ -61,22 +74,7 @@ function DevicesCard() {
   const { remove } = useDeviceActions(wallet);
   const list = devices.data ?? [];
   const readiness = assessReadiness(list);
-  // Passkeys in the same password manager share a root: number the providers
-  // so the list shows which ones fall together. The network records only an
-  // identifier, not a name, so they are numbered, not named.
-  const providers = new Map<string, number>();
-  for (const d of list) {
-    if (d.tier === 'synced' && d.aaguid && !providers.has(d.aaguid))
-      providers.set(d.aaguid, providers.size + 1);
-  }
-  const where = (d: (typeof list)[number]): string | null =>
-    d.tier === 'synced'
-      ? d.aaguid && providers.size > 1
-        ? `Syncs across your devices · password manager ${providers.get(d.aaguid)}`
-        : 'Syncs across your devices'
-      : d.tier === 'device-bound'
-        ? 'On one device or security key only'
-        : null;
+  const userAgent = typeof navigator === 'undefined' ? '' : navigator.userAgent;
 
   if (!wallet) {
     return (
@@ -106,35 +104,20 @@ function DevicesCard() {
       <CardContent className="space-y-3">
         {devices.error && <p className="text-sm text-danger">{devices.error.message}</p>}
         {list.map((d) => (
-          <div
+          <DeviceRow
             key={d.credentialIdHex}
-            className="flex items-center gap-3 rounded-xl bg-surface-2 border border-border-subtle p-3"
-          >
-            <Smartphone className="size-5 text-foreground-muted" />
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
-                <span className="font-medium text-sm">{d.label ?? 'Passkey'}</span>
-                {d.thisDevice && (
-                  <Badge variant="agent" size="xs">
-                    This device
-                  </Badge>
-                )}
-              </div>
-              {where(d) && <span className="block text-xs text-foreground-muted">{where(d)}</span>}
-              <span className="text-xs text-foreground-subtle font-mono">
-                {d.credentialIdHex.slice(0, 18)}…
-              </span>
-            </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              disabled={list.length <= 1 || d.thisDevice || remove.isPending}
-              onClick={() => remove.mutate(d.credentialIdHex)}
-            >
-              Remove
-            </Button>
-          </div>
+            device={d}
+            onlyDevice={list.filter((x) => (x.status ?? 'on-wallet') === 'on-wallet').length <= 1}
+            removing={remove.isPending}
+            onRemove={() => remove.mutate(d.credentialIdHex)}
+            userAgent={userAgent}
+          />
         ))}
+        {!readiness.ready && list.length > 0 && (
+          <p className="text-sm text-foreground-muted" data-testid="sending-disabled">
+            Sending is off: {readiness.guidance}
+          </p>
+        )}
         <LinkDeviceActions />
         {remove.error && <p className="text-sm text-danger">{remove.error.message}</p>}
       </CardContent>

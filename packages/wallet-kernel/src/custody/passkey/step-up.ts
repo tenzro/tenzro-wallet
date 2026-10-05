@@ -279,15 +279,23 @@ export function checkStepUp(req: StepUpRequest): Uint8Array {
   return digest;
 }
 
-/** Parses a pasted or posted step-up request; throws on anything else. */
+/**
+ * Parses a pasted or posted step-up request: the `step_up` data a refused
+ * action returned (which carries the held action), or that data with the
+ * action named alongside. Throws on anything else.
+ */
 export function parseStepUpRequest(value: unknown): StepUpRequest {
   const v = (typeof value === 'string' ? JSON.parse(value) : value) as Record<
     string,
     unknown
   > | null;
-  const action = v?.action as AgentActionWire | undefined;
-  const raw = v?.step_up as Record<string, unknown> | undefined;
-  const stepUp = (raw?.step_up ?? raw) as StepUpChallenge | undefined;
+  const raw = (v?.step_up ?? v?.data) as Record<string, unknown> | undefined;
+  const stepUp = (raw?.step_up ?? raw) as
+    | (StepUpChallenge & { action?: AgentActionWire })
+    | undefined;
+  // The node's step_up data carries the held action itself; a request may
+  // also name it alongside.
+  const action = (v?.action ?? stepUp?.action) as AgentActionWire | undefined;
   if (
     !action ||
     typeof action.agent_did !== 'string' ||

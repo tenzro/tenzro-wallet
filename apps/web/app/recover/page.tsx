@@ -1,63 +1,90 @@
 /**
  * Recover — every device is lost; the account's guardians let a new one in.
  *
- *   1. Start   make a passkey on this device and open a recovery for it
- *              (`tenzro_initiateRecovery`)
- *   2. Ask     send each guardian the request link; they approve on their
- *              own device at /guardian
- *   3. Finish  once enough independent guardians approved and the wait is
- *              over, complete it (`tenzro_finalizeRecovery`) and sign in
+ *   1. Start   make a passkey on this device and build the recovery change
+ *              for the account's keystore
+ *   2. Ask     send each guardian the request link; each approves on their
+ *              own device at /guardian and sends back an approval code
+ *   3. Send    with enough approvals, this device sends the recovery from the
+ *              account itself, signed by its new passkey
+ *   4. Finish  once the wait is over, complete it and sign in
  *
  * During the wait any passkey still on the account can cancel the recovery.
+ * Nothing is kept by this site: the recovery is on the network.
  */
 
 'use client';
 
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Button, Card, Input, Logo } from '@tenzro/ui';
-import { Check, Copy, Fingerprint, LifeBuoy } from 'lucide-react';
+import { Check, Copy, Fingerprint, LifeBuoy, Send } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { QRCodeSVG } from 'qrcode.react';
 import * as React from 'react';
 import {
+  type RecoveryApproval,
   type RecoveryRequest,
+  decodeRecoveryApproval,
   decodeRecoveryRequest,
+  encodeRecoveryApproval,
   encodeRecoveryRequest,
 } from 'tenzro-wallet/custody';
 
 import { custody, signIn } from '@/lib/tenzro/wallet';
 
-const STORE_KEY = 'tenzro.recovery';
+const STORE_KEY = 'tenzro.recovery.v2';
+
+interface Started {
+  readonly request: RecoveryRequest;
+  readonly credentialId: string;
+  readonly approvals: readonly RecoveryApproval[];
+}
 
 function errorText(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
-function loadStarted(): RecoveryRequest | null {
+function loadStarted(): Started | null {
   try {
     const raw = window.sessionStorage.getItem(STORE_KEY);
-    return raw ? decodeRecoveryRequest(raw) : null;
+    if (!raw) return null;
+    const s = JSON.parse(raw) as { request: string; credentialId: string; approvals: string[] };
+    return {
+      request: decodeRecoveryRequest(s.request),
+      credentialId: s.credentialId,
+      approvals: s.approvals.map(decodeRecoveryApproval),
+    };
   } catch {
     return null;
   }
 }
 
-function saveStarted(r: RecoveryRequest | null): void {
+function saveStarted(s: Started | null): void {
   try {
-    if (r) window.sessionStorage.setItem(STORE_KEY, encodeRecoveryRequest(r));
-    else window.sessionStorage.removeItem(STORE_KEY);
+    if (!s) {
+      window.sessionStorage.removeItem(STORE_KEY);
+      return;
+    }
+    window.sessionStorage.setItem(
+      STORE_KEY,
+      JSON.stringify({
+        request: encodeRecoveryRequest(s.request),
+        credentialId: s.credentialId,
+        approvals: s.approvals.map(encodeRecoveryApproval),
+      }),
+    );
   } catch {
     // Storage can be unavailable; the recovery then lasts for this page.
   }
 }
 
 export default function RecoverPage() {
-  const [started, setStarted] = React.useState<RecoveryRequest | null>(null);
+  const [started, setStarted] = React.useState<Started | null>(null);
   React.useEffect(() => setStarted(loadStarted()), []);
-  const remember = (r: RecoveryRequest | null) => {
-    saveStarted(r);
-    setStarted(r);
+  const remember = (s: Started | null) => {
+    saveStarted(s);
+    setStarted(s);
   };
 
   return (
@@ -71,7 +98,7 @@ export default function RecoverPage() {
         <div className="w-full max-w-xl space-y-4">
           <h1 className="text-2xl font-semibold tracking-tight">Recover a wallet</h1>
           {started ? (
-            <Waiting request={started} onReset={() => remember(null)} />
+            <Waiting started={started} onChange={remember} onReset={() => remember(null)} />
           ) : (
             <Start onStarted={remember} />
           )}
@@ -92,7 +119,7 @@ function accountFromKit(text: string): string | null {
   }
 }
 
-function Start({ onStarted }: { readonly onStarted: (r: RecoveryRequest) => void }) {
+function Start({ onStarted }: { readonly onStarted: (s: Started) => void }) {
   const [account, setAccount] = React.useState('');
   const [label, setLabel] = React.useState('');
   const [kitError, setKitError] = React.useState<string | null>(null);
@@ -103,7 +130,8 @@ function Start({ onStarted }: { readonly onStarted: (r: RecoveryRequest) => void
         account: account.trim(),
         label: label.trim() || 'Recovered device',
       }),
-    onSuccess: (s) => onStarted(s.request),
+    onSuccess: (s) =>
+      onStarted({ request: s.request, credentialId: s.credentialId, approvals: [] }),
   });
 
   return (
@@ -161,11 +189,20 @@ function Start({ onStarted }: { readonly onStarted: (r: RecoveryRequest) => void
 }
 
 function Waiting({
-  request,
+  started,
+  onChange,
   onReset,
-}: { readonly request: RecoveryRequest; readonly onReset: () => void }) {
+}: {
+  readonly started: Started;
+  readonly onChange: (s: Started) => void;
+  readonly onReset: () => void;
+}) {
   const router = useRouter();
+  const { request, credentialId, approvals } = started;
+  const account = `0x${request.update.account.replace(/^0x/, '')}`;
   const [copied, setCopied] = React.useState(false);
+  const [code, setCode] = React.useState('');
+  const [codeError, setCodeError] = React.useState<string | null>(null);
   const [now, setNow] = React.useState(() => Date.now());
   React.useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 15_000);
@@ -175,17 +212,18 @@ function Waiting({
     typeof window === 'undefined'
       ? ''
       : `${window.location.origin}/guardian#r=${encodeRecoveryRequest(request)}`;
-  const status = useQuery({
-    queryKey: ['tenzro', 'recovery', request.recoveryId],
-    queryFn: async () =>
-      (await custody().listPendingRecoveries(request.account)).find(
-        (r) => r.recovery_id === request.recoveryId,
-      ) ?? null,
+  const pending = useQuery({
+    queryKey: ['tenzro', 'pendingRecovery', account],
+    queryFn: () => custody().pendingRecovery(account),
     refetchInterval: 20_000,
+  });
+  const submit = useMutation({
+    mutationFn: () => custody().submitRecovery({ request, approvals, credentialId }),
+    onSuccess: () => void pending.refetch(),
   });
   const finish = useMutation({
     mutationFn: async () => {
-      await custody().finalizeRecovery(request.recoveryId);
+      await custody().finishRecovery({ account, credentialId });
       return signIn();
     },
     onSuccess: () => {
@@ -193,16 +231,31 @@ function Waiting({
       router.push('/dashboard');
     },
   });
-  const s = status.data;
-  const ready =
-    !!s && s.ready_at_ms !== null && s.ready_at_ms <= now && !s.finalized && !s.cancelled;
-  const expired = request.expiresAtMs <= now;
+  const p = pending.data;
+  const ours =
+    !!p && p.credential.credential_id.replace(/^0x/, '') === credentialId.replace(/^0x/, '');
+  const ready = ours && p.ready_at_ms <= now;
+  const addCode = () => {
+    try {
+      const a = decodeRecoveryApproval(code);
+      if (a.account.replace(/^0x/, '') !== request.update.account.replace(/^0x/, '')) {
+        throw new Error('That approval is for another account.');
+      }
+      if (!approvals.some((x) => x.public_key === a.public_key))
+        onChange({ ...started, approvals: [...approvals, a] });
+      setCode('');
+      setCodeError(null);
+    } catch (e) {
+      setCodeError(errorText(e));
+    }
+  };
 
   return (
     <Card variant="raised" className="p-6 space-y-4 text-sm">
       <p className="text-foreground-muted">
         A passkey for this wallet was made on this device. Send this link to each guardian. They
-        open it on the device that holds their guardian passkey and approve.
+        open it on the device that holds their guardian passkey, approve, and send you back an
+        approval code.
       </p>
       <div className="flex justify-center rounded-xl bg-white p-4">
         <QRCodeSVG value={link} size={196} />
@@ -221,31 +274,51 @@ function Waiting({
         </Button>
       </div>
 
-      <div className="rounded-xl border border-border-subtle p-3 space-y-1">
-        {status.isError && <p className="text-danger">{errorText(status.error)}</p>}
-        {s === null && <p className="text-danger">The network no longer lists this recovery.</p>}
-        {s?.cancelled && (
-          <p className="text-danger">This recovery was cancelled from a device on the wallet.</p>
-        )}
-        {s && !s.cancelled && (
-          <>
-            <p>
-              {s.guardian_signatures_collected} approval
-              {s.guardian_signatures_collected === 1 ? '' : 's'} so far.
-            </p>
-            <p className="text-foreground-subtle">
-              {s.ready_at_ms === null
-                ? 'Approvals count by independent provider; the network decides when enough have arrived.'
-                : s.ready_at_ms > now
-                  ? `Enough guardians approved. It can complete ${new Date(s.ready_at_ms).toLocaleString()}.`
-                  : 'Enough guardians approved and the wait is over.'}
-            </p>
-          </>
-        )}
-        {expired && !ready && (
-          <p className="text-danger">This recovery has expired. Start a new one.</p>
-        )}
-      </div>
+      {!ours && (
+        <div className="space-y-2">
+          <div className="flex gap-2">
+            <Input
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              placeholder="Paste a guardian's approval code"
+              aria-label="Guardian approval code"
+              spellCheck={false}
+            />
+            <Button variant="secondary" size="md" onClick={addCode} disabled={!code.trim()}>
+              Add
+            </Button>
+          </div>
+          {codeError && <p className="text-danger">{codeError}</p>}
+          <p className="text-foreground-subtle">
+            {approvals.length} of {request.threshold} approval{request.threshold === 1 ? '' : 's'}{' '}
+            needed. Approvals count by independent provider.
+          </p>
+          <Button
+            variant="primary"
+            size="md"
+            leftIcon={<Send className="size-4" />}
+            pending={submit.isPending}
+            disabled={approvals.length < request.threshold || submit.isPending}
+            onClick={() => submit.mutate()}
+          >
+            Send the recovery
+          </Button>
+          <p className="text-foreground-subtle">
+            It is sent from the wallet itself, so the wallet pays its small network fee.
+          </p>
+          {submit.error && <p className="text-danger">{errorText(submit.error)}</p>}
+        </div>
+      )}
+
+      {ours && (
+        <div className="rounded-xl border border-border-subtle p-3 space-y-1">
+          <p>
+            {ready
+              ? 'The wait is over: complete the recovery.'
+              : `The recovery is on the network. It can complete ${new Date(p.ready_at_ms).toLocaleString()}.`}
+          </p>
+        </div>
+      )}
 
       <div className="flex flex-wrap gap-3">
         <Button

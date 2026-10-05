@@ -4,12 +4,12 @@
  * from; the kernel checks what the node asks it to sign before it does.
  */
 
-import { AuthClient, RpcClient } from 'tenzro-sdk';
+import { AuthClient } from 'tenzro-sdk';
 import type { AgentTermsWire } from 'tenzro-wallet';
 import type { AgentStepUp, RawAgentTermsView, StepUpRequest } from 'tenzro-wallet/custody';
+import { increaseAgentBond, postAgentBond, requiredAgentBondWei } from './native-tx';
 
-import { TENZRO_RPC_URL } from './config';
-import { rpcCall } from './rpc';
+import { rpcCall, sdkRpc } from './rpc';
 import { type StoredWallet, custody } from './wallet';
 
 /** A machine registered under this identity that is not an agent with Terms. */
@@ -68,6 +68,38 @@ export function getAgentBond(agentDid: string): Promise<AgentBondView | null> {
   return rpcCall('tenzro_getAgentBond', { agent_did: agentDid });
 }
 
+/** The spend ceiling that sizes an agent's bond: its daily limit, else its per-payment one. */
+export function spendCeilingWei(scope: {
+  max_daily_spend?: string | null;
+  max_transaction_value?: string | null;
+}): bigint | null {
+  const v = scope.max_daily_spend ?? scope.max_transaction_value;
+  return v && /^\d+$/.test(v) ? BigInt(v) : null;
+}
+
+/**
+ * Makes sure an agent's bond covers Terms with `scope`: posts one when none is
+ * active, or tops up the difference, from the wallet's account and signed by
+ * this device's passkey. The network refuses Terms its bond does not cover,
+ * so this runs before the Terms are approved. Returns what was added.
+ */
+export async function ensureAgentBond(
+  wallet: StoredWallet,
+  agentDid: string,
+  scope: { max_daily_spend?: string | null; max_transaction_value?: string | null },
+): Promise<bigint> {
+  const ceiling = spendCeilingWei(scope);
+  if (ceiling === null) return 0n;
+  const required = requiredAgentBondWei(ceiling);
+  const bond = await getAgentBond(agentDid);
+  const held = bond && bond.state === 'Active' ? BigInt(bond.amount) : 0n;
+  if (held >= required) return 0n;
+  const missing = required - held;
+  if (bond && bond.state === 'Active') await increaseAgentBond(wallet, agentDid, missing);
+  else await postAgentBond(wallet, agentDid, missing);
+  return missing;
+}
+
 /** Spend limits in wei; null removes the limit. */
 export interface SpendLimits {
   readonly perPayment: string | null;
@@ -95,7 +127,8 @@ export async function updateAgentLimits(
       max_daily_spend: limits.perDay,
     },
   };
-  const auth = new AuthClient(new RpcClient(TENZRO_RPC_URL));
+  await ensureAgentBond(wallet, view.agent_did, terms.delegation_scope ?? {});
+  const auth = new AuthClient(sdkRpc());
   return auth.updateAgentTerms(
     wallet.account,
     view.agent_did,

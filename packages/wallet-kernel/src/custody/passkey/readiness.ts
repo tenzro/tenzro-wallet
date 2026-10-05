@@ -28,6 +28,28 @@ export interface DeviceSummary {
   readonly aaguid?: string;
   /** Whether this is the passkey the wallet is running on. */
   readonly thisDevice?: boolean;
+  /** The wallet provider's relying party the passkey is registered on. */
+  readonly rpId?: string;
+  /** When it joined the keystore on chain (ms); absent before the account's first change. */
+  readonly addedAtMs?: number;
+  /**
+   * Where it stands on the wallet: `on-wallet` acts and counts now;
+   * `waiting` is linked and counts as a device from `countsFromMs` (a new
+   * passkey on an account with fewer than two devices waits, so a stolen
+   * one cannot add itself and spend); `recovering` joins by recovery once
+   * the wait ends at `countsFromMs`, and any device on the wallet can cancel
+   * it until then.
+   */
+  readonly status?: DeviceStatus;
+  /** When a `waiting` or `recovering` passkey starts to count (ms). */
+  readonly countsFromMs?: number;
+}
+
+export type DeviceStatus = 'on-wallet' | 'waiting' | 'recovering';
+
+/** The devices that act and count now. */
+export function devicesOnWallet(devices: readonly DeviceSummary[]): DeviceSummary[] {
+  return devices.filter((d) => (d.status ?? 'on-wallet') === 'on-wallet');
 }
 
 /** The root a passkey belongs to: its sync provider when synced, itself otherwise. */
@@ -59,10 +81,13 @@ export interface WalletReadiness {
 }
 
 export function assessReadiness(
-  devices: readonly DeviceSummary[],
+  listed: readonly DeviceSummary[],
   opts: { readonly guardians?: number } = {},
 ): WalletReadiness {
   const guardians = opts.guardians ?? 0;
+  // Only passkeys on the wallet count; one still waiting or joining by
+  // recovery does not, and guardians recover but never spend.
+  const devices = devicesOnWallet(listed);
   const roots = independentRoots(devices);
   const base = {
     devices: devices.length,
@@ -80,7 +105,7 @@ export function assessReadiness(
       guidance: 'Create a passkey to set up this wallet.',
     };
   }
-  if (roots < 2 && guardians === 0) {
+  if (roots < 2) {
     return {
       ...base,
       ready: false,
@@ -88,16 +113,19 @@ export function assessReadiness(
       guidance:
         devices.length > 1
           ? 'Your passkeys all sync through one password manager, so they count as one. Add a passkey from another provider, a security key, or a guardian before sending.'
-          : 'Add a second device before sending. With one passkey, losing that device means losing the wallet.',
+          : listed.some((d) => d.status === 'waiting')
+            ? 'Your new device counts once its wait is over; sending opens then.'
+            : 'Add a second device before sending. With one passkey, losing that device means losing the wallet.',
     };
   }
   return {
     ...base,
     ready: true,
     blocker: null,
-    guidance:
-      roots >= 2
-        ? `Protected by ${roots} independent roots. Any passkey can approve; sending and recovery need two of them.`
-        : 'Protected by one root and your guardians.',
+    guidance: `Protected by ${roots} independent roots. Any device on the wallet can approve and send.${
+      guardians > 0
+        ? ` ${guardians} guardian${guardians === 1 ? '' : 's'} can help you recover.`
+        : ''
+    }`,
   };
 }
