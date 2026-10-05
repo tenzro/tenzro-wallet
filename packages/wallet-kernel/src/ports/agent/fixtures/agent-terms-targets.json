@@ -40,7 +40,9 @@
      "asset_limits": [],
      "min_contract_assurance": 0,
      "allowed_contracts": [],
-     "governance": null
+     "governance": null,
+     "counterparty_kyc": null,
+     "max_split_fee_bps": null
     },
     "capabilities": [],
     "serving_nodes": [
@@ -104,7 +106,9 @@
      "asset_limits": [],
      "min_contract_assurance": 0,
      "allowed_contracts": [],
-     "governance": null
+     "governance": null,
+     "counterparty_kyc": null,
+     "max_split_fee_bps": null
     },
     "capabilities": [],
     "serving_nodes": [
@@ -171,7 +175,9 @@
      "asset_limits": [],
      "min_contract_assurance": 0,
      "allowed_contracts": [],
-     "governance": null
+     "governance": null,
+     "counterparty_kyc": null,
+     "max_split_fee_bps": null
     },
     "capabilities": [],
     "serving_nodes": [
@@ -235,7 +241,9 @@
      "asset_limits": [],
      "min_contract_assurance": 0,
      "allowed_contracts": [],
-     "governance": null
+     "governance": null,
+     "counterparty_kyc": null,
+     "max_split_fee_bps": null
     },
     "capabilities": [],
     "serving_nodes": [
@@ -301,7 +309,9 @@
      "asset_limits": [],
      "min_contract_assurance": 0,
      "allowed_contracts": [],
-     "governance": null
+     "governance": null,
+     "counterparty_kyc": null,
+     "max_split_fee_bps": null
     },
     "capabilities": [],
     "serving_nodes": [
@@ -367,7 +377,9 @@
      "asset_limits": [],
      "min_contract_assurance": 0,
      "allowed_contracts": [],
-     "governance": null
+     "governance": null,
+     "counterparty_kyc": null,
+     "max_split_fee_bps": null
     },
     "capabilities": [],
     "serving_nodes": [
@@ -433,7 +445,9 @@
      "asset_limits": [],
      "min_contract_assurance": 0,
      "allowed_contracts": [],
-     "governance": null
+     "governance": null,
+     "counterparty_kyc": null,
+     "max_split_fee_bps": null
     },
     "capabilities": [],
     "serving_nodes": [
@@ -497,7 +511,9 @@
      "asset_limits": [],
      "min_contract_assurance": 0,
      "allowed_contracts": [],
-     "governance": null
+     "governance": null,
+     "counterparty_kyc": null,
+     "max_split_fee_bps": null
     },
     "capabilities": [],
     "serving_nodes": [
@@ -561,7 +577,9 @@
      "asset_limits": [],
      "min_contract_assurance": 0,
      "allowed_contracts": [],
-     "governance": null
+     "governance": null,
+     "counterparty_kyc": null,
+     "max_split_fee_bps": null
     },
     "capabilities": [],
     "serving_nodes": [
@@ -625,7 +643,9 @@
      "asset_limits": [],
      "min_contract_assurance": 0,
      "allowed_contracts": [],
-     "governance": null
+     "governance": null,
+     "counterparty_kyc": null,
+     "max_split_fee_bps": null
     },
     "capabilities": [],
     "serving_nodes": [
@@ -648,6 +668,79 @@
     "delegate": "3391d252787ecb01ead843bf910ed880041e1b5a4e9525729f65a705d888fa5b",
     "update": "dd3bc52e9ee95366d96c4d9147d997e79d4c0efc5c8a3ecaf513e2cb62a7f2b6",
     "update_rotate": "5910945b871b71232c4f0dc4d401d12fc677fcc7e0463bab90210b54c0c05138"
+   }
+  },
+  {
+   "name": "settlement plan over its asset limit",
+   "terms": {
+    "controller_did": "did:tenzro:human:controller",
+    "agent_name": "example",
+    "delegation_scope": {
+     "max_transaction_value": "1000",
+     "max_daily_spend": "5000",
+     "allowed_operations": [
+      "transfer",
+      "pay",
+      "create_escrow",
+      "refund_escrow",
+      "remote_grant",
+      "governance.vote",
+      "governance.veto_signal",
+      "settlement_plan",
+      "inference"
+     ],
+     "allowed_payment_protocols": [],
+     "allowed_chains": [
+      "tenzro",
+      "eip155:8453"
+     ],
+     "allowed_models": [],
+     "allowed_counterparties": [],
+     "max_hourly_spend": null,
+     "max_actions_per_hour": null,
+     "max_actions_per_day": null,
+     "allowed_hours_utc": null,
+     "step_up_above": null,
+     "step_up_new_counterparty": false,
+     "tainted_value_limit": null,
+     "remote_grant_ttl_ms": null,
+     "remote_limits": [],
+     "cosign_above": null,
+     "asset_limits": [
+      {
+       "asset": "usdc",
+       "max_per_tx": "5",
+       "max_per_day": "1000",
+       "min_counterparty_kyc_tier": 0
+      }
+     ],
+     "min_contract_assurance": 0,
+     "allowed_contracts": [],
+     "governance": null,
+     "counterparty_kyc": null,
+     "max_split_fee_bps": null
+    },
+    "capabilities": [],
+    "serving_nodes": [
+     {
+      "machine_did": "did:tenzro:machine:serving-a",
+      "operator_did": "did:tenzro:human:operator",
+      "dpop_public_key": "",
+      "dpop_jkt": "",
+      "key_certification": "",
+      "sealing_public_key": ""
+     }
+    ],
+    "min_distinct_operators": 1,
+    "expires_at_ms": null,
+    "trifecta_exception": false,
+    "auto_approve": null,
+    "credentials": []
+   },
+   "target": {
+    "delegate": "af218db238a3528fae7b0a6c7867863755adca4bb1a1070ac1f6cc43ff006360",
+    "update": "b022aea1036b38bda5961db13f4a6a55845cd96a6829b0102f3f0d6330d4da43",
+    "update_rotate": "966fa15f0e43545311439c22c1182c657da4d94beac3453fc51f2f17738189a9"
    }
   },
   {
@@ -690,12 +783,15 @@
       {
        "asset": "usdc",
        "max_per_tx": "300",
-       "max_per_day": "1000"
+       "max_per_day": "1000",
+       "min_counterparty_kyc_tier": 0
       }
      ],
      "min_contract_assurance": 0,
      "allowed_contracts": [],
-     "governance": null
+     "governance": null,
+     "counterparty_kyc": null,
+     "max_split_fee_bps": null
     },
     "capabilities": [],
     "serving_nodes": [
@@ -759,7 +855,9 @@
      "asset_limits": [],
      "min_contract_assurance": 0,
      "allowed_contracts": [],
-     "governance": null
+     "governance": null,
+     "counterparty_kyc": null,
+     "max_split_fee_bps": null
     },
     "capabilities": [],
     "serving_nodes": [
@@ -782,6 +880,82 @@
     "delegate": "b38b13f3fe6e966beed732d54b8725531b287592c6bc5c324fa8b3024a5dcaf5",
     "update": "a82196be323904e11ca0481bc22025c3c2c9732559c12d616da82d6d713f3a70",
     "update_rotate": "daa2dc4cf0c65e5ad8430bb5b9158e1d3eb5f51812ad7d03a04138e98ebe864a"
+   }
+  },
+  {
+   "name": "kyc and split fee bounds",
+   "terms": {
+    "controller_did": "did:tenzro:human:controller",
+    "agent_name": "example",
+    "delegation_scope": {
+     "max_transaction_value": "1000",
+     "max_daily_spend": "5000",
+     "allowed_operations": [
+      "transfer",
+      "pay",
+      "create_escrow",
+      "refund_escrow",
+      "remote_grant",
+      "governance.vote",
+      "governance.veto_signal",
+      "settlement_plan",
+      "inference"
+     ],
+     "allowed_payment_protocols": [],
+     "allowed_chains": [
+      "tenzro",
+      "eip155:8453"
+     ],
+     "allowed_models": [],
+     "allowed_counterparties": [],
+     "max_hourly_spend": null,
+     "max_actions_per_hour": null,
+     "max_actions_per_day": null,
+     "allowed_hours_utc": null,
+     "step_up_above": null,
+     "step_up_new_counterparty": false,
+     "tainted_value_limit": null,
+     "remote_grant_ttl_ms": null,
+     "remote_limits": [],
+     "cosign_above": null,
+     "asset_limits": [
+      {
+       "asset": "0x2222222222222222222222222222222222222222222222222222222222222222",
+       "max_per_tx": null,
+       "max_per_day": "500",
+       "min_counterparty_kyc_tier": 1
+      }
+     ],
+     "min_contract_assurance": 0,
+     "allowed_contracts": [],
+     "governance": null,
+     "counterparty_kyc": {
+      "min_tier": 2,
+      "registry": "1111111111111111111111111111111111111111111111111111111111111111"
+     },
+     "max_split_fee_bps": 150
+    },
+    "capabilities": [],
+    "serving_nodes": [
+     {
+      "machine_did": "did:tenzro:machine:serving-a",
+      "operator_did": "did:tenzro:human:operator",
+      "dpop_public_key": "",
+      "dpop_jkt": "",
+      "key_certification": "",
+      "sealing_public_key": ""
+     }
+    ],
+    "min_distinct_operators": 1,
+    "expires_at_ms": null,
+    "trifecta_exception": false,
+    "auto_approve": null,
+    "credentials": []
+   },
+   "target": {
+    "delegate": "57953f190f3462712d7424c54e39a64eb80342ff24d451b6ce6fb635cbc08356",
+    "update": "4e94233fb38f6911ee0cfc19f1610b4bba411fc9432fb4f283531420cc4b629e",
+    "update_rotate": "2084192f8045a8666861fd6faf57c3083c849748ab114aa1b9284436df1fdfff"
    }
   }
  ]

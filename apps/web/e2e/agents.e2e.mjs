@@ -241,6 +241,8 @@ async function main() {
     await withNode(ctx, node);
     await ctx.addInitScript(
       ([account, credentialId, did, origin]) => {
+        // A popup starts as about:blank, whose opaque origin has no storage.
+        if (location.origin !== origin) return;
         if (!localStorage.getItem('tenzro.wallet.v2')) {
           localStorage.setItem(
             'tenzro.wallet.v2',
