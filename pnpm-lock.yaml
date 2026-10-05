@@ -133,6 +133,9 @@ importers:
       sonner:
         specifier: 2.0.7
         version: 2.0.7(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
+      tenzro-sdk:
+        specifier: file:../../../harness-sdk/sdk/tenzro-ts-sdk
+        version: file:../harness-sdk/sdk/tenzro-ts-sdk
       tenzro-wallet:
         specifier: workspace:*
         version: link:../../packages/wallet-kernel
