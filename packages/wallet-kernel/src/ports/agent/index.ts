@@ -80,7 +80,7 @@ export type { AcpClientLike } from './adapters/acp-adapter.ts';
 export type {
   AgentBondPort,
   AgentBondRecord,
-  AgentBondStatus,
+  AgentBondState,
   PostAgentBondRequest,
   IncreaseAgentBondRequest,
   WithdrawAgentBondRequest,

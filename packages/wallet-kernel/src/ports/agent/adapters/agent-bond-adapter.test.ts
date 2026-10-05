@@ -1,7 +1,6 @@
 /**
- * Pin AgentBond adapter — writes are the network's typed transactions, read methods
- * normalise snake/camel field shapes and status strings, return null on
- * unknown bond id.
+ * AgentBond adapter: writes are the network's typed transactions; reads decode
+ * the chain bond records the SDK returns.
  */
 
 import type { HybridSigner, TypedTransaction } from 'tenzro-sdk';
@@ -31,8 +30,8 @@ function fakeClient(overrides: Partial<BondClientLike> = {}): {
 } {
   const calls: { method: string; args: unknown[] }[] = [];
   const client: BondClientLike = {
-    getAgentBond: async (bondId) => {
-      calls.push({ method: 'getAgentBond', args: [bondId] });
+    getAgentBond: async (agentDid) => {
+      calls.push({ method: 'getAgentBond', args: [agentDid] });
       return null;
     },
     listAgentBondsByController: async (controllerDid) => {
@@ -59,7 +58,11 @@ describe('AgentBondSdkAdapter writes', () => {
     expect(hash).toBe('0xtxhash');
     expect(sent[0]).toEqual({
       kind: 'PostAgentBond',
-      fields: { agent_did: 'did:tenzro:agent:a', controller_did: 'did:tenzro:human:c', amount: 2e18 },
+      fields: {
+        agent_did: 'did:tenzro:agent:a',
+        controller_did: 'did:tenzro:human:c',
+        amount: 2e18,
+      },
     });
   });
 
@@ -75,113 +78,72 @@ describe('AgentBondSdkAdapter writes', () => {
   });
 });
 
+const BOND = {
+  agent_did: 'did:tenzro:agent:abc',
+  controller_did: 'did:tenzro:human:xyz',
+  amount: '5000000000000000000',
+  state: 'Active' as const,
+  cooldown_until_ms: null,
+  vault: 'aa'.repeat(20),
+};
+
 describe('AgentBondSdkAdapter.get', () => {
-  it('returns null on unknown bond id', async () => {
-    const { client } = fakeClient();
+  it('returns null for an agent with no bond', async () => {
+    const { client, calls } = fakeClient();
     const adapter = new AgentBondSdkAdapter(client, fakeSender().sender, signer);
-    expect(await adapter.get('0xdeadbeef')).toBeNull();
+    expect(await adapter.get('did:tenzro:agent:none')).toBeNull();
+    expect(calls).toEqual([{ method: 'getAgentBond', args: ['did:tenzro:agent:none'] }]);
   });
 
-  it('decodes snake_case fields, normalises active status', async () => {
-    const { client } = fakeClient({
-      getAgentBond: async () => ({
-        bond_id: '0xabc',
-        agent_did: 'did:tenzro:machine:0xctl:abc',
-        controller_did: 'did:tenzro:human:xyz',
-        controller: '0xctl',
-        amount: '5000000000000000000',
-        slashed_amount: '0',
-        status: 'Active',
-        posted_at: 1700000000,
-      }),
-    });
+  it('decodes the chain record', async () => {
+    const { client } = fakeClient({ getAgentBond: async () => BOND });
     const adapter = new AgentBondSdkAdapter(client, fakeSender().sender, signer);
-    const rec = await adapter.get('0xabc');
-    expect(rec).toEqual({
-      bondId: '0xabc',
-      agentDid: 'did:tenzro:machine:0xctl:abc',
-      controllerDid: 'did:tenzro:human:xyz',
-      controller: '0xctl',
+    expect(await adapter.get(BOND.agent_did)).toEqual({
+      agentDid: BOND.agent_did,
+      controllerDid: BOND.controller_did,
       amount: 5_000_000_000_000_000_000n,
-      slashedAmount: 0n,
-      status: 'active',
-      postedAt: 1700000000,
-      withdrawInitiatedAt: undefined,
-      cooldownEndsAt: undefined,
+      state: 'active',
+      cooldownUntilMs: null,
+      vault: BOND.vault,
     });
   });
 
-  it('decodes cooldown record with cooldown_ends_at', async () => {
+  it('carries the cooldown end of a withdrawal', async () => {
     const { client } = fakeClient({
       getAgentBond: async () => ({
-        bond_id: '0xabc',
-        agent_did: 'did:tenzro:machine:0xctl:abc',
-        controller: '0xctl',
-        amount: 1n.toString(),
-        status: 'cooldown',
-        posted_at: 1700000000,
-        withdraw_initiated_at: 1700100000,
-        cooldown_ends_at: 1700700000,
+        ...BOND,
+        state: 'Cooldown' as const,
+        cooldown_until_ms: 1700700000,
       }),
     });
     const adapter = new AgentBondSdkAdapter(client, fakeSender().sender, signer);
-    const rec = await adapter.get('0xabc');
-    expect(rec?.status).toBe('cooldown');
-    expect(rec?.withdrawInitiatedAt).toBe(1700100000);
-    expect(rec?.cooldownEndsAt).toBe(1700700000);
-  });
-
-  it('returns null when bond_id is missing', async () => {
-    const { client } = fakeClient({
-      getAgentBond: async () =>
-        ({
-          agent_did: 'did:tenzro:machine:0xctl:abc',
-        }) as unknown as null,
-    });
-    const adapter = new AgentBondSdkAdapter(client, fakeSender().sender, signer);
-    expect(await adapter.get('0xabc')).toBeNull();
+    const rec = await adapter.get(BOND.agent_did);
+    expect(rec?.state).toBe('cooldown');
+    expect(rec?.cooldownUntilMs).toBe(1700700000);
   });
 });
 
 describe('AgentBondSdkAdapter.listByController', () => {
-  it('returns [] for null/undefined response', async () => {
-    const { client } = fakeClient({
-      listAgentBondsByController: async () => null as never,
-    });
+  it('returns [] when the controller has posted none', async () => {
+    const { client } = fakeClient();
     const adapter = new AgentBondSdkAdapter(client, fakeSender().sender, signer);
     expect(await adapter.listByController('did:tenzro:human:xyz')).toEqual([]);
   });
 
-  it('decodes a list of bonds, dropping rows missing bond_id', async () => {
+  it('decodes every bond in the list', async () => {
     const { client } = fakeClient({
-      listAgentBondsByController: async () => ({
-        controller_did: 'did:tenzro:human:xyz',
-        count: 3,
-        aggregate_bond: '3',
-        bonds: [
-          {
-            bond_id: '0xa',
-            agent_did: 'did:tenzro:machine:0xctl:a',
-            controller: '0xctl',
-            amount: '1',
-            status: 'active',
-            posted_at: 1,
-          },
-          { agent_did: 'no-bond-id' }, // dropped
-          {
-            bond_id: '0xb',
-            agent_did: 'did:tenzro:machine:0xctl:b',
-            controller: '0xctl',
-            amount: '2',
-            status: 'slashed',
-            posted_at: 2,
-          },
-        ],
+      listAgentBondsByController: async (controllerDid) => ({
+        controller_did: controllerDid,
+        count: 2,
+        aggregate_bond: '5000000000000000000',
+        bonds: [BOND, { ...BOND, agent_did: 'did:tenzro:agent:def', state: 'Slashed' as const }],
       }),
     });
     const adapter = new AgentBondSdkAdapter(client, fakeSender().sender, signer);
     const list = await adapter.listByController('did:tenzro:human:xyz');
-    expect(list.map((r) => r.bondId)).toEqual(['0xa', '0xb']);
-    expect(list[1]?.status).toBe('slashed');
+    expect(list.map((b) => [b.agentDid, b.state])).toEqual([
+      ['did:tenzro:agent:abc', 'active'],
+      ['did:tenzro:agent:def', 'slashed'],
+    ]);
   });
 });

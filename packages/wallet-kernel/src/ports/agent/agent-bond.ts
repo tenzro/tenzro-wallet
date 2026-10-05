@@ -1,50 +1,27 @@
 /**
- * AgentBondPort — TNZO bonds posted by a controller against a specific
- * agent DID (Agent-Swarm Spec 9).
+ * AgentBondPort: the TNZO bond a controller posts against one agent.
  *
- * A bond locks TNZO into a deterministically-derived vault address
- * (`Address(SHA-256("tenzro/agent-bond/vault" || agent_did))`) and,
- * while Active and ≥ `bond_min_for_promotion`, promotes the bonded
- * agent to the Delegated admission lane. Withdrawal initiates a
- * cooldown timer; finalisation happens off-VM via the node-side
- * `BondManager` once `cooldown_ms` has elapsed.
- *
- * Per `reference_tenzro_architecture.md` and SDK `bond.ts`:
- *
- *   • PostAgentBond     selector 0x01000020, ~75k gas
- *   • IncreaseAgentBond selector 0x01000021, ~60k gas
- *   • WithdrawAgentBond selector 0x01000022, ~50k gas
- *
- * Writes are PostAgentBond/IncreaseAgentBond/WithdrawAgentBond typed
- * transactions the controller signs (`TypedTxClient.send`); the signer's
- * account is the controller wallet. Reads go through the SDK's `BondClient`.
+ * An agent's Terms require a bond of at least the network's share of their
+ * spend ceiling; a bond withdrawn below that stops the agent. The bond is
+ * locked in a vault derived from the agent DID and read from chain state.
+ * Writes are PostAgentBond / IncreaseAgentBond / WithdrawAgentBond typed
+ * transactions the controller signs; reads go through the SDK's `BondClient`.
  */
 
-export type AgentBondStatus = 'active' | 'cooldown' | 'withdrawn' | 'slashed';
+/** A bond's state in chain state. */
+export type AgentBondState = 'active' | 'cooldown' | 'slashed' | 'returned' | 'burned';
 
+/** One agent bond as chain state holds it; one bond per agent. */
 export interface AgentBondRecord {
-  /** 32-byte bond identifier (lowercase hex). */
-  readonly bondId: string;
-  /** DID of the bonded agent. */
   readonly agentDid: string;
-  /** DID of the controller that posted the bond. */
   readonly controllerDid: string;
-  /** Controller wallet address (the original `tx.from`). */
-  readonly controller: string;
-  /** Current bonded amount, in TNZO base units. */
+  /** Wei the bond holds. */
   readonly amount: bigint;
-  /** Total slashed-from-this-bond, in TNZO base units. */
-  readonly slashedAmount: bigint;
-  readonly status: AgentBondStatus;
-  /** Unix-ms when the bond was first posted. */
-  readonly postedAt: number;
-  /**
-   * Unix-ms when withdraw was initiated; only set when
-   * `status === 'cooldown'`. Funds release after this + cooldown_ms.
-   */
-  readonly withdrawInitiatedAt?: number;
-  /** Unix-ms when funds become withdrawable; only set when status === 'cooldown'. */
-  readonly cooldownEndsAt?: number;
+  readonly state: AgentBondState;
+  /** When a withdrawal's cooldown ends, ms; null when none is running. */
+  readonly cooldownUntilMs: number | null;
+  /** The bond vault, hex. */
+  readonly vault: string;
 }
 
 export interface PostAgentBondRequest {
@@ -78,7 +55,7 @@ export interface AgentBondPort {
   withdraw(req: WithdrawAgentBondRequest): Promise<string>;
 
   /** Inspect a bond by its 32-byte id. Returns null if unknown. */
-  get(bondId: string): Promise<AgentBondRecord | null>;
+  get(agentDid: string): Promise<AgentBondRecord | null>;
 
   /** Enumerate every bond posted by a controller DID. */
   listByController(controllerDid: string): Promise<AgentBondRecord[]>;
