@@ -17,3 +17,4 @@ export * from './recovery-kit.ts';
 export * from './rpc.ts';
 export * from './userop.ts';
 export * from './webauthn.ts';
+export * from './step-up.ts';

@@ -14,16 +14,26 @@ import * as React from 'react';
 import {
   POPUP_ERRORS,
   POPUP_PROTOCOL,
+  type PopupApproveAgentTerms,
   type PopupRequest,
   type PopupResponse,
   type PopupSendTransaction,
   type PopupSignSettlementPlan,
   isPopupRequest,
 } from 'tenzro-wallet';
-import { type OwnershipProof, type PasskeyEntryOptions, hexToBytes } from 'tenzro-wallet/custody';
+import {
+  type OwnershipProof,
+  type PasskeyEntryOptions,
+  type StepUpRequest,
+  hexToBytes,
+  parseStepUpRequest,
+} from 'tenzro-wallet/custody';
 
 import { LinkDeviceActions } from '@/components/wallet/link-device';
 import { PlanReview } from '@/components/wallet/plan-review';
+import { StepUpReview } from '@/components/wallet/step-up-review';
+import { TermsReview } from '@/components/wallet/terms-review';
+import { approveStepUp } from '@/lib/tenzro/agents';
 import { addConnection, isConnected, removeConnection } from '@/lib/tenzro/connections';
 import { TNZO_DECIMALS, formatBaseUnits, shortAddress } from '@/lib/tenzro/format';
 import { usePlatformPasskey, useWallet } from '@/lib/tenzro/hooks';
@@ -58,6 +68,26 @@ function isPlan(p: unknown): p is PopupSignSettlementPlan {
     plan.legs.length <= 16 &&
     Number.isInteger(plan.decide_deadline_ms)
   );
+}
+
+function isTerms(p: unknown): p is PopupApproveAgentTerms {
+  const v = p as Partial<PopupApproveAgentTerms> | null;
+  return (
+    !!v &&
+    (v.operation === 'delegate_agent' || v.operation === 'update_agent_terms') &&
+    typeof v.terms?.agent_name === 'string' &&
+    Array.isArray(v.terms.serving_nodes) &&
+    typeof v.challenge?.challenge_id === 'string' &&
+    typeof v.challenge.challenge_hex === 'string'
+  );
+}
+
+function stepUp(p: unknown): StepUpRequest | null {
+  try {
+    return parseStepUpRequest(p);
+  } catch {
+    return null;
+  }
 }
 
 function isSend(p: unknown): p is PopupSendTransaction {
@@ -153,6 +183,18 @@ export default function ApprovePage() {
           fields: { op: { open: params.plan } },
         });
         respond({ result: { signedTx } });
+      } else if (method === 'tenzro_approveAgentTerms') {
+        if (!isTerms(params)) throw new Error('The site sent invalid Terms.');
+        const authorization = await custody().approveAgentTerms(wallet, {
+          operation: params.operation,
+          terms: params.terms,
+          ...(params.rotate_tokens !== undefined ? { rotateTokens: params.rotate_tokens } : {}),
+          challenge: params.challenge,
+        });
+        respond({ result: { authorization } });
+      } else if (method === 'tenzro_approveAgentAction') {
+        const request = parseStepUpRequest(params);
+        respond({ result: { step_up: await approveStepUp(wallet, request) } });
       }
       window.close();
     } catch (e) {
@@ -205,6 +247,8 @@ export default function ApprovePage() {
   const needsConnection =
     (pending?.request.method === 'tenzro_sendTransaction' ||
       pending?.request.method === 'tenzro_signSettlementPlan' ||
+      pending?.request.method === 'tenzro_approveAgentTerms' ||
+      pending?.request.method === 'tenzro_approveAgentAction' ||
       pending?.request.method === 'tenzro_addWallet' ||
       pending?.request.method === 'tenzro_linkDevice') &&
     !connected;
@@ -326,7 +370,10 @@ export default function ApprovePage() {
               label={deviceName}
               onLinked={(linked) => {
                 respond({
-                  result: { credentialsTotal: linked.credentials_total, alreadyLinked: linked.already_linked === true },
+                  result: {
+                    credentialsTotal: linked.credentials_total,
+                    alreadyLinked: linked.already_linked === true,
+                  },
                 });
                 // A device that already held the passkey gets the explanation before the window closes.
                 if (!linked.already_linked) window.close();
@@ -347,7 +394,11 @@ export default function ApprovePage() {
                   ? 'Add a wallet?'
                   : pending.request.method === 'tenzro_signSettlementPlan'
                     ? 'Review this settlement plan'
-                    : 'Approve this payment?'}
+                    : pending.request.method === 'tenzro_approveAgentTerms'
+                      ? 'Approve these Terms for an agent?'
+                      : pending.request.method === 'tenzro_approveAgentAction'
+                        ? 'Your agent asks you to approve this action'
+                        : 'Approve this payment?'}
             </CardTitle>
             <CardDescription>
               <span className="font-mono">{pending.origin}</span>
@@ -366,6 +417,35 @@ export default function ApprovePage() {
                 <span className="font-mono">{wallet.did}</span>, approved with your passkey. The
                 site learns the new wallet's address.
               </p>
+            ) : pending.request.method === 'tenzro_approveAgentTerms' ? (
+              isTerms(pending.request.params) ? (
+                <>
+                  <TermsReview terms={pending.request.params.terms} />
+                  <p className="text-foreground-muted">
+                    {pending.request.params.operation === 'delegate_agent'
+                      ? 'The agent acts on your behalf within these Terms, on every node, until you revoke it.'
+                      : "These Terms replace the agent's current ones on every node."}{' '}
+                    The passkey your identity was created with approves them.
+                  </p>
+                </>
+              ) : (
+                <p className="text-danger">The site sent invalid Terms.</p>
+              )
+            ) : pending.request.method === 'tenzro_approveAgentAction' ? (
+              (() => {
+                const req = stepUp(pending.request.params);
+                return req ? (
+                  <>
+                    <StepUpReview action={req.action} />
+                    <p className="text-foreground-muted">
+                      The agent's Terms hold this action for you. Approving lets it take this one
+                      action, nothing else.
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-danger">The site sent an invalid action.</p>
+                );
+              })()
             ) : pending.request.method === 'tenzro_signSettlementPlan' ? (
               isPlan(pending.request.params) ? (
                 <PlanReview plan={pending.request.params.plan} />

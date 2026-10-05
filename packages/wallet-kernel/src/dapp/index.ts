@@ -40,6 +40,8 @@ export {
 export type {
   PopupAddWallet,
   PopupAddedWallet,
+  PopupApproveAgentAction,
+  PopupApproveAgentTerms,
   PopupConnectParams,
   PopupConnection,
   PopupHost,

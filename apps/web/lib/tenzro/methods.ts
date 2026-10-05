@@ -4,7 +4,6 @@
  */
 
 import type { SplitRule } from 'tenzro-sdk';
-import type { RawAgentTermsView } from 'tenzro-wallet/custody';
 
 import { rpcCall } from './rpc';
 
@@ -69,22 +68,6 @@ export function getUserOperationReceipt(
   return rpcCall('eth_getUserOperationReceipt', [hash]);
 }
 
-/**
- * Agents this identity roots, each with its consensus Terms, status and
- * spend so far (`tenzro_getAgentTerms`). A controlled machine that is not a
- * delegated agent has no Terms (the node answers null) and is left out.
- */
-export async function listDelegatedAgents(controllerDid: string): Promise<RawAgentTermsView[]> {
-  const res = await rpcCall<{
-    record?: { identity_data?: { Human?: { controlled_machines?: string[] } } };
-  }>('tenzro_resolveIdentity', { did: controllerDid, include_record: true });
-  const dids = res.record?.identity_data?.Human?.controlled_machines ?? [];
-  const views = await Promise.allSettled(
-    dids.map((did) => rpcCall<RawAgentTermsView | null>('tenzro_getAgentTerms', { agent_did: did })),
-  );
-  return views.flatMap((r) => (r.status === 'fulfilled' && r.value ? [r.value] : []));
-}
-
 /** The TNZO/USD rate fees are priced at, from consensus (`tenzro_getFeeRate`). */
 export interface FeeRate {
   /** USD per TNZO, in nano-USD, decimal string. */
@@ -109,7 +92,10 @@ export interface PaymentEntry {
 }
 
 /** Payments received by `payee`, newest last (`tenzro_listPayments`). */
-export function listPayouts(payee: string, limit = 25): Promise<{ payments: PaymentEntry[]; cursor: string | null }> {
+export function listPayouts(
+  payee: string,
+  limit = 25,
+): Promise<{ payments: PaymentEntry[]; cursor: string | null }> {
   return rpcCall('tenzro_listPayments', { payee, limit });
 }
 
@@ -125,7 +111,11 @@ export interface SplitPreview {
   readonly split_hash: string;
 }
 
-export function previewSplit(gross: bigint, split: SplitRule, networkFees = 0n): Promise<SplitPreview> {
+export function previewSplit(
+  gross: bigint,
+  split: SplitRule,
+  networkFees = 0n,
+): Promise<SplitPreview> {
   return rpcCall('tenzro_previewSplit', {
     gross: gross.toString(),
     split,

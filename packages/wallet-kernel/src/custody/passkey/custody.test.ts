@@ -6,15 +6,21 @@
 
 import { describe, expect, it } from 'vitest';
 
+import { agentTermsTarget } from '../../ports/agent/agent-terms.ts';
 import { fromHex, toHex } from './bytes.ts';
 import { SignatureContext, signingDigest, webauthnChallenge } from './composite.ts';
 import { PasskeyCustody, decodeRecoveryRequest, encodeRecoveryRequest } from './custody.ts';
 import { humanDidFromPasskey } from './derive.ts';
 import { passkeySigningDriver } from './driver.ts';
-import { custodyChallengeDigest } from './gate.ts';
-import { type GuardianCard, guardianTarget, recoveryApprovalChallenge, recoveryOpHash } from './guardian.ts';
 import { FakeAuthenticator, MockRpc, challengeDigest } from './fake-authenticator.fixture.ts';
-import { onboardDelegatedAgent, registerControlledMachine } from './machines.ts';
+import { custodyChallengeDigest } from './gate.ts';
+import {
+  type GuardianCard,
+  guardianTarget,
+  recoveryApprovalChallenge,
+  recoveryOpHash,
+} from './guardian.ts';
+import { agentActionDigest, agentWalletAccount } from './step-up.ts';
 import { PasskeyError } from './webauthn.ts';
 
 const ACCOUNT = '0x00000000000000000000000000000000000a11ce';
@@ -30,7 +36,11 @@ function nodeMock(extra: Record<string, (params: never) => unknown> = {}) {
   const credentialIds: string[] = [];
   const digests: Uint8Array[] = [];
   const rpc = new MockRpc({
-    tenzro_createCustodyChallenge: (p: { account_address: string; operation: string; target_hex?: string }) => {
+    tenzro_createCustodyChallenge: (p: {
+      account_address: string;
+      operation: string;
+      target_hex?: string;
+    }) => {
       n += 1;
       const nonce = new Uint8Array(16).fill(n);
       const target = p.target_hex ? fromHex(p.target_hex) : new Uint8Array(0);
@@ -135,7 +145,9 @@ describe('createWallet', () => {
     const clientData = JSON.parse(
       new TextDecoder().decode(new Uint8Array(authz.assertion.client_data_json as number[])),
     ) as { challenge: string };
-    expect(clientData.challenge).toBe(webauthnChallenge(SignatureContext.AccountOwner, digests[0]!));
+    expect(clientData.challenge).toBe(
+      webauthnChallenge(SignatureContext.AccountOwner, digests[0]!),
+    );
 
     expect(account.did).toBe(humanDidFromPasskey(cred.publicKey));
     expect(account.account).toBe(ACCOUNT);
@@ -208,7 +220,11 @@ describe('linkDevice', () => {
     auth.syncsExisting = true;
     auth.preferred = toHex(first.id);
 
-    const res = await custody.linkDevice({ account: account.account, label: 'iPhone', hints: ['hybrid'] });
+    const res = await custody.linkDevice({
+      account: account.account,
+      label: 'iPhone',
+      hints: ['hybrid'],
+    });
     expect(res.already_linked).toBe(true);
     expect(res.credential_id_hex).toBe(toHex(first.id, true));
     expect(res.credentials_total).toBe(1);
@@ -413,9 +429,9 @@ describe('recovery', () => {
     const auth = new FakeAuthenticator();
     const { rpc } = nodeMock();
     const custody = new PasskeyCustody({ rpc, authenticator: auth });
-    await expect(custody.startRecovery({ account: ACCOUNT, label: 'New phone' })).rejects.toBeInstanceOf(
-      PasskeyError,
-    );
+    await expect(
+      custody.startRecovery({ account: ACCOUNT, label: 'New phone' }),
+    ).rejects.toBeInstanceOf(PasskeyError);
   });
 
   it('adds a guardian from its card, approving exactly its key, provider, role and label', async () => {
@@ -452,7 +468,9 @@ describe('recovery', () => {
       'role',
       'threshold',
     ]);
-    expect(added?.guardian_p256_pubkey_hex).toBe(toHex(guardianDevice.credentials[0]!.publicKey, true));
+    expect(added?.guardian_p256_pubkey_hex).toBe(
+      toHex(guardianDevice.credentials[0]!.publicKey, true),
+    );
   });
 
   it('approves from the guardian device at the index its key holds', async () => {
@@ -467,8 +485,22 @@ describe('recovery', () => {
       threshold: 2,
       independent_roots: 2,
       members: [
-        { index: 0, p256_pubkey_hex: `0x${'05'.repeat(64)}`, role: 'device', aaguid: '0x', backup_eligible: false, backup_state: false },
-        { index: 1, p256_pubkey_hex: card.p256, role: 'recovery_key', aaguid: '0x', backup_eligible: false, backup_state: false },
+        {
+          index: 0,
+          p256_pubkey_hex: `0x${'05'.repeat(64)}`,
+          role: 'device',
+          aaguid: '0x',
+          backup_eligible: false,
+          backup_state: false,
+        },
+        {
+          index: 1,
+          p256_pubkey_hex: card.p256,
+          role: 'recovery_key',
+          aaguid: '0x',
+          backup_eligible: false,
+          backup_state: false,
+        },
       ],
     })) as (params: never) => unknown;
 
@@ -476,7 +508,10 @@ describe('recovery', () => {
     const [sub] = rpc.paramsOf('tenzro_submitRecoverySignature');
     expect(Object.keys(sub ?? {}).sort()).toEqual(['guardian_index', 'recovery_id', 'signature']);
     expect(sub?.guardian_index).toBe(1);
-    const sig = sub?.signature as { classical: { form: string; client_data_json: string }; pq?: unknown };
+    const sig = sub?.signature as {
+      classical: { form: string; client_data_json: string };
+      pq?: unknown;
+    };
     expect(sig.classical.form).toBe('web_authn');
     expect(sig.pq).toBeUndefined();
     const cd = JSON.parse(new TextDecoder().decode(fromHex(sig.classical.client_data_json))) as {
@@ -510,7 +545,12 @@ describe('recovery', () => {
       enroll_request: Record<string, unknown>;
       guardian_card: GuardianCard;
       other_guardian_card: GuardianCard;
-      add_guardian: { target_hex: string; nonce_hex: string; challenge_hex: string; request: Record<string, unknown> };
+      add_guardian: {
+        target_hex: string;
+        nonce_hex: string;
+        challenge_hex: string;
+        request: Record<string, unknown>;
+      };
       recovery: {
         recovery_id: string;
         expires_at_ms: number;
@@ -523,12 +563,15 @@ describe('recovery', () => {
     };
     if (process.env.TENZRO_WRITE_FIXTURES === '1') {
       const { rpc, custody, account, auth } = await enrolled();
-      rpc.handlers.tenzro_addGuardian = (() => ({ guardian_count: 2, threshold: 2 })) as (params: never) => unknown;
+      rpc.handlers.tenzro_addGuardian = (() => ({ guardian_count: 2, threshold: 2 })) as (
+        params: never,
+      ) => unknown;
       // Fake authenticators derive keys from a counter: skip ahead so every
       // passkey in the vectors is distinct.
       const fresh = async (skip: number) => {
         const a = new FakeAuthenticator();
-        for (let i = 0; i < skip; i++) await a.create({ userId: new Uint8Array(16), userName: 'skip' });
+        for (let i = 0; i < skip; i++)
+          await a.create({ userId: new Uint8Array(16), userName: 'skip' });
         return a;
       };
       const guardianDevice = await fresh(1);
@@ -537,17 +580,28 @@ describe('recovery', () => {
       const guardian = new PasskeyCustody({ rpc, authenticator: guardianDevice });
       const card = await guardian.createGuardian({ label: '  Sam (é) ', source: 'trusted_person' });
       guardianDevice.preferred = card.credentialId.replace(/^0x/, '').toLowerCase();
-      await custody.addGuardian({ account: account.account, card, threshold: 2, approver: { id: account.credentialId } });
+      await custody.addGuardian({
+        account: account.account,
+        card,
+        threshold: 2,
+        approver: { id: account.credentialId },
+      });
       const challenge = rpc.paramsOf('tenzro_createCustodyChallenge').at(-1)!;
       const nonce = new Uint8Array(16).fill(rpc.paramsOf('tenzro_createCustodyChallenge').length);
       const target = guardianTarget(card);
 
       const node = recoveryNode();
-      const { request } = await new PasskeyCustody({ rpc: node, authenticator: await fresh(2) }).startRecovery({
+      const { request } = await new PasskeyCustody({
+        rpc: node,
+        authenticator: await fresh(2),
+      }).startRecovery({
         account: ACCOUNT,
         label: 'New phone',
       });
-      const other = await new PasskeyCustody({ rpc: node, authenticator: await fresh(3) }).createGuardian({
+      const other = await new PasskeyCustody({
+        rpc: node,
+        authenticator: await fresh(3),
+      }).createGuardian({
         label: 'Other',
         source: 'security_key',
       });
@@ -584,7 +638,12 @@ describe('recovery', () => {
           target_hex: toHex(target, true),
           nonce_hex: toHex(nonce, true),
           challenge_hex: toHex(
-            custodyChallengeDigest(fromHex(account.account), String(challenge.operation), target, nonce),
+            custodyChallengeDigest(
+              fromHex(account.account),
+              String(challenge.operation),
+              target,
+              nonce,
+            ),
             true,
           ),
           request: rpc.paramsOf('tenzro_addGuardian')[0]!,
@@ -606,7 +665,15 @@ describe('recovery', () => {
     const target = guardianTarget(v.guardian_card);
     expect(toHex(target, true)).toBe(v.add_guardian.target_hex);
     expect(
-      toHex(custodyChallengeDigest(fromHex(v.account), 'add_guardian', target, fromHex(v.add_guardian.nonce_hex)), true),
+      toHex(
+        custodyChallengeDigest(
+          fromHex(v.account),
+          'add_guardian',
+          target,
+          fromHex(v.add_guardian.nonce_hex),
+        ),
+        true,
+      ),
     ).toBe(v.add_guardian.challenge_hex);
     const keys = [
       v.account_passkey_hex,
@@ -632,7 +699,10 @@ describe('recovery', () => {
 
   it('round-trips a recovery request as text and refuses anything else', async () => {
     const rpc = recoveryNode();
-    const { request } = await new PasskeyCustody({ rpc, authenticator: new FakeAuthenticator() }).startRecovery({
+    const { request } = await new PasskeyCustody({
+      rpc,
+      authenticator: new FakeAuthenticator(),
+    }).startRecovery({
       account: ACCOUNT,
       label: 'New phone',
     });
@@ -645,15 +715,27 @@ describe('recovery', () => {
     const recovering = new PasskeyCustody({ rpc, authenticator: new FakeAuthenticator() });
     const { request } = await recovering.startRecovery({ account: ACCOUNT, label: 'New phone' });
     const stranger = new FakeAuthenticator();
-    await new PasskeyCustody({ rpc, authenticator: stranger }).createGuardian({ label: 'X', source: 'own_passkey' });
+    await new PasskeyCustody({ rpc, authenticator: stranger }).createGuardian({
+      label: 'X',
+      source: 'own_passkey',
+    });
     rpc.handlers.tenzro_listGuardians = (() => ({
       threshold: 1,
       independent_roots: 1,
-      members: [{ index: 0, p256_pubkey_hex: `0x${'05'.repeat(64)}`, role: 'device', aaguid: '0x', backup_eligible: false, backup_state: false }],
+      members: [
+        {
+          index: 0,
+          p256_pubkey_hex: `0x${'05'.repeat(64)}`,
+          role: 'device',
+          aaguid: '0x',
+          backup_eligible: false,
+          backup_state: false,
+        },
+      ],
     })) as (params: never) => unknown;
-    await expect(new PasskeyCustody({ rpc, authenticator: stranger }).approveRecovery(request)).rejects.toBeInstanceOf(
-      PasskeyError,
-    );
+    await expect(
+      new PasskeyCustody({ rpc, authenticator: stranger }).approveRecovery(request),
+    ).rejects.toBeInstanceOf(PasskeyError);
     expect(rpc.paramsOf('tenzro_submitRecoverySignature')).toHaveLength(0);
   });
 
@@ -764,69 +846,170 @@ describe('passkeySigningDriver', () => {
   });
 });
 
-describe('agents and machines', () => {
-  const human = 'did:tenzro:human:a828941c-fe91-8250-af8b-a16527305188';
-  const scope = { maxTransactionValueWei: '1000', maxDailySpendWei: '5000' };
+describe('agents rooted in this identity', () => {
+  const AGENT = 'did:tenzro:agent:example';
 
-  it('onboards a delegated agent under a human controller with the node field names', async () => {
-    const rpc = new MockRpc({ tenzro_onboardDelegatedAgent: (p: unknown) => p });
-    await onboardDelegatedAgent(rpc, {
-      controllerDid: human,
-      pairing: { devicePublicKeyHex: `0x${'ab'.repeat(32)}`, machineId: 'tpm-ek-1' },
-      capabilities: ['inference'],
-      scope: { ...scope, allowedPaymentProtocols: ['x402'] },
-    });
-    const [p] = rpc.paramsOf('tenzro_onboardDelegatedAgent');
-    expect(p).toEqual({
-      controller_did: human,
-      device_public_key: 'ab'.repeat(32),
-      machine_id: 'tpm-ek-1',
-      capabilities: ['inference'],
-      delegation_scope: {
-        max_transaction_value: '1000',
-        max_daily_spend: '5000',
-        allowed_payment_protocols: ['x402'],
+  async function rooted(controller?: string) {
+    const env = await enrolled();
+    const cred = env.auth.credentials[0]!;
+    env.rpc.handlers.tenzro_getAccountRecord = () => ({
+      record: {
+        account_address: ACCOUNT,
+        credentials: [
+          {
+            credential_id_hex: toHex(cred.id, true),
+            p256_public_key_hex: toHex(cred.publicKey, true),
+          },
+        ],
       },
     });
-  });
-
-  it('never creates an agent without a human owner or a hardware key', async () => {
-    const rpc = new MockRpc({ tenzro_onboardDelegatedAgent: (p: unknown) => p });
-    const pairing = { devicePublicKeyHex: 'ab'.repeat(32), machineId: 'm' };
-    for (const controllerDid of ['self', 'did:tenzro:machine:1234', 'not-a-did']) {
-      await expect(
-        onboardDelegatedAgent(rpc, { controllerDid, pairing, capabilities: [], scope }),
-      ).rejects.toBeInstanceOf(PasskeyError);
-    }
-    await expect(
-      onboardDelegatedAgent(rpc, {
-        controllerDid: human,
-        pairing: { devicePublicKeyHex: '', machineId: 'm' },
-        capabilities: [],
-        scope,
-      }),
-    ).rejects.toBeInstanceOf(PasskeyError);
-    await expect(
-      onboardDelegatedAgent(rpc, {
-        controllerDid: human,
-        pairing,
-        capabilities: [],
-        scope: { maxTransactionValueWei: '1.5', maxDailySpendWei: '1' },
-      }),
-    ).rejects.toBeInstanceOf(PasskeyError);
-    expect(rpc.calls).toHaveLength(0);
-  });
-
-  it('registers a controlled machine with its device key', async () => {
-    const rpc = new MockRpc({ tenzro_registerMachineIdentity: (p: unknown) => p });
-    await registerControlledMachine(rpc, {
-      controllerDid: human,
-      devicePublicKeyHex: `0x${'cd'.repeat(32)}`,
-      capabilities: ['compute'],
-      scope,
+    env.rpc.handlers.tenzro_getAgentTerms = () => ({
+      agent_did: AGENT,
+      root_kind: 'passkey',
+      status: 'active',
+      terms: { controller_did: controller ?? env.account.did },
     });
-    const [p] = rpc.paramsOf('tenzro_registerMachineIdentity');
-    expect(p?.public_key).toBe('cd'.repeat(32));
-    expect(p?.controller_did).toBe(human);
+    return { ...env, cred };
+  }
+
+  function heldAction(amount = '501') {
+    const action = {
+      agent_did: AGENT,
+      machine_did: 'did:tenzro:machine:serving-a',
+      operation: 'transfer',
+      counterparty: 'ab'.repeat(20),
+      amount,
+      chain: 'tenzro',
+      nonce: 7,
+    };
+    const nonce = new Uint8Array(16).fill(5);
+    const target = agentActionDigest(action);
+    const account = agentWalletAccount(AGENT);
+    const digest = custodyChallengeDigest(account, 'agent_step_up', target, nonce);
+    return {
+      action,
+      digest,
+      step_up: {
+        controller_operation: 'agent_step_up',
+        account: toHex(account),
+        nonce: toHex(nonce),
+        target: toHex(target),
+        challenge_hex: toHex(digest),
+        webauthn_challenge: webauthnChallenge(SignatureContext.AccountOwner, digest),
+        action_nonce: 7,
+      },
+    };
+  }
+
+  it("approves a held action with the identity's passkey over the node's step-up digest", async () => {
+    const { custody, account, cred } = await rooted();
+    const { action, step_up, digest } = heldAction();
+    const out = await custody.approveAgentStepUp(account, { action, step_up });
+    expect(out.account).toBe(step_up.account);
+    expect(out.nonce).toBe(step_up.nonce);
+    expect(out.root_public_key).toBe(toHex(cred.publicKey));
+    expect(out.signature.classical.form).toBe('web_authn');
+    const client = JSON.parse(
+      new TextDecoder().decode(fromHex(out.signature.classical.client_data_json)),
+    );
+    expect(client.challenge).toBe(webauthnChallenge(SignatureContext.AccountOwner, digest));
+  });
+
+  it('signs nothing when the action shown is not the one the challenge binds', async () => {
+    const { custody, account, auth } = await rooted();
+    const { step_up } = heldAction('501');
+    const shown = heldAction('5').action;
+    let asked = 0;
+    const get = auth.get.bind(auth);
+    auth.get = async (o) => {
+      asked += 1;
+      return get(o);
+    };
+    await expect(
+      custody.approveAgentStepUp(account, { action: shown, step_up }),
+    ).rejects.toBeInstanceOf(PasskeyError);
+    expect(asked).toBe(0);
+  });
+
+  it('refuses an agent another identity roots', async () => {
+    const { custody, account } = await rooted('did:tenzro:human:someone-else');
+    const { action, step_up } = heldAction();
+    await expect(custody.approveAgentStepUp(account, { action, step_up })).rejects.toThrow(
+      /not rooted in this identity/,
+    );
+  });
+
+  const terms = (controller: string) => ({
+    controller_did: controller,
+    agent_name: 'example',
+    delegation_scope: { max_daily_spend: '5000' },
+    serving_nodes: [
+      { machine_did: 'did:tenzro:machine:serving-a', operator_did: 'did:tenzro:human:op' },
+    ],
+  });
+
+  function termsChallenge(account: string, completed: ReturnType<typeof terms>) {
+    const nonce = new Uint8Array(16).fill(9);
+    const target = agentTermsTarget(completed);
+    const digest = custodyChallengeDigest(fromHex(account), 'delegate_agent', target, nonce);
+    return {
+      challenge_id: 't1',
+      challenge_hex: toHex(digest, true),
+      nonce_hex: toHex(nonce, true),
+      target_hex: toHex(target, true),
+      expires_in_secs: 300,
+      delegation: completed,
+    };
+  }
+
+  it('approves the Terms the node completed with only serving-node keys added', async () => {
+    const { custody, account, cred } = await rooted();
+    const requested = terms(account.did);
+    const completed = {
+      ...requested,
+      serving_nodes: [{ ...requested.serving_nodes[0]!, dpop_public_key: 'cd'.repeat(32) }],
+    };
+    const authorization = await custody.approveAgentTerms(account, {
+      operation: 'delegate_agent',
+      terms: requested,
+      challenge: termsChallenge(account.account, completed),
+    });
+    expect(authorization.challenge_id).toBe('t1');
+    expect(authorization.credential_id_hex).toBe(toHex(cred.id, true));
+  });
+
+  it('refuses Terms the node changed, or Terms for another controller', async () => {
+    const { custody, account } = await rooted();
+    const requested = terms(account.did);
+    const widened = { ...requested, delegation_scope: { max_daily_spend: '9999' } };
+    await expect(
+      custody.approveAgentTerms(account, {
+        operation: 'delegate_agent',
+        terms: requested,
+        challenge: termsChallenge(account.account, widened),
+      }),
+    ).rejects.toThrow(/differ/);
+    const other = terms('did:tenzro:human:someone-else');
+    await expect(
+      custody.approveAgentTerms(account, {
+        operation: 'delegate_agent',
+        terms: other,
+        challenge: termsChallenge(account.account, other),
+      }),
+    ).rejects.toThrow(/another controller/);
+  });
+
+  it("revokes with the identity's passkey on the identity's account", async () => {
+    const { custody, account, rpc, cred } = await rooted();
+    rpc.handlers.tenzro_revokeIdentity = (p: unknown) => p;
+    await custody.revokeDelegatedAgent({ account, agentDid: AGENT });
+    const req = rpc.paramsOf('tenzro_createCustodyChallenge').at(-1);
+    expect(req?.operation).toBe('revoke_delegated_agent');
+    expect(req?.account_address).toBe(ACCOUNT);
+    const [revoke] = rpc.paramsOf('tenzro_revokeIdentity');
+    expect(revoke?.did).toBe(AGENT);
+    expect((revoke?.authorization as { credential_id_hex: string }).credential_id_hex).toBe(
+      toHex(cred.id, true),
+    );
   });
 });

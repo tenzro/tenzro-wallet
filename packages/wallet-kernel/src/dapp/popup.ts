@@ -14,6 +14,9 @@
 import type { EIP1193Provider } from 'tenzro-sdk';
 
 import type { OwnershipProof } from '../custody/passkey/custody.ts';
+import type { CustodyChallenge } from '../custody/passkey/gate.ts';
+import type { StepUpRequest } from '../custody/passkey/step-up.ts';
+import type { AgentTermsWire } from '../ports/agent/agent-terms.ts';
 
 export const POPUP_PROTOCOL = 'tenzro-wallet/popup/v1';
 export const DEFAULT_WALLET_URL = 'https://wallet.tenzro.com';
@@ -25,6 +28,8 @@ export type PopupMethod =
   | 'tenzro_addWallet'
   | 'tenzro_linkDevice'
   | 'tenzro_signSettlementPlan'
+  | 'tenzro_approveAgentTerms'
+  | 'tenzro_approveAgentAction'
   | 'tenzro_disconnect';
 
 export interface PopupRequest {
@@ -108,7 +113,10 @@ export interface PopupSignSettlementPlan {
     readonly nonce: number;
     readonly quote_digest: string;
     readonly split_hash: string;
-    readonly split: { readonly version: number; readonly lines: readonly Record<string, unknown>[] };
+    readonly split: {
+      readonly version: number;
+      readonly lines: readonly Record<string, unknown>[];
+    };
     readonly legs: readonly Record<string, unknown>[];
     readonly decide_deadline_ms: number;
   };
@@ -120,8 +128,34 @@ export const POPUP_METHODS: readonly PopupMethod[] = [
   'tenzro_addWallet',
   'tenzro_linkDevice',
   'tenzro_signSettlementPlan',
+  'tenzro_approveAgentTerms',
+  'tenzro_approveAgentAction',
   'tenzro_disconnect',
 ];
+
+/**
+ * Params of `tenzro_approveAgentTerms`: Terms for an agent the connected
+ * identity roots, and the challenge the node issued for them
+ * (`tenzro_createCustodyChallenge` with `delegate_agent` or
+ * `update_agent_terms`, carrying the completed Terms in `delegation`). The
+ * wallet shows the Terms and its identity passkey approves them; the result
+ * (`{ authorization }`) goes to `tenzro_onboardDelegatedAgent` or
+ * `tenzro_updateAgentTerms`.
+ */
+export interface PopupApproveAgentTerms {
+  readonly operation: 'delegate_agent' | 'update_agent_terms';
+  readonly terms: AgentTermsWire;
+  readonly rotate_tokens?: boolean;
+  readonly challenge: CustodyChallenge & { readonly delegation?: AgentTermsWire };
+}
+
+/**
+ * Params of `tenzro_approveAgentAction`: an action an agent's Terms held for
+ * the connected identity, as its serving node built it, and the `step_up`
+ * data `tenzro_agentAct` returned. The result (`{ step_up }`) is what the
+ * agent sends with the same action again.
+ */
+export type PopupApproveAgentAction = StepUpRequest;
 
 /** Error codes, following EIP-1193. */
 export const POPUP_ERRORS = {

@@ -27,10 +27,7 @@ import { transport } from './rpc';
 
 const STORAGE_KEY = 'tenzro.wallet.v2';
 
-export type StoredWallet = PasskeyAccount & {
-  /** Signed in with a passkey on another device (a phone over QR); this device holds none yet. */
-  readonly onAnotherDevice?: boolean;
-};
+export type StoredWallet = PasskeyAccount;
 
 /** A wallet just created or signed in to, with the ownership proof a site asked for. */
 export type EnteredWallet = StoredWallet & { readonly proof?: OwnershipProof };

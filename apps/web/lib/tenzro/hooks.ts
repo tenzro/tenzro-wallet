@@ -10,6 +10,7 @@ import { type UseQueryResult, useMutation, useQuery, useQueryClient } from '@tan
 import * as React from 'react';
 
 import type { PasskeyEntryOptions } from 'tenzro-wallet/custody';
+import { listRootedIdentities } from './agents';
 import {
   type TokenBalances,
   getBalance,
@@ -18,7 +19,6 @@ import {
   getFeeRate,
   getTokenBalance,
   getTransactionHistory,
-  listDelegatedAgents,
 } from './methods';
 
 import {
@@ -247,11 +247,11 @@ export function useDeviceActions(wallet: StoredWallet | null) {
   return { link, remove };
 }
 
-/** Agents this identity controls, with their daily limits. */
-export function useDelegatedAgents(did: string | undefined) {
+/** Agents (with their Terms) and machines this identity roots. */
+export function useRootedIdentities(did: string | undefined) {
   return useQuery({
-    queryKey: ['tenzro', 'delegated-agents', did],
-    queryFn: () => listDelegatedAgents(did as string),
+    queryKey: ['tenzro', 'rooted', did],
+    queryFn: () => listRootedIdentities(did as string),
     enabled: !!did,
     refetchInterval: 30_000,
   });
@@ -263,9 +263,10 @@ export function useUsdRate() {
     queryKey: ['tenzro', 'fee-rate'],
     queryFn: async () => {
       const r = await getFeeRate();
-      return /^\d+$/.test(r.rate_nano_usd) && r.rate_nano_usd !== '0' ? BigInt(r.rate_nano_usd) : null;
+      return /^\d+$/.test(r.rate_nano_usd) && r.rate_nano_usd !== '0'
+        ? BigInt(r.rate_nano_usd)
+        : null;
     },
     staleTime: 60_000,
   });
 }
-

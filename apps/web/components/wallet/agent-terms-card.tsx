@@ -1,12 +1,19 @@
 'use client';
 
-import { useMutation } from '@tanstack/react-query';
-import { Badge, Button, Card, CardContent, CardHeader, CardTitle } from '@tenzro/ui';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Input } from '@tenzro/ui';
 import * as React from 'react';
-import type { CredentialRef, RawAgentTermsView } from 'tenzro-wallet/custody';
+import type { RawAgentTermsView } from 'tenzro-wallet/custody';
 
-import { TNZO_DECIMALS, formatBaseUnits, shortDid, usdEstimate } from '@/lib/tenzro/format';
-import { custody } from '@/lib/tenzro/wallet';
+import { getAgentBond, updateAgentLimits } from '@/lib/tenzro/agents';
+import {
+  TNZO_DECIMALS,
+  formatBaseUnits,
+  shortDid,
+  tnzoToBaseUnits,
+  usdEstimate,
+} from '@/lib/tenzro/format';
+import { type StoredWallet, custody } from '@/lib/tenzro/wallet';
 
 type Scope = {
   max_transaction_value?: string | null;
@@ -20,7 +27,7 @@ type Scope = {
 
 const STATUS_TEXT: Record<RawAgentTermsView['status'], string> = {
   active: 'Active',
-  quarantined: 'Paused',
+  quarantined: 'Quarantined',
   revoked: 'Revoked',
   expired: 'Expired',
 };
@@ -37,7 +44,10 @@ function Amount({ wei, rate }: { readonly wei: string; readonly rate: bigint | n
   );
 }
 
-function Limit({ label, children }: { readonly label: string; readonly children: React.ReactNode }) {
+function Limit({
+  label,
+  children,
+}: { readonly label: string; readonly children: React.ReactNode }) {
   return (
     <div className="flex items-baseline justify-between gap-4 text-sm">
       <dt className="text-foreground-muted">{label}</dt>
@@ -46,35 +56,112 @@ function Limit({ label, children }: { readonly label: string; readonly children:
   );
 }
 
+/** TNZO typed by the person as wei; empty means no limit. */
+function limitWei(text: string): string | null {
+  const t = text.trim();
+  if (t === '') return null;
+  if (!/^\d+(\.\d{1,18})?$/.test(t)) throw new Error(`"${t}" is not an amount in TNZO.`);
+  return tnzoToBaseUnits(t);
+}
+
+const asTnzo = (wei: string | null | undefined) =>
+  wei ? formatBaseUnits(wei, TNZO_DECIMALS, 18) : '';
+
+/** Edits the three spend limits; the passkey approves the new Terms. */
+function LimitsEditor({
+  view,
+  scope,
+  wallet,
+  onDone,
+}: {
+  readonly view: RawAgentTermsView;
+  readonly scope: Scope;
+  readonly wallet: StoredWallet;
+  readonly onDone: (changed: boolean) => void;
+}) {
+  const [perPayment, setPerPayment] = React.useState(asTnzo(scope.max_transaction_value));
+  const [perHour, setPerHour] = React.useState(asTnzo(scope.max_hourly_spend));
+  const [perDay, setPerDay] = React.useState(asTnzo(scope.max_daily_spend));
+  const save = useMutation({
+    mutationFn: () =>
+      updateAgentLimits(wallet, view, {
+        perPayment: limitWei(perPayment),
+        perHour: limitWei(perHour),
+        perDay: limitWei(perDay),
+      }),
+    onSuccess: () => onDone(true),
+  });
+  const field = (label: string, value: string, set: (v: string) => void) => (
+    <label className="block space-y-1 text-sm">
+      <span className="text-foreground-muted">{label}, TNZO</span>
+      <Input
+        inputMode="decimal"
+        placeholder="No limit"
+        value={value}
+        onChange={(e) => set(e.target.value)}
+      />
+    </label>
+  );
+  return (
+    <div className="space-y-3 rounded-md border border-border p-3">
+      {field('Per payment', perPayment, setPerPayment)}
+      {field('Per hour', perHour, setPerHour)}
+      {field('Per day', perDay, setPerDay)}
+      <p className="text-xs text-foreground-muted">
+        Raising a limit may need a larger bond for this agent; the network refuses Terms its bond
+        does not cover.
+      </p>
+      <div className="flex gap-2">
+        <Button size="sm" disabled={save.isPending} onClick={() => save.mutate()}>
+          {save.isPending ? 'Approve with your passkey…' : 'Approve new limits'}
+        </Button>
+        <Button
+          variant="secondary"
+          size="sm"
+          disabled={save.isPending}
+          onClick={() => onDone(false)}
+        >
+          Cancel
+        </Button>
+      </div>
+      {save.error ? <p className="text-sm text-danger">{save.error.message}</p> : null}
+    </div>
+  );
+}
+
 /**
  * One delegated agent: its consensus Terms in TNZO with a USD estimate at the
- * network's fee rate, what it has spent, and the one action that ends it.
- * Revoking is approved with the passkey and takes effect on every node.
+ * network's fee rate, its bond, what it has spent, and the passkey actions on
+ * it: change its limits, or revoke it on every node.
  */
 export function AgentTermsCard({
   view,
   rate,
-  account,
-  approver,
-  onRevoked,
+  wallet,
+  onChanged,
 }: {
   readonly view: RawAgentTermsView;
   readonly rate: bigint | null;
-  readonly account: string;
-  readonly approver: CredentialRef;
-  readonly onRevoked: () => void;
+  readonly wallet: StoredWallet;
+  readonly onChanged: () => void;
 }) {
   const [confirming, setConfirming] = React.useState(false);
+  const [editing, setEditing] = React.useState(false);
   const scope = ((view.terms as { delegation_scope?: Scope }).delegation_scope ?? {}) as Scope;
   const name = (view.terms as { agent_name?: string }).agent_name ?? shortDid(view.agent_did);
+  const bond = useQuery({
+    queryKey: ['tenzro', 'agent-bond', view.agent_did],
+    queryFn: () => getAgentBond(view.agent_did),
+  });
   const revoke = useMutation({
-    mutationFn: () => custody().revokeDelegatedAgent({ account, agentDid: view.agent_did, approver }),
+    mutationFn: () => custody().revokeDelegatedAgent({ account: wallet, agentDid: view.agent_did }),
     onSuccess: () => {
       setConfirming(false);
-      onRevoked();
+      onChanged();
     },
   });
   const live = view.status === 'active' || view.status === 'quarantined';
+  const rootedHere = view.root_kind === 'passkey';
 
   return (
     <Card variant="raised" data-agent={view.agent_did}>
@@ -82,11 +169,17 @@ export function AgentTermsCard({
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <CardTitle className="truncate">{name}</CardTitle>
-            <p className="mt-1 truncate font-mono text-xs text-foreground-muted">{view.agent_did}</p>
+            <p className="mt-1 truncate font-mono text-xs text-foreground-muted">
+              {view.agent_did}
+            </p>
           </div>
           <div className="flex shrink-0 gap-2">
-            <Badge variant="outline">{view.root_kind === 'machine' ? 'Machine key' : 'Passkey'}</Badge>
-            <Badge variant={view.status === 'active' ? 'success' : 'outline'}>{STATUS_TEXT[view.status]}</Badge>
+            <Badge variant="outline">
+              {view.root_kind === 'machine' ? 'Machine key' : 'Passkey'}
+            </Badge>
+            <Badge variant={view.status === 'active' ? 'success' : 'outline'}>
+              {STATUS_TEXT[view.status]}
+            </Badge>
           </div>
         </div>
       </CardHeader>
@@ -115,8 +208,24 @@ export function AgentTermsCard({
               <Amount wei={view.spent.remaining_today} rate={rate} />
             </Limit>
           ) : null}
+          <Limit label="Bond">
+            {bond.data ? (
+              <>
+                <Amount wei={bond.data.amount} rate={rate} />
+                {bond.data.state !== 'Active' ? (
+                  <span className="text-foreground-muted"> ({bond.data.state})</span>
+                ) : null}
+              </>
+            ) : bond.isLoading ? (
+              '…'
+            ) : (
+              'None posted'
+            )}
+          </Limit>
           {scope.max_split_fee_bps != null ? (
-            <Limit label="Facilitator and relayer fees">at most {(scope.max_split_fee_bps / 100).toFixed(2)}%</Limit>
+            <Limit label="Facilitator and relayer fees">
+              at most {(scope.max_split_fee_bps / 100).toFixed(2)}%
+            </Limit>
           ) : null}
           {scope.allowed_chains && scope.allowed_chains.length > 0 ? (
             <Limit label="Networks">{scope.allowed_chains.join(', ')}</Limit>
@@ -129,29 +238,59 @@ export function AgentTermsCard({
         </dl>
         {rate !== null ? (
           <p className="text-xs text-foreground-muted">
-            US dollar amounts are estimates at the network's current TNZO rate; limits are held in TNZO.
+            US dollar amounts are estimates at the network's current TNZO rate; limits are held in
+            TNZO.
           </p>
         ) : null}
-        {live ? (
+        {live && rootedHere && editing ? (
+          <LimitsEditor
+            view={view}
+            scope={scope}
+            wallet={wallet}
+            onDone={(changed) => {
+              setEditing(false);
+              if (changed) onChanged();
+            }}
+          />
+        ) : null}
+        {live && rootedHere && !editing ? (
           confirming ? (
             <div className="space-y-2 rounded-md border border-danger/40 p-3">
               <p className="text-sm">
-                Revoke {name}? It stops at once on every node and every network it was granted, and cannot be undone.
+                Revoke {name}? It stops at once on every node and every network it was granted, and
+                cannot be undone.
               </p>
               <div className="flex gap-2">
-                <Button variant="danger" size="sm" disabled={revoke.isPending} onClick={() => revoke.mutate()}>
+                <Button
+                  variant="danger"
+                  size="sm"
+                  disabled={revoke.isPending}
+                  onClick={() => revoke.mutate()}
+                >
                   {revoke.isPending ? 'Approve with your passkey…' : 'Revoke with passkey'}
                 </Button>
-                <Button variant="secondary" size="sm" disabled={revoke.isPending} onClick={() => setConfirming(false)}>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={revoke.isPending}
+                  onClick={() => setConfirming(false)}
+                >
                   Keep
                 </Button>
               </div>
               {revoke.error ? <p className="text-sm text-danger">{revoke.error.message}</p> : null}
             </div>
           ) : (
-            <Button variant="outline" size="sm" onClick={() => setConfirming(true)}>
-              Revoke
-            </Button>
+            <div className="flex gap-2">
+              {view.status === 'active' ? (
+                <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
+                  Change limits
+                </Button>
+              ) : null}
+              <Button variant="outline" size="sm" onClick={() => setConfirming(true)}>
+                Revoke
+              </Button>
+            </div>
           )
         ) : null}
       </CardContent>

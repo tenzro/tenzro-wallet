@@ -1,0 +1,1104 @@
+{
+  "source": "sdk/fixtures/agent_terms/vectors.json check_action: AgentAction and AgentAction::digest from tenzro-types (amounts as decimal strings, as the RPC carries them); integers beyond 2^53 as decimal strings",
+  "cases": [
+    {
+      "name": "within terms",
+      "action": {
+        "agent_did": "did:tenzro:agent:example",
+        "machine_did": "did:tenzro:machine:serving-a",
+        "operation": "transfer",
+        "counterparty": "abababababababababababababababababababab",
+        "amount": "100",
+        "asset": null,
+        "usd_e6": 0,
+        "payment": null,
+        "chain": "tenzro",
+        "payment_protocol": null,
+        "model": null,
+        "calls": [],
+        "escrow": null,
+        "remote_grant": null,
+        "ballot": null,
+        "veto_signal": null,
+        "nonce": 7,
+        "tainted": false,
+        "step_up": null
+      },
+      "digest": "c4f677da1cffd0cd66ae386a4032b53b26ff3307faa879598de3eaa06b4dadfd"
+    },
+    {
+      "name": "operation not listed",
+      "action": {
+        "agent_did": "did:tenzro:agent:example",
+        "machine_did": "did:tenzro:machine:serving-a",
+        "operation": "stake",
+        "counterparty": "abababababababababababababababababababab",
+        "amount": "1",
+        "asset": null,
+        "usd_e6": 0,
+        "payment": null,
+        "chain": "tenzro",
+        "payment_protocol": null,
+        "model": null,
+        "calls": [],
+        "escrow": null,
+        "remote_grant": null,
+        "ballot": null,
+        "veto_signal": null,
+        "nonce": 7,
+        "tainted": false,
+        "step_up": null
+      },
+      "digest": "3c53da6945129da10566a0b2dd61422297a647f3f7186ba7c3772017e85cfa3c"
+    },
+    {
+      "name": "operation case-insensitive",
+      "action": {
+        "agent_did": "did:tenzro:agent:example",
+        "machine_did": "did:tenzro:machine:serving-a",
+        "operation": "TRANSFER",
+        "counterparty": "abababababababababababababababababababab",
+        "amount": "1",
+        "asset": null,
+        "usd_e6": 0,
+        "payment": null,
+        "chain": "tenzro",
+        "payment_protocol": null,
+        "model": null,
+        "calls": [],
+        "escrow": null,
+        "remote_grant": null,
+        "ballot": null,
+        "veto_signal": null,
+        "nonce": 7,
+        "tainted": false,
+        "step_up": null
+      },
+      "digest": "1242c28aee24bdf7b9fc65bee40152507afef9fc58b46fe0b53219ccaca142f0"
+    },
+    {
+      "name": "machine not a serving node",
+      "action": {
+        "agent_did": "did:tenzro:agent:example",
+        "machine_did": "did:tenzro:machine:other",
+        "operation": "transfer",
+        "counterparty": "abababababababababababababababababababab",
+        "amount": "1",
+        "asset": null,
+        "usd_e6": 0,
+        "payment": null,
+        "chain": "tenzro",
+        "payment_protocol": null,
+        "model": null,
+        "calls": [],
+        "escrow": null,
+        "remote_grant": null,
+        "ballot": null,
+        "veto_signal": null,
+        "nonce": 7,
+        "tainted": false,
+        "step_up": null
+      },
+      "digest": "c7048d3d403aff2a8058cf28430c6f62f7d9e7de7d948873f7443954f09ec828"
+    },
+    {
+      "name": "per-transaction limit",
+      "action": {
+        "agent_did": "did:tenzro:agent:example",
+        "machine_did": "did:tenzro:machine:serving-a",
+        "operation": "transfer",
+        "counterparty": "abababababababababababababababababababab",
+        "amount": "1001",
+        "asset": null,
+        "usd_e6": 0,
+        "payment": null,
+        "chain": "tenzro",
+        "payment_protocol": null,
+        "model": null,
+        "calls": [],
+        "escrow": null,
+        "remote_grant": null,
+        "ballot": null,
+        "veto_signal": null,
+        "nonce": 7,
+        "tainted": false,
+        "step_up": null
+      },
+      "digest": "5d0b8e5557443396000ba57e088afa692ef86673634c8f7170a9b50ae43b5fab"
+    },
+    {
+      "name": "daily limit",
+      "action": {
+        "agent_did": "did:tenzro:agent:example",
+        "machine_did": "did:tenzro:machine:serving-a",
+        "operation": "transfer",
+        "counterparty": "abababababababababababababababababababab",
+        "amount": "600",
+        "asset": null,
+        "usd_e6": 0,
+        "payment": null,
+        "chain": "tenzro",
+        "payment_protocol": null,
+        "model": null,
+        "calls": [],
+        "escrow": null,
+        "remote_grant": null,
+        "ballot": null,
+        "veto_signal": null,
+        "nonce": 7,
+        "tainted": false,
+        "step_up": null
+      },
+      "digest": "90d37e05457256d8dafa2ce5b095e8d3bf6a24c582887afc63dfec025078aaf0"
+    },
+    {
+      "name": "hourly limit",
+      "action": {
+        "agent_did": "did:tenzro:agent:example",
+        "machine_did": "did:tenzro:machine:serving-a",
+        "operation": "transfer",
+        "counterparty": "abababababababababababababababababababab",
+        "amount": "200",
+        "asset": null,
+        "usd_e6": 0,
+        "payment": null,
+        "chain": "tenzro",
+        "payment_protocol": null,
+        "model": null,
+        "calls": [],
+        "escrow": null,
+        "remote_grant": null,
+        "ballot": null,
+        "veto_signal": null,
+        "nonce": 7,
+        "tainted": false,
+        "step_up": null
+      },
+      "digest": "684ac4aff133047db46c5cf6fe8137078c8faae6337e570dca6a9744df0a7033"
+    },
+    {
+      "name": "actions per hour",
+      "action": {
+        "agent_did": "did:tenzro:agent:example",
+        "machine_did": "did:tenzro:machine:serving-a",
+        "operation": "transfer",
+        "counterparty": "abababababababababababababababababababab",
+        "amount": "1",
+        "asset": null,
+        "usd_e6": 0,
+        "payment": null,
+        "chain": "tenzro",
+        "payment_protocol": null,
+        "model": null,
+        "calls": [],
+        "escrow": null,
+        "remote_grant": null,
+        "ballot": null,
+        "veto_signal": null,
+        "nonce": 7,
+        "tainted": false,
+        "step_up": null
+      },
+      "digest": "bcb4f760c9aeaba343de388bfe962aa000b3b563df7b0656f1060d4508ece958"
+    },
+    {
+      "name": "chain not listed",
+      "action": {
+        "agent_did": "did:tenzro:agent:example",
+        "machine_did": "did:tenzro:machine:serving-a",
+        "operation": "transfer",
+        "counterparty": "abababababababababababababababababababab",
+        "amount": "1",
+        "asset": null,
+        "usd_e6": 0,
+        "payment": null,
+        "chain": "solana:mainnet",
+        "payment_protocol": null,
+        "model": null,
+        "calls": [],
+        "escrow": null,
+        "remote_grant": null,
+        "ballot": null,
+        "veto_signal": null,
+        "nonce": 7,
+        "tainted": false,
+        "step_up": null
+      },
+      "digest": "55e4bce1cf7a9437b4e9a9ba2bf16eae6a9a5129b86845a59b1cc6e60b529e1a"
+    },
+    {
+      "name": "counterparty not listed",
+      "action": {
+        "agent_did": "did:tenzro:agent:example",
+        "machine_did": "did:tenzro:machine:serving-a",
+        "operation": "transfer",
+        "counterparty": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+        "amount": "1",
+        "asset": null,
+        "usd_e6": 0,
+        "payment": null,
+        "chain": "tenzro",
+        "payment_protocol": null,
+        "model": null,
+        "calls": [],
+        "escrow": null,
+        "remote_grant": null,
+        "ballot": null,
+        "veto_signal": null,
+        "nonce": 7,
+        "tainted": false,
+        "step_up": null
+      },
+      "digest": "7a5523690e4f21798821e4f95738f083daa3031d83ca17fc038b5c5e5e966ffc"
+    },
+    {
+      "name": "model not listed",
+      "action": {
+        "agent_did": "did:tenzro:agent:example",
+        "machine_did": "did:tenzro:machine:serving-a",
+        "operation": "inference",
+        "counterparty": "",
+        "amount": "0",
+        "asset": null,
+        "usd_e6": 0,
+        "payment": null,
+        "chain": "tenzro",
+        "payment_protocol": null,
+        "model": "other-model",
+        "calls": [],
+        "escrow": null,
+        "remote_grant": null,
+        "ballot": null,
+        "veto_signal": null,
+        "nonce": 7,
+        "tainted": false,
+        "step_up": null
+      },
+      "digest": "a99e384b5b47149af3d2dcb758beec0fb5197201ef00bc91f25c39d9d8912838"
+    },
+    {
+      "name": "model listed",
+      "action": {
+        "agent_did": "did:tenzro:agent:example",
+        "machine_did": "did:tenzro:machine:serving-a",
+        "operation": "inference",
+        "counterparty": "",
+        "amount": "0",
+        "asset": null,
+        "usd_e6": 0,
+        "payment": null,
+        "chain": "tenzro",
+        "payment_protocol": null,
+        "model": "QWEN3.5-4B",
+        "calls": [],
+        "escrow": null,
+        "remote_grant": null,
+        "ballot": null,
+        "veto_signal": null,
+        "nonce": 7,
+        "tainted": false,
+        "step_up": null
+      },
+      "digest": "2c8a24a4fbd08fefd7ce4a8ab05bf8a712ad081229456f13353dfd415eb88ae4"
+    },
+    {
+      "name": "payment protocol not listed",
+      "action": {
+        "agent_did": "did:tenzro:agent:example",
+        "machine_did": "did:tenzro:machine:serving-a",
+        "operation": "transfer",
+        "counterparty": "abababababababababababababababababababab",
+        "amount": "1",
+        "asset": null,
+        "usd_e6": 0,
+        "payment": null,
+        "chain": "tenzro",
+        "payment_protocol": "x402",
+        "model": null,
+        "calls": [],
+        "escrow": null,
+        "remote_grant": null,
+        "ballot": null,
+        "veto_signal": null,
+        "nonce": 7,
+        "tainted": false,
+        "step_up": null
+      },
+      "digest": "a7c84e274034a6ad535b1ca4eae8e70bf9fcafc3bdc4577a0dbbe70316a2923c"
+    },
+    {
+      "name": "step-up above threshold",
+      "action": {
+        "agent_did": "did:tenzro:agent:example",
+        "machine_did": "did:tenzro:machine:serving-a",
+        "operation": "transfer",
+        "counterparty": "abababababababababababababababababababab",
+        "amount": "501",
+        "asset": null,
+        "usd_e6": 0,
+        "payment": null,
+        "chain": "tenzro",
+        "payment_protocol": null,
+        "model": null,
+        "calls": [],
+        "escrow": null,
+        "remote_grant": null,
+        "ballot": null,
+        "veto_signal": null,
+        "nonce": 7,
+        "tainted": false,
+        "step_up": null
+      },
+      "digest": "043738aff80462b111932a7252bbd00f0a378b61c124dfc162b18aa5bc17f618"
+    },
+    {
+      "name": "step-up new counterparty",
+      "action": {
+        "agent_did": "did:tenzro:agent:example",
+        "machine_did": "did:tenzro:machine:serving-a",
+        "operation": "transfer",
+        "counterparty": "abababababababababababababababababababab",
+        "amount": "10",
+        "asset": null,
+        "usd_e6": 0,
+        "payment": null,
+        "chain": "tenzro",
+        "payment_protocol": null,
+        "model": null,
+        "calls": [],
+        "escrow": null,
+        "remote_grant": null,
+        "ballot": null,
+        "veto_signal": null,
+        "nonce": 7,
+        "tainted": false,
+        "step_up": null
+      },
+      "digest": "73e4f33d7a5462b5d4c3e1689964658bc738ae118bb270af3a11e41ced819fa1"
+    },
+    {
+      "name": "tainted over limit",
+      "action": {
+        "agent_did": "did:tenzro:agent:example",
+        "machine_did": "did:tenzro:machine:serving-a",
+        "operation": "transfer",
+        "counterparty": "abababababababababababababababababababab",
+        "amount": "60",
+        "asset": null,
+        "usd_e6": 0,
+        "payment": null,
+        "chain": "tenzro",
+        "payment_protocol": null,
+        "model": null,
+        "calls": [],
+        "escrow": null,
+        "remote_grant": null,
+        "ballot": null,
+        "veto_signal": null,
+        "nonce": 7,
+        "tainted": true,
+        "step_up": null
+      },
+      "digest": "250f067b200c3dc5332c606ec371991c0da4d686ba9fbff3903c795b2bc2c8ec"
+    },
+    {
+      "name": "tainted new counterparty",
+      "action": {
+        "agent_did": "did:tenzro:agent:example",
+        "machine_did": "did:tenzro:machine:serving-a",
+        "operation": "transfer",
+        "counterparty": "abababababababababababababababababababab",
+        "amount": "40",
+        "asset": null,
+        "usd_e6": 0,
+        "payment": null,
+        "chain": "tenzro",
+        "payment_protocol": null,
+        "model": null,
+        "calls": [],
+        "escrow": null,
+        "remote_grant": null,
+        "ballot": null,
+        "veto_signal": null,
+        "nonce": 7,
+        "tainted": true,
+        "step_up": null
+      },
+      "digest": "e4685e5ddf2071f2ccd48a2d2dd78c3b072fc864913f0664dacde793877e54b2"
+    },
+    {
+      "name": "pay with payment",
+      "action": {
+        "agent_did": "did:tenzro:agent:example",
+        "machine_did": "did:tenzro:machine:serving-a",
+        "operation": "pay",
+        "counterparty": "abababababababababababababababababababab",
+        "amount": "100",
+        "asset": null,
+        "usd_e6": 0,
+        "payment": {
+          "payment_id": "run-1/step-2",
+          "request_digest": "1111111111111111111111111111111111111111111111111111111111111111",
+          "quote_digest": "2222222222222222222222222222222222222222222222222222222222222222"
+        },
+        "chain": "tenzro",
+        "payment_protocol": "mpp",
+        "model": null,
+        "calls": [],
+        "escrow": null,
+        "remote_grant": null,
+        "ballot": null,
+        "veto_signal": null,
+        "nonce": 7,
+        "tainted": false,
+        "step_up": null
+      },
+      "digest": "fc77d0e5b1c256d4395f075241af54b7da16973baa491c85176828d2a3685c7b"
+    },
+    {
+      "name": "pay without payment",
+      "action": {
+        "agent_did": "did:tenzro:agent:example",
+        "machine_did": "did:tenzro:machine:serving-a",
+        "operation": "pay",
+        "counterparty": "abababababababababababababababababababab",
+        "amount": "100",
+        "asset": null,
+        "usd_e6": 0,
+        "payment": null,
+        "chain": "tenzro",
+        "payment_protocol": "mpp",
+        "model": null,
+        "calls": [],
+        "escrow": null,
+        "remote_grant": null,
+        "ballot": null,
+        "veto_signal": null,
+        "nonce": 7,
+        "tainted": false,
+        "step_up": null
+      },
+      "digest": "328be81f4e3dc3f88572f8b0ed4125405a3f748c6e43c244503c911fd325f0ea"
+    },
+    {
+      "name": "pay of zero",
+      "action": {
+        "agent_did": "did:tenzro:agent:example",
+        "machine_did": "did:tenzro:machine:serving-a",
+        "operation": "pay",
+        "counterparty": "abababababababababababababababababababab",
+        "amount": "0",
+        "asset": null,
+        "usd_e6": 0,
+        "payment": {
+          "payment_id": "run-1/step-2",
+          "request_digest": "1111111111111111111111111111111111111111111111111111111111111111",
+          "quote_digest": "2222222222222222222222222222222222222222222222222222222222222222"
+        },
+        "chain": "tenzro",
+        "payment_protocol": "mpp",
+        "model": null,
+        "calls": [],
+        "escrow": null,
+        "remote_grant": null,
+        "ballot": null,
+        "veto_signal": null,
+        "nonce": 7,
+        "tainted": false,
+        "step_up": null
+      },
+      "digest": "58b4d04cbe7d2672d3422bf703d96bf9edc9f18030f6ed9b376ea3014142bee3"
+    },
+    {
+      "name": "pay with empty request digest",
+      "action": {
+        "agent_did": "did:tenzro:agent:example",
+        "machine_did": "did:tenzro:machine:serving-a",
+        "operation": "pay",
+        "counterparty": "abababababababababababababababababababab",
+        "amount": "100",
+        "asset": null,
+        "usd_e6": 0,
+        "payment": {
+          "payment_id": "run-1/step-2",
+          "request_digest": "0000000000000000000000000000000000000000000000000000000000000000",
+          "quote_digest": "2222222222222222222222222222222222222222222222222222222222222222"
+        },
+        "chain": "tenzro",
+        "payment_protocol": "mpp",
+        "model": null,
+        "calls": [],
+        "escrow": null,
+        "remote_grant": null,
+        "ballot": null,
+        "veto_signal": null,
+        "nonce": 7,
+        "tainted": false,
+        "step_up": null
+      },
+      "digest": "4c943f8de3b437a8ce65e682ddb0b13ae2cd0ac798f38eb98bca5e0f929f2b10"
+    },
+    {
+      "name": "create escrow",
+      "action": {
+        "agent_did": "did:tenzro:agent:example",
+        "machine_did": "did:tenzro:machine:serving-a",
+        "operation": "create_escrow",
+        "counterparty": "abababababababababababababababababababab",
+        "amount": "100",
+        "asset": null,
+        "usd_e6": 0,
+        "payment": null,
+        "chain": "tenzro",
+        "payment_protocol": null,
+        "model": null,
+        "calls": [],
+        "escrow": {
+          "create": {
+            "expires_at_ms": 1700003600000,
+            "release_conditions": "BothSignatures"
+          }
+        },
+        "remote_grant": null,
+        "ballot": null,
+        "veto_signal": null,
+        "nonce": 7,
+        "tainted": false,
+        "step_up": null
+      },
+      "digest": "ed9b16acdcfa8ac557199ffafaaa8027e5d41c20a84e810764d75cacfdb6a4b4"
+    },
+    {
+      "name": "refund escrow",
+      "action": {
+        "agent_did": "did:tenzro:agent:example",
+        "machine_did": "did:tenzro:machine:serving-a",
+        "operation": "refund_escrow",
+        "counterparty": "abababababababababababababababababababab",
+        "amount": "0",
+        "asset": null,
+        "usd_e6": 0,
+        "payment": null,
+        "chain": "tenzro",
+        "payment_protocol": null,
+        "model": null,
+        "calls": [],
+        "escrow": {
+          "refund": {
+            "escrow_id": [
+              51, 51, 51, 51, 51, 51, 51, 51, 51, 51, 51, 51, 51, 51, 51, 51, 51, 51, 51, 51, 51,
+              51, 51, 51, 51, 51, 51, 51, 51, 51, 51, 51
+            ]
+          }
+        },
+        "remote_grant": null,
+        "ballot": null,
+        "veto_signal": null,
+        "nonce": 7,
+        "tainted": false,
+        "step_up": null
+      },
+      "digest": "66e6269e96b61e2261189eb746a3848f032455cd7d59d9a1bb6cdc974957d213"
+    },
+    {
+      "name": "refund escrow with amount",
+      "action": {
+        "agent_did": "did:tenzro:agent:example",
+        "machine_did": "did:tenzro:machine:serving-a",
+        "operation": "refund_escrow",
+        "counterparty": "abababababababababababababababababababab",
+        "amount": "5",
+        "asset": null,
+        "usd_e6": 0,
+        "payment": null,
+        "chain": "tenzro",
+        "payment_protocol": null,
+        "model": null,
+        "calls": [],
+        "escrow": {
+          "refund": {
+            "escrow_id": [
+              51, 51, 51, 51, 51, 51, 51, 51, 51, 51, 51, 51, 51, 51, 51, 51, 51, 51, 51, 51, 51,
+              51, 51, 51, 51, 51, 51, 51, 51, 51, 51, 51
+            ]
+          }
+        },
+        "remote_grant": null,
+        "ballot": null,
+        "veto_signal": null,
+        "nonce": 7,
+        "tainted": false,
+        "step_up": null
+      },
+      "digest": "e9edbaf7c9f7ffa323e7c0804d06fa0324c4d09fe0835cfe88902bd3817caaab"
+    },
+    {
+      "name": "escrow operation without escrow",
+      "action": {
+        "agent_did": "did:tenzro:agent:example",
+        "machine_did": "did:tenzro:machine:serving-a",
+        "operation": "create_escrow",
+        "counterparty": "abababababababababababababababababababab",
+        "amount": "1",
+        "asset": null,
+        "usd_e6": 0,
+        "payment": null,
+        "chain": "tenzro",
+        "payment_protocol": null,
+        "model": null,
+        "calls": [],
+        "escrow": null,
+        "remote_grant": null,
+        "ballot": null,
+        "veto_signal": null,
+        "nonce": 7,
+        "tainted": false,
+        "step_up": null
+      },
+      "digest": "808e102a1cb42d33cf0f69c8cfd60bd21fa7d9a04a593d56bd307b61710be20b"
+    },
+    {
+      "name": "remote grant",
+      "action": {
+        "agent_did": "did:tenzro:agent:example",
+        "machine_did": "did:tenzro:machine:serving-a",
+        "operation": "remote_grant",
+        "counterparty": "",
+        "amount": "0",
+        "asset": null,
+        "usd_e6": 0,
+        "payment": null,
+        "chain": "eip155:8453",
+        "payment_protocol": null,
+        "model": null,
+        "calls": [],
+        "escrow": null,
+        "remote_grant": {
+          "caip19": "eip155:8453/erc20:0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+          "budget": "1000000",
+          "per_action_max": "250000",
+          "ttl_ms": 600000,
+          "targets": [
+            {
+              "target": "8383838383838383838383838383838383838383",
+              "selector": "a9059cbb"
+            }
+          ],
+          "payload_hash": "4444444444444444444444444444444444444444444444444444444444444444",
+          "relay_fee_max": "1000"
+        },
+        "ballot": null,
+        "veto_signal": null,
+        "nonce": 7,
+        "tainted": false,
+        "step_up": null
+      },
+      "digest": "0a9256fafcb3537c0dfc545f0fd5bb1f434fdfefceb81ad6ddedc442223f08b9"
+    },
+    {
+      "name": "remote grant on an unlisted chain",
+      "action": {
+        "agent_did": "did:tenzro:agent:example",
+        "machine_did": "did:tenzro:machine:serving-a",
+        "operation": "remote_grant",
+        "counterparty": "",
+        "amount": "0",
+        "asset": null,
+        "usd_e6": 0,
+        "payment": null,
+        "chain": "eip155:1",
+        "payment_protocol": null,
+        "model": null,
+        "calls": [],
+        "escrow": null,
+        "remote_grant": {
+          "caip19": "eip155:8453/erc20:0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+          "budget": "1000000",
+          "per_action_max": "250000",
+          "ttl_ms": 600000,
+          "targets": [
+            {
+              "target": "8383838383838383838383838383838383838383",
+              "selector": "a9059cbb"
+            }
+          ],
+          "payload_hash": "4444444444444444444444444444444444444444444444444444444444444444",
+          "relay_fee_max": "1000"
+        },
+        "ballot": null,
+        "veto_signal": null,
+        "nonce": 7,
+        "tainted": false,
+        "step_up": null
+      },
+      "digest": "c623e73939d8b3e756875f0ef7ac5eedd6ad61c6cf285f1292009c81e5bed640"
+    },
+    {
+      "name": "ballot",
+      "action": {
+        "agent_did": "did:tenzro:agent:example",
+        "machine_did": "did:tenzro:machine:serving-a",
+        "operation": "governance.vote",
+        "counterparty": "",
+        "amount": "0",
+        "asset": null,
+        "usd_e6": 0,
+        "payment": null,
+        "chain": "tenzro",
+        "payment_protocol": null,
+        "model": null,
+        "calls": [],
+        "escrow": null,
+        "remote_grant": null,
+        "ballot": {
+          "proposal_id": "prop-9",
+          "in_favour": true,
+          "validator": "did:tenzro:validator:v"
+        },
+        "veto_signal": null,
+        "nonce": 7,
+        "tainted": false,
+        "step_up": null
+      },
+      "digest": "dab39e1d502a53b3a7de509c4b6b50784ef9ba3919106f80ca86d541eef9cffb"
+    },
+    {
+      "name": "veto signal",
+      "action": {
+        "agent_did": "did:tenzro:agent:example",
+        "machine_did": "did:tenzro:machine:serving-a",
+        "operation": "governance.veto_signal",
+        "counterparty": "",
+        "amount": "10",
+        "asset": null,
+        "usd_e6": 0,
+        "payment": null,
+        "chain": "tenzro",
+        "payment_protocol": null,
+        "model": null,
+        "calls": [],
+        "escrow": null,
+        "remote_grant": null,
+        "ballot": null,
+        "veto_signal": "prop-9",
+        "nonce": 7,
+        "tainted": false,
+        "step_up": null
+      },
+      "digest": "dc80a8a7398027acb1ffb2ef35cc43ff5c3ed2aa2c75f89dca1c38512a57f60e"
+    },
+    {
+      "name": "settlement plan with counterparty",
+      "action": {
+        "agent_did": "did:tenzro:agent:example",
+        "machine_did": "did:tenzro:machine:serving-a",
+        "operation": "settlement_plan",
+        "counterparty": "abababababababababababababababababababab",
+        "amount": "10",
+        "asset": null,
+        "usd_e6": 0,
+        "payment": null,
+        "chain": "tenzro",
+        "payment_protocol": null,
+        "model": null,
+        "calls": [],
+        "escrow": null,
+        "remote_grant": null,
+        "ballot": null,
+        "veto_signal": null,
+        "nonce": 7,
+        "tainted": false,
+        "step_up": null
+      },
+      "digest": "1b130936913b15d1bb87256d5b6daa8652862fef33d99ddcd250419cb8c81b4b"
+    },
+    {
+      "name": "settlement plan",
+      "action": {
+        "agent_did": "did:tenzro:agent:example",
+        "machine_did": "did:tenzro:machine:serving-a",
+        "operation": "settlement_plan",
+        "counterparty": "",
+        "amount": "10",
+        "asset": null,
+        "usd_e6": 0,
+        "payment": null,
+        "chain": "tenzro",
+        "payment_protocol": null,
+        "model": null,
+        "calls": [],
+        "escrow": null,
+        "remote_grant": null,
+        "ballot": null,
+        "veto_signal": null,
+        "nonce": 7,
+        "tainted": false,
+        "step_up": null
+      },
+      "digest": "e7a8c846d89d107c5abd194352f1ffd2b1e35c2743bc4ad3b7acb3eb2a948dfe"
+    },
+    {
+      "name": "settlement plan in an unlisted asset",
+      "action": {
+        "agent_did": "did:tenzro:agent:example",
+        "machine_did": "did:tenzro:machine:serving-a",
+        "operation": "settlement_plan",
+        "counterparty": "",
+        "amount": "10",
+        "asset": "usdc",
+        "usd_e6": 10,
+        "payment": null,
+        "chain": "tenzro",
+        "payment_protocol": null,
+        "model": null,
+        "calls": [],
+        "escrow": null,
+        "remote_grant": null,
+        "ballot": null,
+        "veto_signal": null,
+        "nonce": 7,
+        "tainted": false,
+        "step_up": null
+      },
+      "digest": "8a4e3965f18b32dd5b2f09e1341984936ce916580e6563b23465051f45244425"
+    },
+    {
+      "name": "vm calls",
+      "action": {
+        "agent_did": "did:tenzro:agent:example",
+        "machine_did": "did:tenzro:machine:serving-a",
+        "operation": "transfer",
+        "counterparty": "",
+        "amount": "0",
+        "asset": null,
+        "usd_e6": 0,
+        "payment": null,
+        "chain": "tenzro",
+        "payment_protocol": null,
+        "model": null,
+        "calls": [
+          {
+            "vm": "evm",
+            "to": [
+              170, 170, 170, 170, 170, 170, 170, 170, 170, 170, 170, 170, 170, 170, 170, 170, 170,
+              170, 170, 170
+            ],
+            "value": 5,
+            "data": [1, 2, 3]
+          },
+          {
+            "vm": "svm",
+            "to": [
+              187, 187, 187, 187, 187, 187, 187, 187, 187, 187, 187, 187, 187, 187, 187, 187, 187,
+              187, 187, 187, 187, 187, 187, 187, 187, 187, 187, 187, 187, 187, 187, 187
+            ],
+            "value": 0,
+            "data": []
+          }
+        ],
+        "escrow": null,
+        "remote_grant": null,
+        "ballot": null,
+        "veto_signal": null,
+        "nonce": 7,
+        "tainted": false,
+        "step_up": null
+      },
+      "digest": "4c267bd24d2fc8a3e83522bba01f33a4453e2ea4a4a61bd7fdfa21cf819fc7f0"
+    },
+    {
+      "name": "asset with calls",
+      "action": {
+        "agent_did": "did:tenzro:agent:example",
+        "machine_did": "did:tenzro:machine:serving-a",
+        "operation": "transfer",
+        "counterparty": "",
+        "amount": "0",
+        "asset": "USDC",
+        "usd_e6": 0,
+        "payment": null,
+        "chain": "tenzro",
+        "payment_protocol": null,
+        "model": null,
+        "calls": [
+          {
+            "vm": "evm",
+            "to": [
+              170, 170, 170, 170, 170, 170, 170, 170, 170, 170, 170, 170, 170, 170, 170, 170, 170,
+              170, 170, 170
+            ],
+            "value": 5,
+            "data": [1, 2, 3]
+          },
+          {
+            "vm": "svm",
+            "to": [
+              187, 187, 187, 187, 187, 187, 187, 187, 187, 187, 187, 187, 187, 187, 187, 187, 187,
+              187, 187, 187, 187, 187, 187, 187, 187, 187, 187, 187, 187, 187, 187, 187
+            ],
+            "value": 0,
+            "data": []
+          }
+        ],
+        "escrow": null,
+        "remote_grant": null,
+        "ballot": null,
+        "veto_signal": null,
+        "nonce": 7,
+        "tainted": false,
+        "step_up": null
+      },
+      "digest": "773d06c30719c2ebb8b247fac53c0b228a0fcafb1e2599436d95a82b27489141"
+    },
+    {
+      "name": "asset within limits",
+      "action": {
+        "agent_did": "did:tenzro:agent:example",
+        "machine_did": "did:tenzro:machine:serving-a",
+        "operation": "transfer",
+        "counterparty": "abababababababababababababababababababab",
+        "amount": "200",
+        "asset": "USDC",
+        "usd_e6": 200000000,
+        "payment": null,
+        "chain": "tenzro",
+        "payment_protocol": null,
+        "model": null,
+        "calls": [],
+        "escrow": null,
+        "remote_grant": null,
+        "ballot": null,
+        "veto_signal": null,
+        "nonce": 7,
+        "tainted": false,
+        "step_up": null
+      },
+      "digest": "dc75b15c5f9a4a52f8848675010ea7b3968b84e23c5eb5969bd724f82f46b816"
+    },
+    {
+      "name": "asset per-transaction limit",
+      "action": {
+        "agent_did": "did:tenzro:agent:example",
+        "machine_did": "did:tenzro:machine:serving-a",
+        "operation": "transfer",
+        "counterparty": "abababababababababababababababababababab",
+        "amount": "301",
+        "asset": "USDC",
+        "usd_e6": 200000000,
+        "payment": null,
+        "chain": "tenzro",
+        "payment_protocol": null,
+        "model": null,
+        "calls": [],
+        "escrow": null,
+        "remote_grant": null,
+        "ballot": null,
+        "veto_signal": null,
+        "nonce": 7,
+        "tainted": false,
+        "step_up": null
+      },
+      "digest": "68008b2f6a18a31e641cc58e54e16ff27b7f30d95f7634b65565a8977fd8e21f"
+    },
+    {
+      "name": "asset without a price",
+      "action": {
+        "agent_did": "did:tenzro:agent:example",
+        "machine_did": "did:tenzro:machine:serving-a",
+        "operation": "transfer",
+        "counterparty": "abababababababababababababababababababab",
+        "amount": "200",
+        "asset": "USDC",
+        "usd_e6": 0,
+        "payment": null,
+        "chain": "tenzro",
+        "payment_protocol": null,
+        "model": null,
+        "calls": [],
+        "escrow": null,
+        "remote_grant": null,
+        "ballot": null,
+        "veto_signal": null,
+        "nonce": 7,
+        "tainted": false,
+        "step_up": null
+      },
+      "digest": "9e9bffd3b7f5ad384b3ddd5cf411a4adae88a37f74f583be7c56ab9705f17069"
+    },
+    {
+      "name": "asset without a limit",
+      "action": {
+        "agent_did": "did:tenzro:agent:example",
+        "machine_did": "did:tenzro:machine:serving-a",
+        "operation": "transfer",
+        "counterparty": "abababababababababababababababababababab",
+        "amount": "200",
+        "asset": "DAI",
+        "usd_e6": 200000000,
+        "payment": null,
+        "chain": "tenzro",
+        "payment_protocol": null,
+        "model": null,
+        "calls": [],
+        "escrow": null,
+        "remote_grant": null,
+        "ballot": null,
+        "veto_signal": null,
+        "nonce": 7,
+        "tainted": false,
+        "step_up": null
+      },
+      "digest": "60c786a6ec0fab681aad4b099e22f4d07aa3e0c10c69aa5613234aed0fa27bee"
+    },
+    {
+      "name": "amount beyond 2^53 at the limit",
+      "action": {
+        "agent_did": "did:tenzro:agent:example",
+        "machine_did": "did:tenzro:machine:serving-a",
+        "operation": "transfer",
+        "counterparty": "abababababababababababababababababababab",
+        "amount": "18446744073709551615",
+        "asset": null,
+        "usd_e6": 0,
+        "payment": null,
+        "chain": "tenzro",
+        "payment_protocol": null,
+        "model": null,
+        "calls": [],
+        "escrow": null,
+        "remote_grant": null,
+        "ballot": null,
+        "veto_signal": null,
+        "nonce": "18446744073709551615",
+        "tainted": false,
+        "step_up": null
+      },
+      "digest": "033983395574c14f0244b6171499b09daafd5b4ae87dbf512b93cf636b0c83f2"
+    },
+    {
+      "name": "kyc and split fee bounds",
+      "action": {
+        "agent_did": "did:tenzro:agent:example",
+        "machine_did": "did:tenzro:machine:serving-a",
+        "operation": "settlement_plan",
+        "counterparty": "abababababababababababababababababababab",
+        "amount": "1",
+        "asset": null,
+        "usd_e6": 0,
+        "payment": null,
+        "chain": "tenzro",
+        "payment_protocol": null,
+        "model": null,
+        "calls": [],
+        "escrow": null,
+        "remote_grant": null,
+        "ballot": null,
+        "veto_signal": null,
+        "nonce": 7,
+        "tainted": false,
+        "step_up": null
+      },
+      "digest": "06ece641484fd476283f67e8bfd6ef6b8ff9daca1bd6be7a054522ab056fe51d"
+    }
+  ]
+}

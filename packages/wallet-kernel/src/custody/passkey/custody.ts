@@ -18,13 +18,25 @@
 
 import { sha256 } from '@noble/hashes/sha2.js';
 
+import { type AgentTermsWire, agentTermsTarget } from '../../ports/agent/agent-terms.ts';
 import { fromHex, normalizeHex, randomBytes, toHex } from './bytes.ts';
-import { type CompositeSignatureJson, SignatureContext, compositeSignatureJson, signingDigest } from './composite.ts';
-import { humanDidFromPasskey, recoverAssertionPublicKeys } from './derive.ts';
+import {
+  type CompositeSignatureJson,
+  SignatureContext,
+  compositeSignatureJson,
+  signingDigest,
+} from './composite.ts';
+import {
+  humanDidFromPasskey,
+  normalizeP256PublicKey,
+  recoverAssertionPublicKeys,
+} from './derive.ts';
 import {
   type CustodyAuthorization,
+  type CustodyChallenge,
   type CustodyOperation,
   authorizeChallenge,
+  custodyChallengeDigest,
   requestCustodyChallenge,
 } from './gate.ts';
 import {
@@ -36,8 +48,10 @@ import {
   recoveryApprovalChallenge,
   recoveryOpHash,
 } from './guardian.ts';
+import { getAgentTerms } from './machines.ts';
 import { type DeviceSummary, type WalletReadiness, assessReadiness } from './readiness.ts';
 import type { JsonRpcTransport } from './rpc.ts';
+import { type AgentStepUp, type StepUpRequest, checkStepUp } from './step-up.ts';
 import {
   type CredentialRef,
   type PasskeyAuthenticator,
@@ -57,6 +71,8 @@ export interface PasskeyAccount {
   readonly transports: readonly string[];
   readonly tier?: PasskeyTier;
   readonly displayName?: string;
+  /** Signed in with a passkey on another device (a phone over QR); this device holds none. */
+  readonly onAnotherDevice?: boolean;
 }
 
 export interface EnrollPasskeyResult {
@@ -82,8 +98,13 @@ export interface AccountRecordCredential {
 export interface PasskeyTransactionSigner {
   p256PublicKey(): Uint8Array;
   mlDsaPublicKey(): Uint8Array | null;
-  signComposite(mPrime: Uint8Array): Promise<
-    [{ authenticatorData: Uint8Array; clientDataJson: Uint8Array; signature: Uint8Array }, Uint8Array | null]
+  signComposite(
+    mPrime: Uint8Array,
+  ): Promise<
+    [
+      { authenticatorData: Uint8Array; clientDataJson: Uint8Array; signature: Uint8Array },
+      Uint8Array | null,
+    ]
   >;
 }
 
@@ -287,7 +308,11 @@ export class PasskeyCustody {
         const found = await this.signIn({ ...opts, immediate: true });
         if (found.account) return { ...found, existing: true };
       } catch (err) {
-        if (!(err instanceof PasskeyError) || (err.kind !== 'cancelled' && err.kind !== 'not-found')) throw err;
+        if (
+          !(err instanceof PasskeyError) ||
+          (err.kind !== 'cancelled' && err.kind !== 'not-found')
+        )
+          throw err;
       }
     }
     const hints = opts.hints;
@@ -442,7 +467,9 @@ export class PasskeyCustody {
       this.listCredentialIds(account.account),
       this.getAccountRecord(account.account).catch(() => null),
     ]);
-    const recorded = new Map((record?.credentials ?? []).map((c) => [stripped(c.credential_id_hex), c]));
+    const recorded = new Map(
+      (record?.credentials ?? []).map((c) => [stripped(c.credential_id_hex), c]),
+    );
     return ids.map((id) => {
       const r = recorded.get(id);
       const thisDevice = id === stripped(account.credentialId);
@@ -526,7 +553,10 @@ export class PasskeyCustody {
       });
       const held = toHex(signed.credentialId);
       if (!existing.includes(held)) {
-        throw new PasskeyError('That device answered with a passkey from another account.', 'invalid');
+        throw new PasskeyError(
+          'That device answered with a passkey from another account.',
+          'invalid',
+        );
       }
       return {
         account_address: opts.account,
@@ -624,22 +654,16 @@ export class PasskeyCustody {
     if (!Number.isInteger(opts.salt) || opts.salt < 1) {
       throw new PasskeyError('A further wallet needs a salt of 1 or more.', 'invalid');
     }
-    const record = await this.getAccountRecord(account.account);
-    const root = record?.credentials?.find(
-      (c) =>
-        c.p256_public_key_hex &&
-        humanDidFromPasskey(fromHex(c.p256_public_key_hex)) === account.did,
+    const root = await this.#identityRoot(account);
+    const credential = root.credential;
+    const xyHex = `0x${toHex(root.publicKey)}`;
+    const credentialId = fromHex(credential.id);
+    const challenge = await requestCustodyChallenge(
+      this.rpc,
+      xyHex,
+      'enroll_passkey',
+      credentialId,
     );
-    if (!root?.p256_public_key_hex) {
-      throw new PasskeyError(
-        "The network does not list this identity's first passkey on the account.",
-        'not-found',
-      );
-    }
-    const credential: CredentialRef = { id: stripped(root.credential_id_hex) };
-    const xyHex = `0x${stripped(root.p256_public_key_hex)}`;
-    const credentialId = fromHex(root.credential_id_hex);
-    const challenge = await requestCustodyChallenge(this.rpc, xyHex, 'enroll_passkey', credentialId);
     const { authorization } = await authorizeChallenge(this.authenticator, challenge, [credential]);
     const enrolled = await this.rpc.call<EnrollPasskeyResult>('tenzro_enrollPasskey', {
       passkey_public_key_hex: xyHex,
@@ -775,23 +799,133 @@ export class PasskeyCustody {
   }
 
   /**
-   * Revokes a delegated agent this account roots: the passkey approves
-   * revoking exactly `agentDid`, and the node records the revocation in
-   * consensus, which every node, remote chain grant and web directory
-   * enforces from the same state.
+   * Revokes an agent or machine this identity roots: the identity's own
+   * passkey approves revoking exactly `did`, and the node records the
+   * revocation in consensus, which every node, remote chain grant and web
+   * directory enforces from the same state.
    */
   async revokeDelegatedAgent(opts: {
-    readonly account: string;
+    readonly account: PasskeyAccount;
     readonly agentDid: string;
-    readonly approver: CredentialRef;
-  }): Promise<{ tokens_revoked?: number; chain?: { submitted: boolean; tx_hash?: string; error?: string } }> {
-    const authorization = await this.#authorize(
-      opts.account,
+  }): Promise<{
+    tokens_revoked?: number;
+    chain?: { submitted: boolean; tx_hash?: string; error?: string };
+  }> {
+    const root = await this.#identityRoot(opts.account);
+    const challenge = await requestCustodyChallenge(
+      this.rpc,
+      opts.account.account,
       'revoke_delegated_agent',
       new TextEncoder().encode(opts.agentDid),
-      opts.approver,
+    );
+    const { authorization } = await authorizeChallenge(
+      this.authenticator,
+      challenge,
+      [root.credential],
+      {
+        ...(root.onThisDevice(opts.account) ? {} : { hybrid: true }),
+      },
     );
     return this.rpc.call('tenzro_revokeIdentity', { did: opts.agentDid, authorization });
+  }
+
+  /**
+   * Approves Terms for an agent this identity roots: creating it
+   * (`delegate_agent`) or replacing its Terms (`update_agent_terms`). The
+   * requester asked the node for the challenge; the node completed the Terms
+   * (serving nodes' keys only). The identity's own passkey signs only when the
+   * completed Terms are the requested ones and the challenge binds exactly
+   * them on this identity's account.
+   */
+  async approveAgentTerms(
+    account: PasskeyAccount,
+    req: {
+      readonly operation: 'delegate_agent' | 'update_agent_terms';
+      readonly terms: AgentTermsWire;
+      readonly rotateTokens?: boolean;
+      readonly challenge: CustodyChallenge & { readonly delegation?: AgentTermsWire };
+    },
+  ): Promise<CustodyAuthorization> {
+    if (req.terms.controller_did !== account.did) {
+      throw new PasskeyError('These Terms name another controller; nothing was signed.', 'invalid');
+    }
+    const completed = req.challenge.delegation;
+    if (!completed)
+      throw new PasskeyError(
+        'The challenge carries no completed Terms; nothing was signed.',
+        'invalid',
+      );
+    const rotate = req.operation === 'update_agent_terms' ? (req.rotateTokens ?? false) : undefined;
+    const target = agentTermsTarget(completed, rotate);
+    const expected = agentTermsTarget(
+      { ...req.terms, serving_nodes: completed.serving_nodes },
+      rotate,
+    );
+    const ids = (t: AgentTermsWire) =>
+      t.serving_nodes.map((n) => `${n.machine_did}|${n.operator_did}`).join(',');
+    if (toHex(target) !== toHex(expected) || ids(req.terms) !== ids(completed)) {
+      throw new PasskeyError(
+        'The node completed Terms that differ from the ones requested; nothing was signed.',
+        'invalid',
+      );
+    }
+    const nonce = fromHex(req.challenge.nonce_hex ?? '');
+    const digest = custodyChallengeDigest(fromHex(account.account), req.operation, target, nonce);
+    if (
+      nonce.length !== 16 ||
+      stripped(req.challenge.target_hex ?? '') !== toHex(target) ||
+      stripped(req.challenge.challenge_hex) !== toHex(digest)
+    ) {
+      throw new PasskeyError(
+        'The challenge is for different Terms or another account; nothing was signed.',
+        'invalid',
+      );
+    }
+    const root = await this.#identityRoot(account);
+    const { authorization } = await authorizeChallenge(
+      this.authenticator,
+      req.challenge,
+      [root.credential],
+      {
+        ...(root.onThisDevice(account) ? {} : { hybrid: true }),
+      },
+    );
+    return authorization;
+  }
+
+  /**
+   * Approves one action an agent's Terms held for this identity (step-up).
+   * The challenge must be the node's `agent_step_up` digest of exactly the
+   * action shown, the agent must be one this identity roots with a passkey,
+   * and the identity's own passkey signs. The agent sends the action again
+   * with the result as `step_up`.
+   */
+  async approveAgentStepUp(account: PasskeyAccount, req: StepUpRequest): Promise<AgentStepUp> {
+    const digest = checkStepUp(req);
+    const terms = await getAgentTerms(this.rpc, req.action.agent_did);
+    if (!terms)
+      throw new PasskeyError(`${req.action.agent_did} has no Terms on chain.`, 'not-found');
+    if (terms.root_kind !== 'passkey' || terms.terms.controller_did !== account.did) {
+      throw new PasskeyError(
+        'This agent is not rooted in this identity; nothing was signed.',
+        'invalid',
+      );
+    }
+    if (terms.status !== 'active') {
+      throw new PasskeyError(`This agent is ${terms.status}; nothing was signed.`, 'invalid');
+    }
+    const root = await this.#identityRoot(account);
+    const signer = await this.authenticator.get({
+      challenge: signingDigest(SignatureContext.AccountOwner, digest),
+      allow: [root.credential],
+      ...(root.onThisDevice(account) ? {} : { hybrid: true }),
+    });
+    return {
+      account: stripped(req.step_up.account),
+      nonce: stripped(req.step_up.nonce),
+      root_public_key: toHex(root.publicKey),
+      signature: compositeSignatureJson(signer),
+    };
   }
 
   /**
@@ -802,10 +936,15 @@ export class PasskeyCustody {
    */
   async transactionSigner(account: PasskeyAccount): Promise<PasskeyTransactionSigner> {
     const record = await this.getAccountRecord(account.account);
-    const own = record?.credentials?.find((c) => stripped(c.credential_id_hex) === stripped(account.credentialId));
+    const own = record?.credentials?.find(
+      (c) => stripped(c.credential_id_hex) === stripped(account.credentialId),
+    );
     const key = own?.p256_public_key_hex ? fromHex(own.p256_public_key_hex) : new Uint8Array(0);
     if (key.length !== 64) {
-      throw new PasskeyError('The account record names no P-256 key for this passkey.', 'not-found');
+      throw new PasskeyError(
+        'The account record names no P-256 key for this passkey.',
+        'not-found',
+      );
     }
     const authenticator = this.authenticator;
     const credential: CredentialRef = { id: account.credentialId, transports: account.transports };
@@ -830,8 +969,14 @@ export class PasskeyCustody {
 
   /** The account's guardians and threshold. Public. */
   async listGuardians(account: string): Promise<GuardianSet> {
-    const r = await this.rpc.call<GuardianSet>('tenzro_listGuardians', { account_address: account });
-    return { threshold: r.threshold, independent_roots: r.independent_roots, members: r.members ?? [] };
+    const r = await this.rpc.call<GuardianSet>('tenzro_listGuardians', {
+      account_address: account,
+    });
+    return {
+      threshold: r.threshold,
+      independent_roots: r.independent_roots,
+      members: r.members ?? [],
+    };
   }
 
   /**
@@ -875,7 +1020,9 @@ export class PasskeyCustody {
     readonly label: string;
     readonly ttlSecs?: number;
     readonly hints?: readonly PasskeyHint[];
-  }): Promise<RecoveryStarted & { readonly credentialId: string; readonly request: RecoveryRequest }> {
+  }): Promise<
+    RecoveryStarted & { readonly credentialId: string; readonly request: RecoveryRequest }
+  > {
     const created = await this.authenticator.create({
       userId: fromHex(opts.account).slice(-20),
       userName: opts.label,
@@ -978,12 +1125,17 @@ export class PasskeyCustody {
   }): Promise<GuardianCard> {
     const label = opts.label.trim();
     if (new TextEncoder().encode(label).length > MAX_GUARDIAN_LABEL_BYTES) {
-      throw new PasskeyError(`A guardian label is at most ${MAX_GUARDIAN_LABEL_BYTES} bytes.`, 'invalid');
+      throw new PasskeyError(
+        `A guardian label is at most ${MAX_GUARDIAN_LABEL_BYTES} bytes.`,
+        'invalid',
+      );
     }
     const created = await this.authenticator.create({
       userId: randomBytes(16),
       userName: `Tenzro guardian: ${label}`,
-      ...(opts.hints ? { hints: opts.hints, crossPlatform: opts.hints.includes('security-key') } : {}),
+      ...(opts.hints
+        ? { hints: opts.hints, crossPlatform: opts.hints.includes('security-key') }
+        : {}),
     });
     return {
       format: 'tenzro-guardian',
@@ -1019,7 +1171,10 @@ export class PasskeyCustody {
       stripped(pending.new_credential_id_hex) !== stripped(request.newCredentialIdHex) ||
       pending.expires_at_ms !== request.expiresAtMs
     ) {
-      throw new PasskeyError('This request does not match the recovery the network holds.', 'invalid');
+      throw new PasskeyError(
+        'This request does not match the recovery the network holds.',
+        'invalid',
+      );
     }
     const { members } = await this.listGuardians(request.account);
     if (members.length === 0) {
@@ -1032,7 +1187,10 @@ export class PasskeyCustody {
       recoveryId: request.recoveryId,
       expiresAtMs: request.expiresAtMs,
     });
-    const signed = await this.authenticator.get({ challenge: recoveryApprovalChallenge(opHash), allow: [] });
+    const signed = await this.authenticator.get({
+      challenge: recoveryApprovalChallenge(opHash),
+      allow: [],
+    });
     const a = signed.assertion;
     const candidates = recoverAssertionPublicKeys(
       new Uint8Array(a.authenticator_data),
@@ -1051,6 +1209,35 @@ export class PasskeyCustody {
   }
 
   // ── internals ─────────────────────────────────────────────────────────
+
+  /**
+   * The passkey this identity's DID derives from: the only key that roots its
+   * agents and opens further wallets. A linked device's passkey cannot.
+   */
+  async #identityRoot(account: PasskeyAccount): Promise<{
+    readonly credential: CredentialRef;
+    readonly publicKey: Uint8Array;
+    readonly onThisDevice: (a: PasskeyAccount) => boolean;
+  }> {
+    const record = await this.getAccountRecord(account.account);
+    const root = record?.credentials?.find(
+      (c) =>
+        c.p256_public_key_hex &&
+        humanDidFromPasskey(fromHex(c.p256_public_key_hex)) === account.did,
+    );
+    if (!root?.p256_public_key_hex) {
+      throw new PasskeyError(
+        "The network does not list this identity's first passkey on the account.",
+        'not-found',
+      );
+    }
+    const id = stripped(root.credential_id_hex);
+    return {
+      credential: { id },
+      publicKey: normalizeP256PublicKey(fromHex(root.p256_public_key_hex)),
+      onThisDevice: (a) => !a.onAnotherDevice && stripped(a.credentialId) === id,
+    };
+  }
 
   async #authorize(
     account: string,
