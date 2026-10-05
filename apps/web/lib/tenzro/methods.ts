@@ -3,6 +3,9 @@
  * wallet uses. Everything here is a read; no session token is involved.
  */
 
+import type { SplitRule } from 'tenzro-sdk';
+import type { RawAgentTermsView } from 'tenzro-wallet/custody';
+
 import { rpcCall } from './rpc';
 
 /** Latest block height, 0x-prefixed hex. */
@@ -66,42 +69,66 @@ export function getUserOperationReceipt(
   return rpcCall('eth_getUserOperationReceipt', [hash]);
 }
 
-/** An AP2 mandate: an agent allowed to pay on this account's behalf, within limits. */
-/** An agent this identity controls, with the daily limit its terms set. */
-export interface DelegatedAgent {
-  readonly agent_did: string;
-  /** Base units; null when the terms set no daily limit. */
-  readonly max_daily_spend: string | null;
-  /** Base units spent today. */
-  readonly current_daily_spend: string;
-}
-
 /**
- * Agents this identity controls: the controlled DIDs on its identity record,
- * each with the spend its on-chain terms allow today. A controlled machine
- * that is not an agent has no terms (the node answers null) and is left out.
+ * Agents this identity roots, each with its consensus Terms, status and
+ * spend so far (`tenzro_getAgentTerms`). A controlled machine that is not a
+ * delegated agent has no Terms (the node answers null) and is left out.
  */
-export async function listDelegatedAgents(controllerDid: string): Promise<DelegatedAgent[]> {
+export async function listDelegatedAgents(controllerDid: string): Promise<RawAgentTermsView[]> {
   const res = await rpcCall<{
     record?: { identity_data?: { Human?: { controlled_machines?: string[] } } };
   }>('tenzro_resolveIdentity', { did: controllerDid, include_record: true });
   const dids = res.record?.identity_data?.Human?.controlled_machines ?? [];
-  const spends = await Promise.allSettled(
-    dids.map((did) =>
-      rpcCall<{ max_daily_spend?: string | null; current_daily_spend?: string } | null>(
-        'tenzro_getAgentDailySpend',
-        { agent_did: did },
-      ),
-    ),
+  const views = await Promise.allSettled(
+    dids.map((did) => rpcCall<RawAgentTermsView | null>('tenzro_getAgentTerms', { agent_did: did })),
   );
-  const out: DelegatedAgent[] = [];
-  spends.forEach((r, i) => {
-    if (r.status !== 'fulfilled' || r.value === null) return;
-    out.push({
-      agent_did: dids[i] as string,
-      max_daily_spend: r.value.max_daily_spend ?? null,
-      current_daily_spend: r.value.current_daily_spend ?? '0',
-    });
+  return views.flatMap((r) => (r.status === 'fulfilled' && r.value ? [r.value] : []));
+}
+
+/** The TNZO/USD rate fees are priced at, from consensus (`tenzro_getFeeRate`). */
+export interface FeeRate {
+  /** USD per TNZO, in nano-USD, decimal string. */
+  readonly rate_nano_usd: string;
+  readonly mode?: string;
+}
+
+export function getFeeRate(): Promise<FeeRate> {
+  return rpcCall<FeeRate>('tenzro_getFeeRate', {});
+}
+
+/** The standing split every payment to `payee` is divided by, `null` when none. */
+export function getPayeeSplit(payee: string): Promise<{ rule: SplitRule | null }> {
+  return rpcCall('tenzro_getPayeeSplit', { payee });
+}
+
+/** One consensus payment record from the event index. */
+export interface PaymentEntry {
+  readonly cursor: string;
+  readonly tx_hash: string;
+  readonly record: Record<string, unknown>;
+}
+
+/** Payments received by `payee`, newest last (`tenzro_listPayments`). */
+export function listPayouts(payee: string, limit = 25): Promise<{ payments: PaymentEntry[]; cursor: string | null }> {
+  return rpcCall('tenzro_listPayments', { payee, limit });
+}
+
+/** The split engine's division of `gross` under `split`, as the chain makes it (`tenzro_previewSplit`). */
+export interface SplitPreview {
+  readonly allocation: {
+    readonly gross: string;
+    readonly fee: { fee: string; burn: string; treasury: string; insurance: string };
+    readonly network_fees: string;
+    readonly net: string;
+    readonly credits: string[];
+  };
+  readonly split_hash: string;
+}
+
+export function previewSplit(gross: bigint, split: SplitRule, networkFees = 0n): Promise<SplitPreview> {
+  return rpcCall('tenzro_previewSplit', {
+    gross: gross.toString(),
+    split,
+    network_fees: networkFees.toString(),
   });
-  return out;
 }

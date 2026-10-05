@@ -15,6 +15,7 @@ import {
   getBalance,
   getBlockNumber,
   getChainId,
+  getFeeRate,
   getTokenBalance,
   getTransactionHistory,
   listDelegatedAgents,
@@ -255,3 +256,16 @@ export function useDelegatedAgents(did: string | undefined) {
     refetchInterval: 30_000,
   });
 }
+
+/** The TNZO/USD rate consensus prices fees at, nano-USD per TNZO; null while unknown. */
+export function useUsdRate() {
+  return useQuery({
+    queryKey: ['tenzro', 'fee-rate'],
+    queryFn: async () => {
+      const r = await getFeeRate();
+      return /^\d+$/.test(r.rate_nano_usd) && r.rate_nano_usd !== '0' ? BigInt(r.rate_nano_usd) : null;
+    },
+    staleTime: 60_000,
+  });
+}
+

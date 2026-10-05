@@ -49,6 +49,7 @@ export type {
   PopupRequest,
   PopupResponse,
   PopupSendTransaction,
+  PopupSignSettlementPlan,
   PopupWindow,
 } from './popup.ts';
 

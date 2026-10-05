@@ -10,7 +10,7 @@
 
 'use client';
 
-import { Activity, Bot, Building2, Cable, Compass, Send, Settings, Wallet } from 'lucide-react';
+import { Activity, Bot, Building2, Cable, Compass, Send, Settings, Split, Wallet } from 'lucide-react';
 import { motion } from 'motion/react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -30,6 +30,7 @@ const groups = [
     label: 'Agentic',
     items: [
       { href: '/agents', label: 'Agents', icon: Bot },
+      { href: '/publisher', label: 'Publisher', icon: Split },
       { href: '/connect', label: 'Connections', icon: Cable },
     ],
   },

@@ -62,3 +62,13 @@ export function shortDid(did: string, tail = 6): string {
   if (last.length <= tail + 3) return did;
   return `${parts.slice(0, -1).join(':')}:…${last.slice(-tail)}`;
 }
+
+/**
+ * The USD value of `wei` TNZO at `rateNanoUsd` (nano-USD per TNZO, the rate
+ * consensus prices fees at): `wei * rate / 1e27`, to the cent, rounded down.
+ * An estimate: the rate moves every epoch.
+ */
+export function usdEstimate(wei: bigint, rateNanoUsd: bigint): string {
+  const cents = (wei * rateNanoUsd) / 10n ** 25n;
+  return `$${(cents / 100n).toLocaleString('en-US')}.${(cents % 100n).toString().padStart(2, '0')}`;
+}

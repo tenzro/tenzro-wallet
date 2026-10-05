@@ -1,0 +1,396 @@
+/**
+ * Browser test of the agent, publisher and settlement-plan screens against a
+ * built wallet and a mocked node. Chromium's virtual WebAuthn authenticator
+ * (CDP) holds the account passkey, so each approval is a real
+ * navigator.credentials call, and every signature the mock node receives is
+ * verified as the node verifies it.
+ *
+ * Covers: an agent's Terms in TNZO with a USD estimate, revoking it with the
+ * passkey; publisher mode (standing split, preview, setting it with a
+ * passkey-signed Payment transaction, payouts); and the plan review a site
+ * asks for before the passkey signs a settlement plan's open transaction.
+ *
+ * Needs the app built with NEXT_PUBLIC_TENZRO_RP_ID=localhost and
+ * NEXT_PUBLIC_TENZRO_RPC_URL=http://rpc.test.invalid/ and served at BASE_URL.
+ * Run: `node e2e/agents.e2e.mjs`.
+ */
+
+import assert from 'node:assert/strict';
+import { createHash, createPublicKey, generateKeyPairSync, randomBytes, verify } from 'node:crypto';
+
+import { chromium } from 'playwright';
+import {
+  TRANSACTION_SIGNATURE_CONTEXT,
+  accountAddress,
+  compositeMessageRepresentative,
+  previewSplit as localPreview,
+} from 'tenzro-sdk';
+import { SignatureContext, custodyChallengeDigest, hexToBytes, webauthnChallenge } from 'tenzro-wallet/custody';
+
+const BASE = process.env.BASE_URL ?? 'http://localhost:3917';
+const RPC = 'http://rpc.test.invalid/';
+const ACCOUNT = `0x${'ac'.repeat(20)}`;
+const HUMAN = 'did:tenzro:human:e2e';
+const AGENT = 'did:tenzro:machine:e2e:shopper';
+const RATE_NANO_USD = '2500000000'; // 2.50 USD per TNZO
+const FEE_PARAMS = { fee_bps: 30, min_fee: '0', burn_bps: 5000, insurance_bps: 1000 };
+
+const hex = (b) => `0x${Buffer.from(b).toString('hex')}`;
+const b64u = (b) => Buffer.from(b).toString('base64url');
+
+function randomP256() {
+  const { publicKey, privateKey } = generateKeyPairSync('ec', { namedCurve: 'P-256' });
+  const jwk = publicKey.export({ format: 'jwk' });
+  const xy = Buffer.concat([Buffer.from(jwk.x, 'base64url'), Buffer.from(jwk.y, 'base64url')]);
+  return { xy, pkcs8: privateKey.export({ format: 'der', type: 'pkcs8' }) };
+}
+
+/** Verifies a WebAuthn assertion by the P-256 key `xy` over `challenge` (base64url). */
+function verifyAssertion({ authenticatorData, clientDataJson, signature }, xy, challenge, what) {
+  const cd = JSON.parse(Buffer.from(clientDataJson).toString('utf8'));
+  assert.equal(cd.type, 'webauthn.get', `${what}: ceremony`);
+  assert.equal(cd.challenge, challenge, `${what}: challenge`);
+  assert.equal(cd.origin, new URL(BASE).origin, `${what}: origin`);
+  const ad = Buffer.from(authenticatorData);
+  assert.ok(ad.subarray(0, 32).equals(createHash('sha256').update('localhost').digest()), `${what}: rpIdHash`);
+  const key = createPublicKey({
+    format: 'jwk',
+    key: { kty: 'EC', crv: 'P-256', x: xy.subarray(0, 32).toString('base64url'), y: xy.subarray(32).toString('base64url') },
+  });
+  const signed = Buffer.concat([ad, createHash('sha256').update(Buffer.from(clientDataJson)).digest()]);
+  assert.ok(verify('sha256', signed, key, Buffer.from(signature)), `${what}: signature`);
+}
+
+/** The challenge a passkey signs for a transaction digest: base64url(SHA-256(M')). */
+async function txChallenge(digestHex) {
+  const mPrime = await compositeMessageRepresentative(TRANSACTION_SIGNATURE_CONTEXT, hexToBytes(digestHex));
+  return b64u(createHash('sha256').update(mPrime).digest());
+}
+
+function mockNode(accountKey, credId) {
+  const calls = [];
+  const challenges = new Map();
+  const payloads = new Map();
+  let n = 0;
+  const node = { calls, revoked: false, split: null, sent: [] };
+  const terms = {
+    controller_did: HUMAN,
+    agent_name: 'shopper',
+    delegation_scope: {
+      max_transaction_value: '4000000000000000000',
+      max_daily_spend: '20000000000000000000',
+      allowed_operations: ['pay', 'settlement_plan'],
+      allowed_chains: ['tenzro', 'base'],
+      max_split_fee_bps: 150,
+    },
+    serving_nodes: [],
+  };
+  const handlers = {
+    eth_chainId: () => '0x539',
+    tenzro_getNonce: () => '0x7',
+    tenzro_resolveIdentity: () => ({ record: { identity_data: { Human: { controlled_machines: [AGENT] } } } }),
+    tenzro_getAgentTerms: (p) => {
+      assert.equal(p.agent_did, AGENT);
+      return {
+        agent_did: AGENT,
+        root_kind: 'passkey',
+        status: node.revoked ? 'revoked' : 'active',
+        version: 2,
+        approval_digest: 'ab'.repeat(32),
+        updated_at_ms: 1,
+        terms,
+        spent: {
+          today: '6000000000000000000',
+          this_hour: '0',
+          actions_today: 3,
+          actions_this_hour: 0,
+          remaining_today: '14000000000000000000',
+          remaining_this_hour: null,
+          assets: [],
+        },
+      };
+    },
+    tenzro_getFeeRate: () => ({ rate_nano_usd: RATE_NANO_USD, mode: 'oracle' }),
+    tenzro_getAccountRecord: () => ({
+      record: {
+        account_address: ACCOUNT,
+        credentials: [{ credential_id_hex: credId.toString('hex'), p256_public_key_hex: hex(accountKey.xy) }],
+      },
+    }),
+    tenzro_getPayeeSplit: () => ({ rule: node.split }),
+    tenzro_listPayments: (p) => ({
+      payments: [{ cursor: '1', tx_hash: `0x${'12'.repeat(32)}`, record: { amount: '3000000000000000000', payee: p.payee } }],
+      cursor: null,
+    }),
+    tenzro_previewSplit: (p) => ({
+      allocation: localPreview(BigInt(p.gross), p.split, FEE_PARAMS, BigInt(p.network_fees ?? '0')),
+      split_hash: '00',
+    }),
+    tenzro_createCustodyChallenge: (p) => {
+      n += 1;
+      const nonce = randomBytes(16);
+      const target = hexToBytes(p.target_hex ?? '0x');
+      const digest = custodyChallengeDigest(hexToBytes(p.account_address), p.operation, target, nonce);
+      challenges.set(`c${n}`, { ...p, digest });
+      return {
+        challenge_id: `c${n}`,
+        challenge_hex: hex(digest),
+        webauthn_challenge: webauthnChallenge(SignatureContext.AccountOwner, digest),
+        nonce_hex: hex(nonce),
+        target_hex: hex(target),
+        expires_in_secs: 300,
+      };
+    },
+    tenzro_revokeIdentity: (p) => {
+      const c = challenges.get(p.authorization.challenge_id);
+      assert.ok(c, 'revoke: a challenge the node issued');
+      assert.equal(c.operation, 'revoke_delegated_agent');
+      assert.equal(Buffer.from(hexToBytes(c.target_hex)).toString('utf8'), AGENT, 'revoke: target is the agent DID');
+      assert.equal(p.did, AGENT);
+      const a = p.authorization.assertion;
+      verifyAssertion(
+        { authenticatorData: a.authenticator_data, clientDataJson: a.client_data_json, signature: a.signature },
+        accountKey.xy,
+        webauthnChallenge(SignatureContext.AccountOwner, c.digest),
+        'revoke',
+      );
+      node.revoked = true;
+      return { tokens_revoked: 1, chain: { submitted: true, tx_hash: '0x01' } };
+    },
+    tenzro_getSigningPayload: (p) => {
+      const preimage = JSON.stringify({
+        chain_id: p.chain_id,
+        from: p.from.slice(2),
+        to: p.to.slice(2),
+        nonce: p.nonce,
+        gas_limit: p.gas_limit,
+        gas_price: p.gas_price,
+        timestamp: p.timestamp,
+        valid_until: p.valid_until,
+        action: p.tx_type,
+      });
+      const digest = createHash('sha256').update(preimage).digest('hex');
+      payloads.set(digest, p);
+      return { kind: 'typed_action', digest, preimage };
+    },
+    tenzro_sendRawTransaction: (p) => {
+      node.sent.push(p);
+      if (p.tx_type?.Payment?.op?.set_split) node.split = p.tx_type.Payment.op.set_split.rule;
+      return `0x${'34'.repeat(32)}`;
+    },
+  };
+  node.answer = (method, params) => {
+    calls.push({ method, params });
+    const h = handlers[method];
+    if (!h) throw new Error(`unmocked ${method}`);
+    return h(params);
+  };
+  node.payloads = payloads;
+  return node;
+}
+
+async function withNode(context, node) {
+  await context.route(`${RPC}**`, async (route) => {
+    const req = route.request();
+    const cors = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': 'POST, OPTIONS' };
+    if (req.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: cors });
+    const body = req.postDataJSON();
+    let payload;
+    try {
+      payload = { jsonrpc: '2.0', id: body.id, result: node.answer(body.method, body.params) };
+    } catch (e) {
+      payload = { jsonrpc: '2.0', id: body.id, error: { code: -32000, message: String(e) } };
+    }
+    return route.fulfill({ status: 200, headers: { ...cors, 'content-type': 'application/json' }, body: JSON.stringify(payload) });
+  });
+}
+
+/** Checks a passkey-signed transaction the way the node does: the WebAuthn leg over the payload digest. */
+async function verifyTx(node, sent, xy, what) {
+  const sig = sent.signature.classical;
+  assert.equal(sig.form, 'web_authn', `${what}: passkey form`);
+  assert.equal(sent.public_key, xy.toString('hex'), `${what}: public key`);
+  assert.equal(sent.from, hex(await accountAddress(new Uint8Array(xy))), `${what}: from the passkey's account`);
+  const digest = [...node.payloads.keys()].find((d) => node.payloads.get(d).timestamp === sent.timestamp);
+  assert.ok(digest, `${what}: a payload the node issued`);
+  verifyAssertion(
+    {
+      authenticatorData: Buffer.from(sig.authenticator_data, 'hex'),
+      clientDataJson: Buffer.from(sig.client_data_json, 'hex'),
+      signature: Buffer.from(sig.signature, 'hex'),
+    },
+    xy,
+    await txChallenge(digest),
+    what,
+  );
+}
+
+async function main() {
+  const browser = await chromium.launch();
+  let passed = 0;
+  const step = async (name, fn) => {
+    await fn();
+    passed += 1;
+    console.log(`ok - ${name}`);
+  };
+  try {
+    const accountKey = randomP256();
+    const credId = randomBytes(16);
+    const node = mockNode(accountKey, credId);
+    const ctx = await browser.newContext();
+    await withNode(ctx, node);
+    await ctx.addInitScript(
+      ([account, credentialId, did, origin]) => {
+        if (!localStorage.getItem('tenzro.wallet.v2')) {
+          localStorage.setItem(
+            'tenzro.wallet.v2',
+            JSON.stringify({ did, account, credentialId, transports: ['internal'], tier: 'device-bound' }),
+          );
+          localStorage.setItem(
+            'tenzro.wallet.connections.v1',
+            JSON.stringify([{ origin, account, connectedAt: Date.now() }]),
+          );
+        }
+      },
+      [ACCOUNT, credId.toString('hex'), HUMAN, new URL(BASE).origin],
+    );
+    const errors = [];
+    ctx.on('page', (p) => p.on('pageerror', (e) => errors.push(String(e))));
+    /** Gives `p` a virtual platform authenticator holding the account passkey. */
+    const holdPasskey = async (p) => {
+      const cdp = await ctx.newCDPSession(p);
+      await cdp.send('WebAuthn.enable', { enableUI: false });
+      const { authenticatorId } = await cdp.send('WebAuthn.addVirtualAuthenticator', {
+        options: { protocol: 'ctap2', transport: 'internal', hasResidentKey: true, hasUserVerification: true, isUserVerified: true, automaticPresenceSimulation: true },
+      });
+      await cdp.send('WebAuthn.addCredential', {
+        authenticatorId,
+        credential: {
+          credentialId: credId.toString('base64'),
+          isResidentCredential: true,
+          rpId: 'localhost',
+          privateKey: accountKey.pkcs8.toString('base64'),
+          userHandle: Buffer.from(ACCOUNT.slice(2), 'hex').toString('base64'),
+          signCount: 0,
+        },
+      });
+    };
+    const page = await ctx.newPage();
+    await holdPasskey(page);
+
+    await step('agents: Terms in TNZO with a labelled USD estimate', async () => {
+      await page.goto(`${BASE}/agents`);
+      const card = page.locator(`[data-agent="${AGENT}"]`);
+      await card.waitFor();
+      const text = await card.innerText();
+      assert.match(text, /shopper/);
+      assert.match(text, /Passkey/);
+      assert.match(text, /Per payment\s*4 TNZO \(about \$10\.00\)/);
+      assert.match(text, /Per day\s*20 TNZO \(about \$50\.00\)/);
+      assert.match(text, /Spent today\s*6 TNZO \(about \$15\.00\)/);
+      assert.match(text, /Left today\s*14 TNZO/);
+      assert.match(text, /at most 1\.50%/);
+      assert.match(text, /estimates at the network's current TNZO rate/);
+    });
+
+    await step('agents: one revoke, approved with the passkey', async () => {
+      const card = page.locator(`[data-agent="${AGENT}"]`);
+      await card.getByRole('button', { name: 'Revoke', exact: true }).click();
+      await card.getByRole('button', { name: 'Revoke with passkey' }).click();
+      await card.getByText('Revoked', { exact: true }).waitFor({ timeout: 30_000 });
+      assert.ok(node.revoked);
+      assert.equal(node.calls.filter((c) => c.method === 'tenzro_revokeIdentity').length, 1);
+    });
+
+    let payee = '';
+    await step('publisher: no split yet, payouts listed', async () => {
+      await page.goto(`${BASE}/publisher`);
+      await page.getByTestId('current-split').getByText('No split').waitFor();
+      await page.getByTestId('payouts').getByText('3 TNZO').waitFor();
+      payee = hex(await accountAddress(new Uint8Array(accountKey.xy)));
+      const listed = node.calls.find((c) => c.method === 'tenzro_listPayments');
+      assert.equal(listed.params.payee, payee, 'payouts read for the passkey account');
+    });
+
+    await step('publisher: previews and sets a split with a passkey-signed transaction', async () => {
+      await page.getByRole('button', { name: 'Add a share' }).click();
+      await page.getByLabel('Role 1').selectOption('referrer');
+      await page.getByLabel('Recipient 1').fill(`0x${'bb'.repeat(32)}`);
+      await page.getByLabel('Percent 1').fill('10');
+      const preview = page.getByTestId('split-preview');
+      await preview.waitFor();
+      assert.match(await preview.innerText(), /referrer: 0\.0997 TNZO/);
+      await page.getByRole('button', { name: 'Set split with passkey' }).click();
+      await page.getByTestId('current-split').getByText(/referrer: 10% to/).waitFor({ timeout: 30_000 });
+      const sent = node.sent.at(-1);
+      assert.deepEqual(sent.tx_type.Payment.op.set_split.rule.lines.map((l) => l.role), ['referrer', 'payee']);
+      assert.equal(sent.tx_type.Payment.op.set_split.rule.lines[1].recipient.address, payee.slice(2));
+      await verifyTx(node, sent, accountKey.xy, 'set split');
+    });
+
+    await step('plan review: legs, fees, split, commit and abort, then the passkey signs', async () => {
+      const plan = {
+        nonce: 1,
+        quote_digest: '09'.repeat(32),
+        split_hash: '00'.repeat(32),
+        split: {
+          version: 1,
+          lines: [
+            { role: 'facilitator', recipient: { address: 'cc'.repeat(32) }, basis: { bps: 100 } },
+            { role: 'payee', recipient: { address: 'dd'.repeat(32) }, basis: 'remainder' },
+          ],
+        },
+        legs: [
+          { kind: { native_transfer: { amount: '2000000000000000000', escrow_id: null } }, class_required: 'native' },
+          { kind: { intent_fill: { order_id: 'ee'.repeat(32) } }, class_required: 'proven', usd_e6: 5_000_000, max_network_fee: '10000000000000000' },
+        ],
+        decide_deadline_ms: Date.now() + 600_000,
+      };
+      await page.goto(`${BASE}/agents`);
+      const popupPromise = ctx.waitForEvent('page');
+      await page.evaluate((p) => {
+        window.__resp = null;
+        const w = window.open('/approve', 'tenzro-approve', 'width=420,height=720');
+        window.addEventListener('message', (e) => {
+          if (e.data?.type === 'ready') {
+            w.postMessage({ protocol: 'tenzro-wallet/popup/v1', type: 'request', id: 'r1', method: 'tenzro_signSettlementPlan', params: { plan: p } }, '*');
+          }
+          if (e.data?.type === 'response') window.__resp = e.data;
+        });
+      }, plan);
+      const popup = await popupPromise;
+      await holdPasskey(popup);
+      const review = popup.getByTestId('plan-review');
+      await review.waitFor();
+      const legs = popup.getByTestId('plan-leg');
+      assert.equal(await legs.count(), 2);
+      assert.match(await legs.nth(0).innerText(), /2 TNZO from your account on Tenzro/);
+      assert.match(await legs.nth(1).innerText(), /proven from its network, \$5\.00/);
+      await popup.getByTestId('plan-split').getByText('TNZO').first().waitFor();
+      const text = await review.innerText();
+      assert.match(text, /Protocol fee: 0\.006 TNZO/);
+      assert.match(text, /Network fees, at most: 0\.01 TNZO/);
+      assert.match(text, /facilitator \(0xcccc/);
+      assert.match(text, /Commit:/);
+      assert.match(text, /Abort: if any leg fails or the deadline passes/);
+      assert.match(text, /about \$5\.00 for the TNZO, an estimate/);
+      await popup.getByRole('button', { name: 'Approve' }).click();
+      await page.waitForFunction(() => window.__resp !== null, null, { timeout: 30_000 });
+      const resp = await page.evaluate(() => window.__resp);
+      const signed = resp.result.signedTx;
+      assert.deepEqual(signed.transaction.tx_type.SettlementPlan.op.open, plan);
+      const sent = { ...signed, from: hex(signed.transaction.from), timestamp: signed.transaction.timestamp };
+      await verifyTx(node, sent, accountKey.xy, 'plan open');
+    });
+
+    assert.deepEqual(errors, [], 'page errors');
+    console.log(`\n${passed} passed`);
+  } finally {
+    await browser.close();
+  }
+}
+
+main().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});

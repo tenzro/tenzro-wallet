@@ -1,5 +1,5 @@
 /**
- * AgentPaymentSdkAdapter: `AgentPaymentClient.getDailySpend` for the spend and
+ * AgentPaymentSdkAdapter: `AgentPaymentClient.getTerms` for the Terms and spend, and
  * `AuthClient.updateAgentTerms` for limits.
  *
  * Before the passkey signs a terms change, the adapter checks that the terms
@@ -11,20 +11,14 @@
 import type { AgentPaymentClient, AuthClient } from 'tenzro-sdk';
 import { fromHex, toHex } from '../../../custody/passkey/bytes.ts';
 import { type CustodyAuthorization, custodyChallengeDigest } from '../../../custody/passkey/gate.ts';
+import type { RawAgentTermsView } from '../../../custody/passkey/machines.ts';
 import type {
   AgentPaymentPort,
+  AgentTermsState,
   AgentTermsUpdated,
-  DailySpend,
   UpdateAgentTermsRequest,
 } from '../agent-payment.ts';
 import { type AgentTermsWire, agentTermsTarget } from '../agent-terms.ts';
-
-interface RawDailySpend {
-  agent_did: string;
-  current_daily_spend: string;
-  max_daily_spend: string | null;
-  remaining: string | null;
-}
 
 interface RawChallenge {
   challenge_id: string;
@@ -44,7 +38,7 @@ interface RawTermsUpdate {
 }
 
 export interface AgentPaymentClientLike {
-  getDailySpend(agentDid: string): Promise<RawDailySpend | null>;
+  getTerms(agentDid: string): Promise<RawAgentTermsView | null>;
 }
 
 export interface AgentTermsClientLike {
@@ -93,14 +87,27 @@ export class AgentPaymentSdkAdapter implements AgentPaymentPort {
     );
   }
 
-  async getDailySpend(agentDid: string): Promise<DailySpend | null> {
-    const raw = await this.spend.getDailySpend(agentDid);
+  async getTerms(agentDid: string): Promise<AgentTermsState | null> {
+    const raw = await this.spend.getTerms(agentDid);
     if (!raw) return null;
+    const s = raw.spent;
     return {
       agentDid: raw.agent_did,
-      spentToday: BigInt(raw.current_daily_spend),
-      dailyLimit: big(raw.max_daily_spend),
-      remaining: big(raw.remaining),
+      rootKind: raw.root_kind,
+      status: raw.status,
+      version: raw.version,
+      terms: raw.terms as unknown as AgentTermsWire,
+      spentToday: BigInt(s.today),
+      spentThisHour: BigInt(s.this_hour),
+      actionsToday: s.actions_today,
+      actionsThisHour: s.actions_this_hour,
+      remainingToday: big(s.remaining_today),
+      remainingThisHour: big(s.remaining_this_hour),
+      assets: s.assets.map((a) => ({
+        asset: a.asset,
+        spentToday: BigInt(a.spent_today),
+        remainingToday: big(a.remaining_today),
+      })),
     };
   }
 

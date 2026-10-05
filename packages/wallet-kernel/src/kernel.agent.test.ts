@@ -13,11 +13,19 @@ import type { SurfaceName } from './types/surface.ts';
 
 function stubAgentPayment(): AgentPaymentPort {
   return {
-    getDailySpend: async (agentDid) => ({
+    getTerms: async (agentDid) => ({
       agentDid,
+      rootKind: 'passkey',
+      status: 'active',
+      version: 1,
+      terms: { controller_did: 'did:tenzro:human:c', agent_name: 'a', serving_nodes: [] },
       spentToday: 10n,
-      dailyLimit: 100n,
-      remaining: 90n,
+      spentThisHour: 10n,
+      actionsToday: 1,
+      actionsThisHour: 1,
+      remainingToday: 90n,
+      remainingThisHour: null,
+      assets: [],
     }),
     updateAgentTerms: async (req) => ({
       agentDid: req.agentDid,
@@ -37,8 +45,8 @@ describe('WalletKernel agent-ports bundle', () => {
       surfaces: noSurfaces,
       agentPorts: { agentPayment: stubAgentPayment() },
     });
-    const spend = await kernel.agent.agentPayment().getDailySpend('did:tenzro:agent');
-    expect(spend?.remaining).toBe(90n);
+    const view = await kernel.agent.agentPayment().getTerms('did:tenzro:agent');
+    expect(view?.remainingToday).toBe(90n);
   });
 
   it('throws a clear error when a port is not configured', async () => {

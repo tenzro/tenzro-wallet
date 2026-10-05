@@ -9,11 +9,12 @@
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "lint": "next lint",
-    "test:e2e": "node e2e/guardians.e2e.mjs"
+    "test:e2e": "node e2e/guardians.e2e.mjs && node e2e/agents.e2e.mjs"
   },
   "dependencies": {
     "@tanstack/react-query": "5.100.8",
     "@tenzro/ui": "workspace:*",
+    "tenzro-sdk": "file:../../../harness-sdk/sdk/tenzro-ts-sdk",
     "tenzro-wallet": "workspace:*",
     "lucide-react": "1.14.0",
     "motion": "12.38.0",

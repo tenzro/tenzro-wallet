@@ -182,9 +182,27 @@ export async function listControlledMachines(
   return res.record?.identity_data?.Human?.controlled_machines ?? [];
 }
 
-export async function getAgentDailySpend(
-  rpc: JsonRpcTransport,
-  agentDid: string,
-): Promise<{ max_daily_spend?: string; current_daily_spend?: string; remaining?: string }> {
-  return rpc.call('tenzro_getAgentDailySpend', { agent_did: agentDid });
+/** `tenzro_getAgentTerms`: the agent's Terms, root kind, status and spend so far; null without Terms. */
+export async function getAgentTerms(rpc: JsonRpcTransport, agentDid: string): Promise<RawAgentTermsView | null> {
+  return rpc.call('tenzro_getAgentTerms', { agent_did: agentDid });
+}
+
+/** The node's answer to `tenzro_getAgentTerms`; amounts are decimal strings. */
+export interface RawAgentTermsView {
+  readonly agent_did: string;
+  readonly root_kind: 'passkey' | 'machine';
+  readonly status: 'active' | 'quarantined' | 'revoked' | 'expired';
+  readonly version: number;
+  readonly approval_digest: string;
+  readonly updated_at_ms: number;
+  readonly terms: Record<string, unknown>;
+  readonly spent: {
+    readonly today: string;
+    readonly this_hour: string;
+    readonly actions_today: number;
+    readonly actions_this_hour: number;
+    readonly remaining_today: string | null;
+    readonly remaining_this_hour: string | null;
+    readonly assets: readonly { asset: string; spent_today: string; remaining_today: string | null }[];
+  };
 }

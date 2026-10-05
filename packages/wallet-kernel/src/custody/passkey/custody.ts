@@ -78,6 +78,15 @@ export interface AccountRecordCredential {
   readonly backup_state?: boolean | null;
 }
 
+/** A passkey as a native-transaction signer, in the shape the SDK's `HybridSigner` takes. */
+export interface PasskeyTransactionSigner {
+  p256PublicKey(): Uint8Array;
+  mlDsaPublicKey(): Uint8Array | null;
+  signComposite(mPrime: Uint8Array): Promise<
+    [{ authenticatorData: Uint8Array; clientDataJson: Uint8Array; signature: Uint8Array }, Uint8Array | null]
+  >;
+}
+
 export interface AccountRecord {
   readonly account_address: string;
   readonly owner_did?: string;
@@ -763,6 +772,58 @@ export class PasskeyCustody {
       account_address: opts.account,
       authorization,
     });
+  }
+
+  /**
+   * Revokes a delegated agent this account roots: the passkey approves
+   * revoking exactly `agentDid`, and the node records the revocation in
+   * consensus, which every node, remote chain grant and web directory
+   * enforces from the same state.
+   */
+  async revokeDelegatedAgent(opts: {
+    readonly account: string;
+    readonly agentDid: string;
+    readonly approver: CredentialRef;
+  }): Promise<{ tokens_revoked?: number; chain?: { submitted: boolean; tx_hash?: string; error?: string } }> {
+    const authorization = await this.#authorize(
+      opts.account,
+      'revoke_delegated_agent',
+      new TextEncoder().encode(opts.agentDid),
+      opts.approver,
+    );
+    return this.rpc.call('tenzro_revokeIdentity', { did: opts.agentDid, authorization });
+  }
+
+  /**
+   * A signer for native transactions from the account this device's passkey
+   * names: the passkey signs each one as a WebAuthn assertion over
+   * `SHA-256(M')`. The passkey's P-256 key is read from the published account
+   * record.
+   */
+  async transactionSigner(account: PasskeyAccount): Promise<PasskeyTransactionSigner> {
+    const record = await this.getAccountRecord(account.account);
+    const own = record?.credentials?.find((c) => stripped(c.credential_id_hex) === stripped(account.credentialId));
+    const key = own?.p256_public_key_hex ? fromHex(own.p256_public_key_hex) : new Uint8Array(0);
+    if (key.length !== 64) {
+      throw new PasskeyError('The account record names no P-256 key for this passkey.', 'not-found');
+    }
+    const authenticator = this.authenticator;
+    const credential: CredentialRef = { id: account.credentialId, transports: account.transports };
+    return {
+      p256PublicKey: () => key,
+      mlDsaPublicKey: () => null,
+      async signComposite(mPrime: Uint8Array) {
+        const s = await authenticator.get({ challenge: sha256(mPrime), allow: [credential] });
+        return [
+          {
+            authenticatorData: Uint8Array.from(s.assertion.authenticator_data),
+            clientDataJson: Uint8Array.from(s.assertion.client_data_json),
+            signature: Uint8Array.from(s.assertion.signature),
+          },
+          null,
+        ];
+      },
+    };
   }
 
   // ── Recovery ──────────────────────────────────────────────────────────

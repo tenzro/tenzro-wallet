@@ -64,28 +64,45 @@ function termsClient(returned: AgentTermsWire, seen: AgentTermsChallenge[]): Age
   };
 }
 
-const noSpend: AgentPaymentClientLike = { getDailySpend: async () => null };
+const noSpend: AgentPaymentClientLike = { getTerms: async () => null };
 
 describe('AgentPaymentSdkAdapter', () => {
-  it('maps the daily spend; null when the agent has no terms', async () => {
+  it('maps the Terms and spend; null when the agent has no terms', async () => {
     const a = new AgentPaymentSdkAdapter(
       {
-        getDailySpend: async (did) => ({
+        getTerms: async (did) => ({
           agent_did: did,
-          current_daily_spend: '40',
-          max_daily_spend: '100',
-          remaining: '60',
+          root_kind: 'machine',
+          status: 'active',
+          version: 3,
+          approval_digest: 'ab',
+          updated_at_ms: 1,
+          terms: { controller_did: 'did:tenzro:machine:m', agent_name: 'a', serving_nodes: [] },
+          spent: {
+            today: '40',
+            this_hour: '5',
+            actions_today: 2,
+            actions_this_hour: 1,
+            remaining_today: '60',
+            remaining_this_hour: null,
+            assets: [{ asset: '0x22', spent_today: '7', remaining_today: '3' }],
+          },
         }),
       },
       termsClient(completed, []),
     );
-    expect(await a.getDailySpend('did:a')).toEqual({
+    const view = await a.getTerms('did:a');
+    expect(view).toMatchObject({
       agentDid: 'did:a',
+      rootKind: 'machine',
+      version: 3,
       spentToday: 40n,
-      dailyLimit: 100n,
-      remaining: 60n,
+      spentThisHour: 5n,
+      remainingToday: 60n,
+      remainingThisHour: null,
+      assets: [{ asset: '0x22', spentToday: 7n, remainingToday: 3n }],
     });
-    expect(await new AgentPaymentSdkAdapter(noSpend, termsClient(completed, [])).getDailySpend('x')).toBeNull();
+    expect(await new AgentPaymentSdkAdapter(noSpend, termsClient(completed, [])).getTerms('x')).toBeNull();
   });
 
   it('signs a terms update only after the completed terms check out', async () => {

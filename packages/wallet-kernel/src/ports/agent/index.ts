@@ -9,7 +9,7 @@ export type {
   AgentPaymentPort,
   AgentTermsChallenge,
   AgentTermsUpdated,
-  DailySpend,
+  AgentTermsState,
   UpdateAgentTermsRequest,
 } from './agent-payment.ts';
 export type {

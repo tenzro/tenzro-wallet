@@ -17,14 +17,17 @@ import {
   type PopupRequest,
   type PopupResponse,
   type PopupSendTransaction,
+  type PopupSignSettlementPlan,
   isPopupRequest,
 } from 'tenzro-wallet';
 import { type OwnershipProof, type PasskeyEntryOptions, hexToBytes } from 'tenzro-wallet/custody';
 
 import { LinkDeviceActions } from '@/components/wallet/link-device';
+import { PlanReview } from '@/components/wallet/plan-review';
 import { addConnection, isConnected, removeConnection } from '@/lib/tenzro/connections';
 import { TNZO_DECIMALS, formatBaseUnits, shortAddress } from '@/lib/tenzro/format';
 import { usePlatformPasskey, useWallet } from '@/lib/tenzro/hooks';
+import { signTransaction } from '@/lib/tenzro/native-tx';
 import { type EnteredWallet, custody, sendTnzo } from '@/lib/tenzro/wallet';
 
 interface Pending {
@@ -40,6 +43,21 @@ function connectChallenge(request: PopupRequest): Uint8Array | undefined {
     throw new Error('The site sent an invalid challenge.');
   }
   return hexToBytes(challenge);
+}
+
+function isPlan(p: unknown): p is PopupSignSettlementPlan {
+  const plan = (p as Partial<PopupSignSettlementPlan> | null)?.plan;
+  return (
+    !!plan &&
+    Number.isInteger(plan.nonce) &&
+    typeof plan.quote_digest === 'string' &&
+    typeof plan.split_hash === 'string' &&
+    Array.isArray(plan.split?.lines) &&
+    Array.isArray(plan.legs) &&
+    plan.legs.length >= 1 &&
+    plan.legs.length <= 16 &&
+    Number.isInteger(plan.decide_deadline_ms)
+  );
 }
 
 function isSend(p: unknown): p is PopupSendTransaction {
@@ -128,6 +146,13 @@ export default function ApprovePage() {
         if (!isSend(params)) throw new Error('The site sent an invalid transaction.');
         const { userOpHash } = await sendTnzo(wallet, params.to, BigInt(params.value));
         respond({ result: { userOpHash } });
+      } else if (method === 'tenzro_signSettlementPlan') {
+        if (!isPlan(params)) throw new Error('The site sent an invalid settlement plan.');
+        const signedTx = await signTransaction(wallet, {
+          kind: 'SettlementPlan',
+          fields: { op: { open: params.plan } },
+        });
+        respond({ result: { signedTx } });
       }
       window.close();
     } catch (e) {
@@ -179,6 +204,7 @@ export default function ApprovePage() {
   const connected = pending && wallet ? isConnected(pending.origin, wallet.account) : false;
   const needsConnection =
     (pending?.request.method === 'tenzro_sendTransaction' ||
+      pending?.request.method === 'tenzro_signSettlementPlan' ||
       pending?.request.method === 'tenzro_addWallet' ||
       pending?.request.method === 'tenzro_linkDevice') &&
     !connected;
@@ -319,7 +345,9 @@ export default function ApprovePage() {
                 ? 'Connect to this site?'
                 : pending.request.method === 'tenzro_addWallet'
                   ? 'Add a wallet?'
-                  : 'Approve this payment?'}
+                  : pending.request.method === 'tenzro_signSettlementPlan'
+                    ? 'Review this settlement plan'
+                    : 'Approve this payment?'}
             </CardTitle>
             <CardDescription>
               <span className="font-mono">{pending.origin}</span>
@@ -338,6 +366,12 @@ export default function ApprovePage() {
                 <span className="font-mono">{wallet.did}</span>, approved with your passkey. The
                 site learns the new wallet's address.
               </p>
+            ) : pending.request.method === 'tenzro_signSettlementPlan' ? (
+              isPlan(pending.request.params) ? (
+                <PlanReview plan={pending.request.params.plan} />
+              ) : (
+                <p className="text-danger">The site sent an invalid settlement plan.</p>
+              )
             ) : isSend(pending.request.params) ? (
               <div className="space-y-1">
                 <p className="font-mono text-xl tabular">

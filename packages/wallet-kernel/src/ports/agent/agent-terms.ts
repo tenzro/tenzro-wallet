@@ -30,6 +30,8 @@ export interface AssetLimitTerms {
   readonly asset: string;
   readonly max_per_tx?: string | null;
   readonly max_per_day: string;
+  /** The KYC tier (0 to 3) a counterparty paid in this asset must hold. */
+  readonly min_counterparty_kyc_tier?: number;
 }
 
 export interface ContractTerms {
@@ -69,6 +71,10 @@ export interface TermsScope {
   readonly min_contract_assurance?: number;
   readonly allowed_contracts?: readonly ContractTerms[];
   readonly governance?: GovernanceTerms | null;
+  /** The KYC tier every counterparty the agent pays must hold, under `registry` (a token id). */
+  readonly counterparty_kyc?: { readonly min_tier: number; readonly registry: string } | null;
+  /** The most facilitator and relayer split lines of a plan the agent opens may take, bps. */
+  readonly max_split_fee_bps?: number | null;
 }
 
 /** A delegated agent's terms, in the node's JSON shape. */
@@ -185,6 +191,10 @@ export function agentTermsTarget(terms: AgentTermsWire, rotate?: boolean): Uint8
       put(h, opt(l.max_per_tx));
       put(h, l.max_per_day);
     }
+    if (assets.some((l) => (l.min_counterparty_kyc_tier ?? 0) !== 0)) {
+      put(h, 'asset-kyc');
+      h.update(new Uint8Array(assets.map((l) => l.min_counterparty_kyc_tier ?? 0)));
+    }
   }
   const contracts = s.allowed_contracts ?? [];
   if ((s.min_contract_assurance ?? 0) !== 0 || contracts.length > 0) {
@@ -205,6 +215,17 @@ export function agentTermsTarget(terms: AgentTermsWire, rotate?: boolean): Uint8
     new DataView(bps.buffer).setUint16(0, g.max_weight_bps ?? 0, false);
     h.update(bps);
     put(h, g.policy_hash ?? '');
+  }
+  if (s.counterparty_kyc) {
+    put(h, 'kyc');
+    h.update(new Uint8Array([s.counterparty_kyc.min_tier]));
+    put(h, s.counterparty_kyc.registry);
+  }
+  if (some(s.max_split_fee_bps)) {
+    put(h, 'split-fee');
+    const bps = new Uint8Array(2);
+    new DataView(bps.buffer).setUint16(0, s.max_split_fee_bps, false);
+    h.update(bps);
   }
   return h.digest();
 }

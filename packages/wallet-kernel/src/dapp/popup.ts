@@ -24,6 +24,7 @@ export type PopupMethod =
   | 'tenzro_sendTransaction'
   | 'tenzro_addWallet'
   | 'tenzro_linkDevice'
+  | 'tenzro_signSettlementPlan'
   | 'tenzro_disconnect';
 
 export interface PopupRequest {
@@ -94,11 +95,31 @@ export interface PopupSendTransaction {
   readonly value: string;
 }
 
+/**
+ * Params of `tenzro_signSettlementPlan`: the `open` operation of a settlement
+ * plan (legs on one or more networks, the split rule, the deadline) the site
+ * asks the account to fund. The wallet shows every leg, fee and share, and
+ * what commit and abort do, before the passkey signs the open transaction;
+ * the result is the signed transaction (`{ signedTx }`) for the site's
+ * facilitator to submit (an x402 `plan` payment carries it).
+ */
+export interface PopupSignSettlementPlan {
+  readonly plan: {
+    readonly nonce: number;
+    readonly quote_digest: string;
+    readonly split_hash: string;
+    readonly split: { readonly version: number; readonly lines: readonly Record<string, unknown>[] };
+    readonly legs: readonly Record<string, unknown>[];
+    readonly decide_deadline_ms: number;
+  };
+}
+
 export const POPUP_METHODS: readonly PopupMethod[] = [
   'tenzro_connect',
   'tenzro_sendTransaction',
   'tenzro_addWallet',
   'tenzro_linkDevice',
+  'tenzro_signSettlementPlan',
   'tenzro_disconnect',
 ];
 

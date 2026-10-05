@@ -10,14 +10,25 @@
 import type { CustodyAuthorization } from '../../custody/passkey/gate.ts';
 import type { AgentTermsWire } from './agent-terms.ts';
 
-export interface DailySpend {
+/** A delegated agent's Terms as consensus holds them, and its spend against them. */
+export interface AgentTermsState {
   readonly agentDid: string;
-  /** Spent today, wei. */
+  /** What approved the Terms: a person's passkey or a machine's TPM / Secure Enclave key. */
+  readonly rootKind: 'passkey' | 'machine';
+  readonly status: 'active' | 'quarantined' | 'revoked' | 'expired';
+  /** Increments with every approved change. */
+  readonly version: number;
+  readonly terms: AgentTermsWire;
+  /** Spent today and this clock hour, wei. */
   readonly spentToday: bigint;
-  /** The terms' daily limit, when they set one. */
-  readonly dailyLimit: bigint | null;
-  /** What the daily limit leaves, when the terms set one. */
-  readonly remaining: bigint | null;
+  readonly spentThisHour: bigint;
+  readonly actionsToday: number;
+  readonly actionsThisHour: number;
+  /** What the daily and hourly limits leave, when the Terms set them. */
+  readonly remainingToday: bigint | null;
+  readonly remainingThisHour: bigint | null;
+  /** Per limited asset, in its base units. */
+  readonly assets: readonly { asset: string; spentToday: bigint; remainingToday: bigint | null }[];
 }
 
 /** The challenge a terms change asks the passkey to sign. */
@@ -51,6 +62,6 @@ export interface AgentTermsUpdated {
 }
 
 export interface AgentPaymentPort {
-  getDailySpend(agentDid: string): Promise<DailySpend | null>;
+  getTerms(agentDid: string): Promise<AgentTermsState | null>;
   updateAgentTerms(req: UpdateAgentTermsRequest): Promise<AgentTermsUpdated>;
 }
