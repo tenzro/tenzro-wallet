@@ -28,17 +28,6 @@ export type {
   AgentTermsClientLike,
 } from './adapters/agent-payment-adapter.ts';
 
-// HITL approval queue
-export type {
-  AuthApprovalPort,
-  PendingApproval,
-  PendingApprovalsList,
-  ApprovalDecisionStatus,
-  ApprovalDecisionResult,
-} from './auth-approval.ts';
-export { AuthApprovalSdkAdapter } from './adapters/auth-approval-adapter.ts';
-export type { AuthClientLike } from './adapters/auth-approval-adapter.ts';
-
 // TEE attestation
 export type {
   TeeAttestationPort,

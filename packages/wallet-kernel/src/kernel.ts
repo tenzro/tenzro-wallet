@@ -8,7 +8,6 @@ import { type PolicyContext, enforcePolicy } from './consent/index.ts';
 import type {
   AcpPort,
   AgentPaymentPort,
-  AuthApprovalPort,
   EscrowPort,
   HtlcEscrowPort,
   TeeAttestationPort,
@@ -42,8 +41,6 @@ import type { SurfaceName } from './types/surface.ts';
  */
 export interface AgentPortsBundle {
   readonly agentPayment?: AgentPaymentPort;
-  /** Human-in-the-loop pending-approvals queue (auth engine). */
-  readonly authApproval?: AuthApprovalPort;
   /** TEE attestation verification for services that run in a provider's enclave. */
   readonly teeAttestation?: TeeAttestationPort;
   /** Native escrow primitive (CreateEscrow/Release/Refund). */
@@ -90,7 +87,6 @@ export class WalletKernel {
    */
   readonly agent = {
     agentPayment: (): AgentPaymentPort => this.#requireAgent('agentPayment'),
-    authApproval: (): AuthApprovalPort => this.#requireAgent('authApproval'),
     teeAttestation: (): TeeAttestationPort => this.#requireAgent('teeAttestation'),
     escrow: (): EscrowPort => this.#requireAgent('escrow'),
     acp: (): AcpPort => this.#requireAgent('acp'),

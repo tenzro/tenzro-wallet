@@ -96,7 +96,7 @@ packages/
         adapters/                  # tenzro-sdk-adapter, tenzro-identity-adapter
         agent/                     # agent ports: ap2, acp, erc8004, erc7802, htlc-escrow,
                                    #   nanopayment, lifecycle, principal-chain,
-                                   #   fee-estimator, payment-rails, auth-approval,
+                                   #   fee-estimator, payment-rails,
                                    #   tee-attestation, escrow, insurance, agent-bond,
                                    #   session-key
         bridge/                    # eight vendor adapters (LI.FI / CCIP / LayerZero /
