@@ -25,9 +25,7 @@ export type BabylonClientLike = Pick<
 export class BabylonAdapter implements BabylonPort {
   constructor(private readonly client: BabylonClientLike) {}
 
-  registerFinalityProvider(
-    req: RegisterFinalityProviderRequest,
-  ): Promise<FinalityProvider> {
+  registerFinalityProvider(req: RegisterFinalityProviderRequest): Promise<FinalityProvider> {
     return this.client.registerFinalityProvider(req as never) as Promise<FinalityProvider>;
   }
   getFinalityProvider(validator: string): Promise<FinalityProvider | null> {

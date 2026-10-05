@@ -251,8 +251,9 @@ export default function LandingPage() {
           </h2>
           <p className="text-lg text-foreground-muted max-w-2xl mx-auto leading-relaxed mb-8">
             Your wallet is created from a passkey on your device and never leaves your hands: every
-            approval is signed by the passkey, inside the device's secure hardware. Link a phone, a laptop or a security key so that losing one device
-            never means losing the wallet. No words to write down.
+            approval is signed by the passkey, inside the device's secure hardware. Link a phone, a
+            laptop or a security key so that losing one device never means losing the wallet. No
+            words to write down.
           </p>
           <div className="flex justify-center gap-3">
             <Button

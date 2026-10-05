@@ -10,7 +10,17 @@
 
 'use client';
 
-import { Activity, Bot, Building2, Cable, Compass, Send, Settings, Split, Wallet } from 'lucide-react';
+import {
+  Activity,
+  Bot,
+  Building2,
+  Cable,
+  Compass,
+  Send,
+  Settings,
+  Split,
+  Wallet,
+} from 'lucide-react';
 import { motion } from 'motion/react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';

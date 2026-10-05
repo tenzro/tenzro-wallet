@@ -21,11 +21,7 @@ import type { SurfaceKey, TdipDid } from './identity.ts';
  * - `ed25519+ml-dsa-65` — composite hybrid pair for machine identities whose
  *   device key signs both legs. Returns two entries.
  */
-export type SigningScheme =
-  | 'webauthn-p256'
-  | 'ed25519'
-  | 'secp256k1'
-  | 'ed25519+ml-dsa-65';
+export type SigningScheme = 'webauthn-p256' | 'ed25519' | 'secp256k1' | 'ed25519+ml-dsa-65';
 
 export interface SigningRequest {
   readonly did: TdipDid;

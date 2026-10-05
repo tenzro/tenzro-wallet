@@ -62,8 +62,14 @@ export class FakeAuthenticator implements PasskeyAuthenticator {
   }
 
   async create(opts: CreatePasskeyOptions): Promise<CreatedPasskey> {
-    if (this.syncsExisting && (opts.exclude ?? []).some((c) => this.credentials.some((h) => toHex(h.id) === c.id))) {
-      throw new PasskeyError('This authenticator already holds a passkey for this account.', 'already-enrolled');
+    if (
+      this.syncsExisting &&
+      (opts.exclude ?? []).some((c) => this.credentials.some((h) => toHex(h.id) === c.id))
+    ) {
+      throw new PasskeyError(
+        'This authenticator already holds a passkey for this account.',
+        'already-enrolled',
+      );
     }
     this.#counter += 1;
     const seed = sha256(utf8(`fake-credential-${this.#counter}`));
@@ -86,7 +92,13 @@ export class FakeAuthenticator implements PasskeyAuthenticator {
       tier: cred.tier,
       registrationAuthenticatorData: concatBytes(
         sha256(utf8(this.rpId)),
-        new Uint8Array([0x01 | 0x04 | 0x40 | (cred.tier === 'synced' ? 0x08 | 0x10 : 0), 0, 0, 0, 0]),
+        new Uint8Array([
+          0x01 | 0x04 | 0x40 | (cred.tier === 'synced' ? 0x08 | 0x10 : 0),
+          0,
+          0,
+          0,
+          0,
+        ]),
         cred.aaguid,
         new Uint8Array([0, cred.id.length]),
         cred.id,

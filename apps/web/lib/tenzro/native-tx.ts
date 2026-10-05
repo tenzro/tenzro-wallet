@@ -10,8 +10,8 @@ import {
   SettlementClient,
   type SignedTransactionJson,
   type SplitRule,
-  TypedTxClient,
   type TypedTransaction,
+  TypedTxClient,
   accountAddress,
 } from 'tenzro-sdk';
 import { bytesToHex } from 'tenzro-wallet/custody';
@@ -32,11 +32,17 @@ export async function nativeAccount(wallet: StoredWallet): Promise<string> {
 }
 
 /** Sets (or, with `null`, clears) the standing split every payment to this account is divided by. */
-export async function setPayeeSplit(wallet: StoredWallet, rule: SplitRule | null): Promise<unknown> {
+export async function setPayeeSplit(
+  wallet: StoredWallet,
+  rule: SplitRule | null,
+): Promise<unknown> {
   return new SettlementClient(rpc()).setPayeeSplit(await signer(wallet), rule);
 }
 
 /** Signs `tx` with the passkey without submitting it, for the party that asked to submit it. */
-export async function signTransaction(wallet: StoredWallet, tx: TypedTransaction): Promise<SignedTransactionJson> {
+export async function signTransaction(
+  wallet: StoredWallet,
+  tx: TypedTransaction,
+): Promise<SignedTransactionJson> {
   return new TypedTxClient(rpc()).sign(await signer(wallet), tx);
 }

@@ -83,9 +83,21 @@ export default function GuardianPage() {
 }
 
 const SOURCES: { value: GuardianSource; title: string; body: string }[] = [
-  { value: 'trusted_person', title: 'For someone I know', body: 'A passkey on this device, kept for them.' },
-  { value: 'own_passkey', title: 'For my own wallet', body: 'A passkey on another device of mine.' },
-  { value: 'security_key', title: 'On a security key', body: 'A hardware key; recoveries it approves wait the shortest.' },
+  {
+    value: 'trusted_person',
+    title: 'For someone I know',
+    body: 'A passkey on this device, kept for them.',
+  },
+  {
+    value: 'own_passkey',
+    title: 'For my own wallet',
+    body: 'A passkey on another device of mine.',
+  },
+  {
+    value: 'security_key',
+    title: 'On a security key',
+    body: 'A hardware key; recoveries it approves wait the shortest.',
+  },
 ];
 
 function BecomeGuardian() {
@@ -210,10 +222,13 @@ function ApproveRecovery({ initial }: { readonly initial: string }) {
       {approve.error && <p className="text-danger">{errorText(approve.error)}</p>}
       {approve.data && (
         <p className="text-success">
-          Approved. {approve.data.guardian_signatures_collected} of {approve.data.guardians_required}{' '}
+          Approved. {approve.data.guardian_signatures_collected} of{' '}
+          {approve.data.guardians_required}{' '}
           {approve.data.quorum_reached
             ? `reached; the recovery can complete ${
-                approve.data.ready_at_ms ? new Date(approve.data.ready_at_ms).toLocaleString() : 'after its wait'
+                approve.data.ready_at_ms
+                  ? new Date(approve.data.ready_at_ms).toLocaleString()
+                  : 'after its wait'
               }.`
             : 'approvals so far.'}
         </p>

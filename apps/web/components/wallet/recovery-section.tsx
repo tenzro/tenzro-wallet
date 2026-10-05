@@ -1,23 +1,13 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  Button,
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@tenzro/ui';
+import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle } from '@tenzro/ui';
 import { Download } from 'lucide-react';
 import * as React from 'react';
-import {
-  type CredentialRef,
-  buildRecoveryKit,
-} from 'tenzro-wallet/custody';
+import { type CredentialRef, buildRecoveryKit } from 'tenzro-wallet/custody';
 
-import { TENZRO_NETWORK_NAME, TENZRO_RP_ID } from '@/lib/tenzro/config';
 import { GuardiansPanel } from '@/components/wallet/guardians';
+import { TENZRO_NETWORK_NAME, TENZRO_RP_ID } from '@/lib/tenzro/config';
 import { useWallet } from '@/lib/tenzro/hooks';
 import { custody } from '@/lib/tenzro/wallet';
 
@@ -78,8 +68,8 @@ export function RecoverySection() {
       <CardHeader>
         <CardTitle>Recovery</CardTitle>
         <CardDescription>
-          Your wallet is your passkeys. Link a second device so that losing one never locks you
-          out, and add guardians for the day every device is gone.
+          Your wallet is your passkeys. Link a second device so that losing one never locks you out,
+          and add guardians for the day every device is gone.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-5 text-sm">
@@ -108,7 +98,6 @@ export function RecoverySection() {
             <p className="text-danger">{kitState}</p>
           )}
         </div>
-
       </CardContent>
     </Card>
   );

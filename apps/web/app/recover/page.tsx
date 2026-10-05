@@ -20,7 +20,11 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { QRCodeSVG } from 'qrcode.react';
 import * as React from 'react';
-import { type RecoveryRequest, decodeRecoveryRequest, encodeRecoveryRequest } from 'tenzro-wallet/custody';
+import {
+  type RecoveryRequest,
+  decodeRecoveryRequest,
+  encodeRecoveryRequest,
+} from 'tenzro-wallet/custody';
 
 import { custody, signIn } from '@/lib/tenzro/wallet';
 
@@ -80,7 +84,9 @@ export default function RecoverPage() {
 function accountFromKit(text: string): string | null {
   try {
     const kit = JSON.parse(text) as { format?: string; account?: string };
-    return kit.format === 'tenzro-recovery-kit' && typeof kit.account === 'string' ? kit.account : null;
+    return kit.format === 'tenzro-recovery-kit' && typeof kit.account === 'string'
+      ? kit.account
+      : null;
   } catch {
     return null;
   }
@@ -92,7 +98,11 @@ function Start({ onStarted }: { readonly onStarted: (r: RecoveryRequest) => void
   const [kitError, setKitError] = React.useState<string | null>(null);
   const valid = /^0x[0-9a-fA-F]{40}$/.test(account.trim());
   const start = useMutation({
-    mutationFn: () => custody().startRecovery({ account: account.trim(), label: label.trim() || 'Recovered device' }),
+    mutationFn: () =>
+      custody().startRecovery({
+        account: account.trim(),
+        label: label.trim() || 'Recovered device',
+      }),
     onSuccess: (s) => onStarted(s.request),
   });
 
@@ -150,7 +160,10 @@ function Start({ onStarted }: { readonly onStarted: (r: RecoveryRequest) => void
   );
 }
 
-function Waiting({ request, onReset }: { readonly request: RecoveryRequest; readonly onReset: () => void }) {
+function Waiting({
+  request,
+  onReset,
+}: { readonly request: RecoveryRequest; readonly onReset: () => void }) {
   const router = useRouter();
   const [copied, setCopied] = React.useState(false);
   const [now, setNow] = React.useState(() => Date.now());
@@ -165,8 +178,9 @@ function Waiting({ request, onReset }: { readonly request: RecoveryRequest; read
   const status = useQuery({
     queryKey: ['tenzro', 'recovery', request.recoveryId],
     queryFn: async () =>
-      (await custody().listPendingRecoveries(request.account)).find((r) => r.recovery_id === request.recoveryId) ??
-      null,
+      (await custody().listPendingRecoveries(request.account)).find(
+        (r) => r.recovery_id === request.recoveryId,
+      ) ?? null,
     refetchInterval: 20_000,
   });
   const finish = useMutation({
@@ -180,7 +194,8 @@ function Waiting({ request, onReset }: { readonly request: RecoveryRequest; read
     },
   });
   const s = status.data;
-  const ready = !!s && s.ready_at_ms !== null && s.ready_at_ms <= now && !s.finalized && !s.cancelled;
+  const ready =
+    !!s && s.ready_at_ms !== null && s.ready_at_ms <= now && !s.finalized && !s.cancelled;
   const expired = request.expiresAtMs <= now;
 
   return (
@@ -209,11 +224,14 @@ function Waiting({ request, onReset }: { readonly request: RecoveryRequest; read
       <div className="rounded-xl border border-border-subtle p-3 space-y-1">
         {status.isError && <p className="text-danger">{errorText(status.error)}</p>}
         {s === null && <p className="text-danger">The network no longer lists this recovery.</p>}
-        {s && s.cancelled && <p className="text-danger">This recovery was cancelled from a device on the wallet.</p>}
+        {s?.cancelled && (
+          <p className="text-danger">This recovery was cancelled from a device on the wallet.</p>
+        )}
         {s && !s.cancelled && (
           <>
             <p>
-              {s.guardian_signatures_collected} approval{s.guardian_signatures_collected === 1 ? '' : 's'} so far.
+              {s.guardian_signatures_collected} approval
+              {s.guardian_signatures_collected === 1 ? '' : 's'} so far.
             </p>
             <p className="text-foreground-subtle">
               {s.ready_at_ms === null
@@ -224,7 +242,9 @@ function Waiting({ request, onReset }: { readonly request: RecoveryRequest; read
             </p>
           </>
         )}
-        {expired && !ready && <p className="text-danger">This recovery has expired. Start a new one.</p>}
+        {expired && !ready && (
+          <p className="text-danger">This recovery has expired. Start a new one.</p>
+        )}
       </div>
 
       <div className="flex flex-wrap gap-3">

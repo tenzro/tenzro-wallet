@@ -210,7 +210,9 @@ export function agentTermsTarget(terms: AgentTermsWire, rotate?: boolean): Uint8
     const g = s.governance;
     put(h, 'governance');
     putList(h, g.domains);
-    h.update(new Uint8Array([g.may_vote ? 1 : 0, g.may_veto_signal ? 1 : 0, g.may_originate ? 1 : 0]));
+    h.update(
+      new Uint8Array([g.may_vote ? 1 : 0, g.may_veto_signal ? 1 : 0, g.may_originate ? 1 : 0]),
+    );
     const bps = new Uint8Array(2);
     new DataView(bps.buffer).setUint16(0, g.max_weight_bps ?? 0, false);
     h.update(bps);

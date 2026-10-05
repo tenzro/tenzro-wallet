@@ -16,7 +16,7 @@
  * string-amount shape the RPC expects and decode the envelopes back.
  */
 
-import type { SecureMintClient, SecureMintPolicy as SdkPolicy } from 'tenzro-sdk';
+import type { SecureMintPolicy as SdkPolicy, SecureMintClient } from 'tenzro-sdk';
 import type {
   SecureMintApply,
   SecureMintCheck,
@@ -88,9 +88,7 @@ function encodePolicy(policy: SecureMintPolicy): SdkPolicy {
     token: policy.token,
     asset_id: policy.assetId,
     reserve: policy.reserve.toString(),
-    ...(policy.circulating !== undefined
-      ? { circulating: policy.circulating.toString() }
-      : {}),
+    ...(policy.circulating !== undefined ? { circulating: policy.circulating.toString() } : {}),
     por_feed_id: policy.porFeedId,
     attester_did: policy.attesterDid,
     attestation_hash: policy.attestationHash,

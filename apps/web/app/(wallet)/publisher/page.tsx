@@ -1,7 +1,15 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input } from '@tenzro/ui';
+import {
+  Button,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  Input,
+} from '@tenzro/ui';
 import * as React from 'react';
 import { type SplitLine, type SplitRole, type SplitRule, validateSplitRule } from 'tenzro-sdk';
 
@@ -29,7 +37,9 @@ const ONE_TNZO = 10n ** 18n;
 
 function recipientOf(r: string): SplitLine['recipient'] {
   const v = r.trim();
-  return v.startsWith('did:') ? { did_derived: v } : { address: v.replace(/^0x/, '').toLowerCase() };
+  return v.startsWith('did:')
+    ? { did_derived: v }
+    : { address: v.replace(/^0x/, '').toLowerCase() };
 }
 
 /** The rule the rows describe: each row a basis-point line, this account the remainder. */
@@ -39,7 +49,11 @@ function ruleOf(rows: Row[], self: string): SplitRule {
     recipient: recipientOf(r.recipient),
     basis: { bps: Math.round(Number(r.percent) * 100) },
   }));
-  lines.push({ role: 'payee', recipient: { address: self.replace(/^0x/, '').toLowerCase() }, basis: 'remainder' });
+  lines.push({
+    role: 'payee',
+    recipient: { address: self.replace(/^0x/, '').toLowerCase() },
+    basis: 'remainder',
+  });
   return { version: 1, lines };
 }
 
@@ -50,7 +64,12 @@ function describe(line: SplitLine): string {
       : 'did_derived' in line.recipient
         ? line.recipient.did_derived
         : shortAddress(`0x${line.recipient.address}`);
-  const share = line.basis === 'remainder' ? 'the rest' : 'bps' in line.basis ? `${line.basis.bps / 100}%` : `${line.basis.fixed} base units`;
+  const share =
+    line.basis === 'remainder'
+      ? 'the rest'
+      : 'bps' in line.basis
+        ? `${line.basis.bps / 100}%`
+        : `${line.basis.fixed} base units`;
   return `${line.role}: ${share} to ${who}`;
 }
 
@@ -124,7 +143,9 @@ export default function PublisherPage() {
       <Card variant="raised">
         <CardHeader>
           <CardTitle>Your split</CardTitle>
-          <CardDescription>The network divides each payment to you by this rule, after its protocol fee.</CardDescription>
+          <CardDescription>
+            The network divides each payment to you by this rule, after its protocol fee.
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           {current.isLoading || self.isLoading ? (
@@ -143,7 +164,12 @@ export default function PublisherPage() {
             </p>
           )}
           {rule ? (
-            <Button variant="secondary" size="sm" disabled={save.isPending} onClick={() => save.mutate(null)}>
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={save.isPending}
+              onClick={() => save.mutate(null)}
+            >
               Clear split
             </Button>
           ) : null}
@@ -162,7 +188,11 @@ export default function PublisherPage() {
                 aria-label={`Role ${i + 1}`}
                 className="h-10 rounded-xl border border-border-default bg-surface-1 px-2 text-sm"
                 value={r.role}
-                onChange={(e) => setRows(rows.map((x, j) => (j === i ? { ...x, role: e.target.value as SplitRole } : x)))}
+                onChange={(e) =>
+                  setRows(
+                    rows.map((x, j) => (j === i ? { ...x, role: e.target.value as SplitRole } : x)),
+                  )
+                }
               >
                 {ROLES.map((o) => (
                   <option key={o.value} value={o.value}>
@@ -174,16 +204,24 @@ export default function PublisherPage() {
                 aria-label={`Recipient ${i + 1}`}
                 placeholder="Account (0x, 32 bytes) or DID"
                 value={r.recipient}
-                onChange={(e) => setRows(rows.map((x, j) => (j === i ? { ...x, recipient: e.target.value } : x)))}
+                onChange={(e) =>
+                  setRows(rows.map((x, j) => (j === i ? { ...x, recipient: e.target.value } : x)))
+                }
               />
               <Input
                 aria-label={`Percent ${i + 1}`}
                 inputMode="decimal"
                 placeholder="%"
                 value={r.percent}
-                onChange={(e) => setRows(rows.map((x, j) => (j === i ? { ...x, percent: e.target.value } : x)))}
+                onChange={(e) =>
+                  setRows(rows.map((x, j) => (j === i ? { ...x, percent: e.target.value } : x)))
+                }
               />
-              <Button variant="ghost" size="sm" onClick={() => setRows(rows.filter((_, j) => j !== i))}>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setRows(rows.filter((_, j) => j !== i))}
+              >
                 Remove
               </Button>
             </div>
@@ -197,12 +235,18 @@ export default function PublisherPage() {
           </Button>
           {draft.error ? <p className="text-sm text-danger">{draft.error}</p> : null}
           {preview.data ? (
-            <div className="rounded-md border border-border-subtle p-3 text-sm" data-testid="split-preview">
+            <div
+              className="rounded-md border border-border-subtle p-3 text-sm"
+              data-testid="split-preview"
+            >
               <p className="mb-1 text-foreground-muted">A payment of 1 TNZO would divide as:</p>
-              <p>Protocol fee: {formatBaseUnits(preview.data.allocation.fee.fee, TNZO_DECIMALS)} TNZO</p>
+              <p>
+                Protocol fee: {formatBaseUnits(preview.data.allocation.fee.fee, TNZO_DECIMALS)} TNZO
+              </p>
               {draft.rule?.lines.map((l, i) => (
                 <p key={i}>
-                  {l.role === 'payee' ? 'You' : l.role}: {formatBaseUnits(preview.data.allocation.credits[i] ?? '0', TNZO_DECIMALS)} TNZO
+                  {l.role === 'payee' ? 'You' : l.role}:{' '}
+                  {formatBaseUnits(preview.data.allocation.credits[i] ?? '0', TNZO_DECIMALS)} TNZO
                 </p>
               ))}
             </div>

@@ -24,7 +24,11 @@ function setup(recordCredentials?: () => unknown[]) {
   let firstXy = '';
   let firstCred = '';
   const rpc = new MockRpc({
-    tenzro_createCustodyChallenge: (p: { account_address: string; operation: string; target_hex?: string }) => {
+    tenzro_createCustodyChallenge: (p: {
+      account_address: string;
+      operation: string;
+      target_hex?: string;
+    }) => {
       n += 1;
       return issuedChallenge(n, p);
     },
@@ -223,7 +227,11 @@ describe('linking a phone from the first device', () => {
     const ids: string[] = [];
     let n = 0;
     const rpc = new MockRpc({
-      tenzro_createCustodyChallenge: (p: { account_address: string; operation: string; target_hex?: string }) => {
+      tenzro_createCustodyChallenge: (p: {
+        account_address: string;
+        operation: string;
+        target_hex?: string;
+      }) => {
         n += 1;
         return issuedChallenge(n, p);
       },
@@ -271,7 +279,11 @@ describe('linking a phone from the first device', () => {
     const ids: string[] = [];
     let n = 0;
     const rpc = new MockRpc({
-      tenzro_createCustodyChallenge: (p: { account_address: string; operation: string; target_hex?: string }) => {
+      tenzro_createCustodyChallenge: (p: {
+        account_address: string;
+        operation: string;
+        target_hex?: string;
+      }) => {
         n += 1;
         return issuedChallenge(n, p);
       },

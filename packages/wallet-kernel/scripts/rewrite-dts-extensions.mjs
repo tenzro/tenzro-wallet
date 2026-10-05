@@ -8,7 +8,7 @@
  * declaration files for module resolution to succeed.
  */
 
-import { readFile, writeFile, readdir } from 'node:fs/promises';
+import { readFile, readdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 const DIST = new URL('../dist/', import.meta.url).pathname;

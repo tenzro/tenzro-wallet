@@ -101,7 +101,8 @@ function CreateOrSignIn({ onDone }: { onDone: () => void }) {
         <h1 className="text-3xl font-semibold tracking-tight mb-3">Your wallet is a passkey.</h1>
         <p className="text-foreground-muted leading-relaxed mb-8 max-w-lg mx-auto">
           Your identity and account are created from a passkey on this device. Every approval is
-          signed by the passkey, inside this device's secure hardware. Nothing is stored and there is nothing to write down.
+          signed by the passkey, inside this device's secure hardware. Nothing is stored and there
+          is nothing to write down.
         </p>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-left mb-8">

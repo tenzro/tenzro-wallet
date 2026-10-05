@@ -167,7 +167,11 @@ export function App() {
             origin="inference.example"
             chains={['ethereum', 'base', 'arbitrum']}
           />
-          <ConnectedRow name="Data Market" origin="data.example" chains={['solana', 'tenzro-svm']} />
+          <ConnectedRow
+            name="Data Market"
+            origin="data.example"
+            chains={['solana', 'tenzro-svm']}
+          />
           <ConnectedRow name="Tempo" origin="app.tempo.xyz" chains={['tempo']} />
         </TabsContent>
       </Tabs>

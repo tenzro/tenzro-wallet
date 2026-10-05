@@ -120,7 +120,12 @@ describe('EscrowSdkAdapter.release / refund', () => {
       kind: 'ReleaseEscrow',
       fields: {
         escrow_id: Array(32).fill(0xee),
-        proof: { proof_type: 'Cryptographic', proof_data: [1, 2], signatures: [], attestation: null },
+        proof: {
+          proof_type: 'Cryptographic',
+          proof_data: [1, 2],
+          signatures: [],
+          attestation: null,
+        },
       },
     });
   });

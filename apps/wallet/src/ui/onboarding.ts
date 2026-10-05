@@ -102,7 +102,11 @@ function renderState(state: UiState, dispatch: (a: Action) => void): HTMLElement
   const root = el('div', { class: 'tenzro-onboarding' });
   switch (state.kind) {
     case 'choose': {
-      const name = el('input', { type: 'text', placeholder: 'Your name', autocomplete: 'username webauthn' });
+      const name = el('input', {
+        type: 'text',
+        placeholder: 'Your name',
+        autocomplete: 'username webauthn',
+      });
       root.append(
         h2('Set up your Tenzro wallet'),
         p('Your wallet is secured by a passkey on your device. There is nothing to write down.'),

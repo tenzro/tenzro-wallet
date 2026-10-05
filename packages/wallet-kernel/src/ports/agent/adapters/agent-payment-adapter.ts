@@ -10,7 +10,10 @@
 
 import type { AgentPaymentClient, AuthClient } from 'tenzro-sdk';
 import { fromHex, toHex } from '../../../custody/passkey/bytes.ts';
-import { type CustodyAuthorization, custodyChallengeDigest } from '../../../custody/passkey/gate.ts';
+import {
+  type CustodyAuthorization,
+  custodyChallengeDigest,
+} from '../../../custody/passkey/gate.ts';
 import type { RawAgentTermsView } from '../../../custody/passkey/machines.ts';
 import type {
   AgentPaymentPort,
@@ -64,7 +67,9 @@ export function checkCompletedTerms(
     agentTermsTarget({ ...requested, serving_nodes: completed.serving_nodes }, rotateTokens),
   );
   if (target !== expected) {
-    throw new Error('The node returned terms that differ from the ones requested; nothing was signed.');
+    throw new Error(
+      'The node returned terms that differ from the ones requested; nothing was signed.',
+    );
   }
   const ids = (t: AgentTermsWire) =>
     t.serving_nodes.map((n) => `${n.machine_did}|${n.operator_did}`).join(',');
@@ -136,7 +141,9 @@ export class AgentPaymentSdkAdapter implements AgentPaymentPort {
           strip(challenge.target_hex ?? '') !== strip(targetHex) ||
           strip(challenge.challenge_hex) !== toHex(digest)
         ) {
-          throw new Error('The node issued a challenge for different terms than the ones checked; nothing was signed.');
+          throw new Error(
+            'The node issued a challenge for different terms than the ones checked; nothing was signed.',
+          );
         }
         return req.authorize({
           challenge_id: challenge.challenge_id,

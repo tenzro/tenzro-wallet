@@ -160,7 +160,10 @@ function execute(callType: number, executionCalldata: Uint8Array): Uint8Array {
 /** One call: executionCalldata = target (20) || value (32, big-endian) || data. */
 export function encodeExecuteSingle(call: Execution): Uint8Array {
   checkValue(call.value);
-  return execute(CALLTYPE_SINGLE, concatBytes(target(call.to), uint256(call.value), call.data ?? new Uint8Array(0)));
+  return execute(
+    CALLTYPE_SINGLE,
+    concatBytes(target(call.to), uint256(call.value), call.data ?? new Uint8Array(0)),
+  );
 }
 
 /**
@@ -169,10 +172,16 @@ export function encodeExecuteSingle(call: Execution): Uint8Array {
  */
 export function encodeExecuteBatch(calls: readonly Execution[]): Uint8Array {
   if (calls.length === 0) throw new Error('a batch needs at least one call');
-  if (calls.length > MAX_BATCH_CALLS) throw new Error(`a batch holds at most ${MAX_BATCH_CALLS} calls`);
+  if (calls.length > MAX_BATCH_CALLS)
+    throw new Error(`a batch holds at most ${MAX_BATCH_CALLS} calls`);
   const tuples = calls.map((c) => {
     checkValue(c.value);
-    return concatBytes(addressWord(c.to), uint256(c.value), uint256(0x60n), abiBytes(c.data ?? new Uint8Array(0)));
+    return concatBytes(
+      addressWord(c.to),
+      uint256(c.value),
+      uint256(0x60n),
+      abiBytes(c.data ?? new Uint8Array(0)),
+    );
   });
   let offset = 32 * calls.length;
   const offsets = tuples.map((t) => {
@@ -180,7 +189,10 @@ export function encodeExecuteBatch(calls: readonly Execution[]): Uint8Array {
     offset += t.length;
     return at;
   });
-  return execute(CALLTYPE_BATCH, concatBytes(uint256(0x20n), uint256(BigInt(calls.length)), ...offsets, ...tuples));
+  return execute(
+    CALLTYPE_BATCH,
+    concatBytes(uint256(0x20n), uint256(BigInt(calls.length)), ...offsets, ...tuples),
+  );
 }
 
 const q = (v: bigint): string => `0x${v.toString(16)}`;

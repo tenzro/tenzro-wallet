@@ -281,8 +281,11 @@ export class BrowserPasskeyAuthenticator implements PasskeyAuthenticator {
 
   async supportsImmediateGet(): Promise<boolean> {
     try {
-      const pkc = (globalThis as { PublicKeyCredential?: { getClientCapabilities?: () => Promise<Record<string, boolean>> } })
-        .PublicKeyCredential;
+      const pkc = (
+        globalThis as {
+          PublicKeyCredential?: { getClientCapabilities?: () => Promise<Record<string, boolean>> };
+        }
+      ).PublicKeyCredential;
       return (await pkc?.getClientCapabilities?.())?.immediateGet === true;
     } catch {
       return false;

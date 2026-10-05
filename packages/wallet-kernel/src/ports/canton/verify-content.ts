@@ -139,7 +139,7 @@ function recipientPresent(
   // The serialised argument JSON is the catch-all: the receiver always appears
   // there for a transfer choice even when it isn't a top-level signatory
   // (e.g. a TransferPreapproval_Send where the provider co-signs).
-  if (parsed.jsonString !== undefined && parsed.jsonString.includes(party)) return true;
+  if (parsed.jsonString?.includes(party)) return true;
   return false;
 }
 

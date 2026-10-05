@@ -32,7 +32,9 @@ export interface DeviceSummary {
 
 /** The root a passkey belongs to: its sync provider when synced, itself otherwise. */
 export function rootOf(d: DeviceSummary): string {
-  return d.tier === 'synced' && d.aaguid ? `provider:${d.aaguid.toLowerCase()}` : `passkey:${d.credentialIdHex.toLowerCase()}`;
+  return d.tier === 'synced' && d.aaguid
+    ? `provider:${d.aaguid.toLowerCase()}`
+    : `passkey:${d.credentialIdHex.toLowerCase()}`;
 }
 
 /** How many roots the account has that cannot be lost or taken together. */
@@ -71,7 +73,12 @@ export function assessReadiness(
   };
 
   if (devices.length === 0) {
-    return { ...base, ready: false, blocker: 'no-devices', guidance: 'Create a passkey to set up this wallet.' };
+    return {
+      ...base,
+      ready: false,
+      blocker: 'no-devices',
+      guidance: 'Create a passkey to set up this wallet.',
+    };
   }
   if (roots < 2 && guardians === 0) {
     return {

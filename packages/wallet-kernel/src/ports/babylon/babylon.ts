@@ -51,9 +51,7 @@ export interface BtcDelegation {
 }
 
 export interface BabylonPort {
-  registerFinalityProvider(
-    req: RegisterFinalityProviderRequest,
-  ): Promise<FinalityProvider>;
+  registerFinalityProvider(req: RegisterFinalityProviderRequest): Promise<FinalityProvider>;
   getFinalityProvider(validator: string): Promise<FinalityProvider | null>;
   listFinalityProviders(): Promise<FinalityProvider[]>;
   totalStakeForProvider(validator: string): Promise<BabylonTotalStake>;

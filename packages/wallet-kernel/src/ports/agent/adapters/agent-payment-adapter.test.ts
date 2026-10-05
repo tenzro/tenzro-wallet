@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { toHex } from '../../../custody/passkey/bytes.ts';
-import { type CustodyAuthorization, custodyChallengeDigest } from '../../../custody/passkey/gate.ts';
 import { fromHex } from '../../../custody/passkey/bytes.ts';
+import {
+  type CustodyAuthorization,
+  custodyChallengeDigest,
+} from '../../../custody/passkey/gate.ts';
 import type { AgentTermsChallenge } from '../agent-payment.ts';
 import { type AgentTermsWire, agentTermsTarget } from '../agent-terms.ts';
 import vectors from '../fixtures/agent-terms-targets.json' with { type: 'json' };
@@ -35,7 +38,11 @@ const requested: AgentTermsWire = {
 };
 const completed: AgentTermsWire = {
   ...requested,
-  serving_nodes: requested.serving_nodes.map((n) => ({ ...n, dpop_public_key: 'ab', dpop_jkt: 'cd' })),
+  serving_nodes: requested.serving_nodes.map((n) => ({
+    ...n,
+    dpop_public_key: 'ab',
+    dpop_jkt: 'cd',
+  })),
 };
 const auth: CustodyAuthorization = {
   challenge_id: 'c1',
@@ -50,7 +57,10 @@ function termsClient(returned: AgentTermsWire, seen: AgentTermsChallenge[]): Age
       const nonce = new Uint8Array(16).fill(7);
       const a = await authorize({
         challenge_id: 'c1',
-        challenge_hex: toHex(custodyChallengeDigest(fromHex(account), 'update_agent_terms', target, nonce), true),
+        challenge_hex: toHex(
+          custodyChallengeDigest(fromHex(account), 'update_agent_terms', target, nonce),
+          true,
+        ),
         nonce_hex: toHex(nonce, true),
         target_hex: toHex(target, true),
         account_address: account,
@@ -59,7 +69,11 @@ function termsClient(returned: AgentTermsWire, seen: AgentTermsChallenge[]): Age
       });
       expect(a).toBe(auth);
       expect(rotate).toBe(true);
-      return { agent_did: agentDid, delegation: returned as unknown as Record<string, unknown>, tokens_revoked: 2 };
+      return {
+        agent_did: agentDid,
+        delegation: returned as unknown as Record<string, unknown>,
+        tokens_revoked: 2,
+      };
     },
   };
 }
@@ -102,7 +116,9 @@ describe('AgentPaymentSdkAdapter', () => {
       remainingThisHour: null,
       assets: [{ asset: '0x22', spentToday: 7n, remainingToday: 3n }],
     });
-    expect(await new AgentPaymentSdkAdapter(noSpend, termsClient(completed, [])).getTerms('x')).toBeNull();
+    expect(
+      await new AgentPaymentSdkAdapter(noSpend, termsClient(completed, [])).getTerms('x'),
+    ).toBeNull();
   });
 
   it('signs a terms update only after the completed terms check out', async () => {

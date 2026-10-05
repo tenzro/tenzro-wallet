@@ -19,7 +19,9 @@ describe('independentRoots', () => {
   });
 
   it('counts every device-bound passkey on its own, even of one model', () => {
-    expect(independentRoots([dev('01', 'device-bound', OTHER), dev('02', 'device-bound', OTHER)])).toBe(2);
+    expect(
+      independentRoots([dev('01', 'device-bound', OTHER), dev('02', 'device-bound', OTHER)]),
+    ).toBe(2);
   });
 
   it('counts a synced provider and a security key as two', () => {

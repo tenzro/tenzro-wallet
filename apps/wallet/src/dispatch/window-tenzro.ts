@@ -113,16 +113,10 @@ export class KernelEip1193Provider implements EIP1193Provider {
         );
       },
       personal_sign: async () => {
-        throw rpcError(
-          -32601,
-          'personal_sign: not wired yet.',
-        );
+        throw rpcError(-32601, 'personal_sign: not wired yet.');
       },
       tenzro_prepareIntent: async () => {
-        throw rpcError(
-          -32601,
-          'tenzro_prepareIntent: not wired yet.',
-        );
+        throw rpcError(-32601, 'tenzro_prepareIntent: not wired yet.');
       },
     };
   }

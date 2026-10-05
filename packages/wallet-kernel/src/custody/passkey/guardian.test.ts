@@ -58,7 +58,9 @@ describe('recoveryOpHash', () => {
 
   it('is approved under the recovery-approval context', () => {
     const op = new Uint8Array(32).fill(9);
-    expect(recoveryApprovalChallenge(op)).toEqual(signingDigest(SignatureContext.RecoveryApproval, op));
+    expect(recoveryApprovalChallenge(op)).toEqual(
+      signingDigest(SignatureContext.RecoveryApproval, op),
+    );
   });
 });
 
@@ -76,7 +78,9 @@ describe('guardian cards', () => {
   it('read provider and backup flags from the registration', () => {
     const p = registrationProvenance(regData(0x18, aaguidA, new Uint8Array([1])));
     expect(p).toEqual({ aaguid: aaguidA, backupEligible: true, backupState: true });
-    expect(registrationProvenance(regData(0, aaguidA, new Uint8Array([1]))).backupEligible).toBe(false);
+    expect(registrationProvenance(regData(0, aaguidA, new Uint8Array([1]))).backupEligible).toBe(
+      false,
+    );
   });
 
   it('name key, no pq key, provider, flags, role and label in the target', () => {
@@ -104,7 +108,11 @@ describe('guardian cards', () => {
 });
 
 describe('quorum preview', () => {
-  const synced = (id: string, aaguid = 'a1'.repeat(16)): QuorumMember => ({ id, backupEligible: true, aaguid });
+  const synced = (id: string, aaguid = 'a1'.repeat(16)): QuorumMember => ({
+    id,
+    backupEligible: true,
+    aaguid,
+  });
   const bound = (id: string): QuorumMember => ({ id, backupEligible: false });
 
   it('counts synced passkeys of one provider once', () => {
@@ -114,7 +122,11 @@ describe('quorum preview', () => {
   });
 
   it('counts each device-bound passkey on its own', () => {
-    expect(checkGuardianQuorum([bound('01'), bound('02')], 2)).toEqual({ ok: true, roots: 2, reason: null });
+    expect(checkGuardianQuorum([bound('01'), bound('02')], 2)).toEqual({
+      ok: true,
+      roots: 2,
+      reason: null,
+    });
   });
 
   it('groups synced passkeys that report no provider', () => {
@@ -135,6 +147,10 @@ describe('quorum preview', () => {
   });
 
   it('reads a card as a member', () => {
-    expect(cardQuorumMember(card())).toEqual({ id: '01'.repeat(64), backupEligible: true, aaguid: 'a1'.repeat(16) });
+    expect(cardQuorumMember(card())).toEqual({
+      id: '01'.repeat(64),
+      backupEligible: true,
+      aaguid: 'a1'.repeat(16),
+    });
   });
 });

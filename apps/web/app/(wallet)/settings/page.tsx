@@ -66,7 +66,8 @@ function DevicesCard() {
   // identifier, not a name, so they are numbered, not named.
   const providers = new Map<string, number>();
   for (const d of list) {
-    if (d.tier === 'synced' && d.aaguid && !providers.has(d.aaguid)) providers.set(d.aaguid, providers.size + 1);
+    if (d.tier === 'synced' && d.aaguid && !providers.has(d.aaguid))
+      providers.set(d.aaguid, providers.size + 1);
   }
   const where = (d: (typeof list)[number]): string | null =>
     d.tier === 'synced'
@@ -97,7 +98,8 @@ function DevicesCard() {
             <CardDescription>{readiness.guidance}</CardDescription>
           </div>
           <Badge variant={readiness.ready ? 'success' : 'warning'} size="sm" dot>
-            {readiness.independentRoots} independent {readiness.independentRoots === 1 ? 'root' : 'roots'}
+            {readiness.independentRoots} independent{' '}
+            {readiness.independentRoots === 1 ? 'root' : 'roots'}
           </Badge>
         </div>
       </CardHeader>

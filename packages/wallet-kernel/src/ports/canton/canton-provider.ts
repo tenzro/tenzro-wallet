@@ -76,9 +76,7 @@ export type CantonProviderConfig = ByoCantonProviderConfig | TenzroCantonProvide
  * base URLs and the auth-header builder; everything downstream (prepare/sign/
  * execute, content verification, completion tailing) is mode-agnostic.
  */
-export function resolveCantonAdapterConfig(
-  provider: CantonProviderConfig,
-): LedgerApiAdapterConfig {
+export function resolveCantonAdapterConfig(provider: CantonProviderConfig): LedgerApiAdapterConfig {
   if (provider.mode === 'tenzro-network') {
     const base: LedgerApiAdapterConfig = {
       ledgerBaseUrl: provider.baseUrl,
@@ -88,9 +86,7 @@ export function resolveCantonAdapterConfig(
       // it. Throw if anything ever falls through to it — that'd be a bug.
       token: () =>
         Promise.reject(
-          new Error(
-            'tenzro-network canton: token() must not be called — auth is the API key',
-          ),
+          new Error('tenzro-network canton: token() must not be called — auth is the API key'),
         ),
       authHeaders: async () => ({ 'x-tenzro-api-key': await provider.apiKey() }),
       ...(provider.fetch !== undefined ? { fetch: provider.fetch } : {}),

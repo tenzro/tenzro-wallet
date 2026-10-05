@@ -34,7 +34,14 @@ describe('custodyChallengeDigest', () => {
   it('binds account, operation, target and nonce', () => {
     const nonce = Uint8Array.from({ length: 16 }, (_, i) => i);
     expect(
-      toHex(custodyChallengeDigest(new Uint8Array(20).fill(7), 'add_guardian', utf8('guardian-target'), nonce)),
+      toHex(
+        custodyChallengeDigest(
+          new Uint8Array(20).fill(7),
+          'add_guardian',
+          utf8('guardian-target'),
+          nonce,
+        ),
+      ),
     ).toBe('ec7ea9196c21ab3eb2a0dcdc6b96e59a069b4a7b14a6f8576474d05ffe649b37');
   });
 });

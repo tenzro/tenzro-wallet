@@ -3,10 +3,12 @@ import { BabylonAdapter, type BabylonClientLike } from './adapter.ts';
 
 function fakeClient(): { client: BabylonClientLike; calls: Array<[string, unknown[]]> } {
   const calls: Array<[string, unknown[]]> = [];
-  const record = (name: string) => async (...args: unknown[]) => {
-    calls.push([name, args]);
-    return { ok: true, method: name } as never;
-  };
+  const record =
+    (name: string) =>
+    async (...args: unknown[]) => {
+      calls.push([name, args]);
+      return { ok: true, method: name } as never;
+    };
   const client = {
     registerFinalityProvider: record('registerFinalityProvider'),
     getFinalityProvider: record('getFinalityProvider'),

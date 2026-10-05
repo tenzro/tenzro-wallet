@@ -9,7 +9,12 @@ import { useUsdRate } from '@/lib/tenzro/hooks';
 import { previewSplit } from '@/lib/tenzro/methods';
 
 type Plan = PopupSignSettlementPlan['plan'];
-type Leg = { kind?: Record<string, Record<string, unknown>>; class_required?: string; usd_e6?: number; max_network_fee?: string };
+type Leg = {
+  kind?: Record<string, Record<string, unknown>>;
+  class_required?: string;
+  usd_e6?: number;
+  max_network_fee?: string;
+};
 
 const CLASS_TEXT: Record<string, string> = {
   native: 'settles on Tenzro',
@@ -17,8 +22,10 @@ const CLASS_TEXT: Record<string, string> = {
   attested: 'attested by a bonded attestor',
 };
 
-const big = (v: unknown) => (typeof v === 'string' && /^\d+$/.test(v) ? BigInt(v) : typeof v === 'number' ? BigInt(v) : 0n);
-const usd = (e6: bigint) => `$${(e6 / 1_000_000n).toLocaleString('en-US')}.${((e6 % 1_000_000n) / 10_000n).toString().padStart(2, '0')}`;
+const big = (v: unknown) =>
+  typeof v === 'string' && /^\d+$/.test(v) ? BigInt(v) : typeof v === 'number' ? BigInt(v) : 0n;
+const usd = (e6: bigint) =>
+  `$${(e6 / 1_000_000n).toLocaleString('en-US')}.${((e6 % 1_000_000n) / 10_000n).toString().padStart(2, '0')}`;
 
 /** One leg in words: what moves, where, and how its outcome is known. */
 function legText(leg: Leg): string {
@@ -103,7 +110,9 @@ export function PlanReview({ plan }: { readonly plan: Plan }) {
       <section>
         <h3 className="mb-1 font-medium">Who is paid on commit</h3>
         {funded === 0n ? (
-          <p className="text-foreground-muted">No Tenzro value is divided; each leg pays its own recipient.</p>
+          <p className="text-foreground-muted">
+            No Tenzro value is divided; each leg pays its own recipient.
+          </p>
         ) : division.error ? (
           <p className="text-danger">This plan cannot be divided: {String(division.error)}</p>
         ) : (
@@ -124,10 +133,14 @@ export function PlanReview({ plan }: { readonly plan: Plan }) {
 
       <section className="space-y-1 rounded-md border border-border-subtle p-3">
         <p>
-          <span className="font-medium">Total:</span> {formatBaseUnits(funded.toString(), TNZO_DECIMALS)} TNZO on Tenzro
+          <span className="font-medium">Total:</span>{' '}
+          {formatBaseUnits(funded.toString(), TNZO_DECIMALS)} TNZO on Tenzro
           {offTenzroUsd > 0n ? ` and ${usd(offTenzroUsd)} on other networks` : ''}
           {rate.data && funded > 0n ? (
-            <span className="text-foreground-muted"> (about {usdEstimate(funded, rate.data)} for the TNZO, an estimate)</span>
+            <span className="text-foreground-muted">
+              {' '}
+              (about {usdEstimate(funded, rate.data)} for the TNZO, an estimate)
+            </span>
           ) : null}
         </p>
         <p>
@@ -135,8 +148,8 @@ export function PlanReview({ plan }: { readonly plan: Plan }) {
           {deadline.toLocaleString()}, the Tenzro value is divided as above.
         </p>
         <p>
-          <span className="font-medium">Abort:</span> if any leg fails or the deadline passes, the plan aborts and
-          everything it holds returns to you.
+          <span className="font-medium">Abort:</span> if any leg fails or the deadline passes, the
+          plan aborts and everything it holds returns to you.
         </p>
       </section>
     </div>

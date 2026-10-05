@@ -141,7 +141,8 @@ export function recoveryOpHash(r: {
   readonly recoveryId: string;
   readonly expiresAtMs: number;
 }): Uint8Array {
-  if (r.newPasskeyPublicKey.length !== 64) throw new Error('the new passkey key must be raw x || y');
+  if (r.newPasskeyPublicKey.length !== 64)
+    throw new Error('the new passkey key must be raw x || y');
   const h = sha256.create();
   h.update(utf8(RECOVERY_DOMAIN));
   for (const part of [
@@ -211,7 +212,10 @@ export interface QuorumCheck {
  * roots. A threshold of 1 is accepted but flagged: one guardian could then
  * recover the account alone.
  */
-export function checkGuardianQuorum(members: readonly QuorumMember[], threshold: number): QuorumCheck {
+export function checkGuardianQuorum(
+  members: readonly QuorumMember[],
+  threshold: number,
+): QuorumCheck {
   const roots = guardianIndependentRoots(members);
   if (!Number.isInteger(threshold) || threshold < 1) {
     return { ok: false, roots, reason: 'The threshold must be at least 1.' };

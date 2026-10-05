@@ -17,7 +17,10 @@ export function LinkDeviceActions({
   /** Name recorded for the new device; a default fits each kind. */
   readonly label?: string;
   /** Called with the network's answer once the device is on the account. */
-  readonly onLinked?: (linked: { readonly credentials_total: number; readonly already_linked?: boolean }) => void;
+  readonly onLinked?: (linked: {
+    readonly credentials_total: number;
+    readonly already_linked?: boolean;
+  }) => void;
 }) {
   const { wallet } = useWallet();
   const { link } = useDeviceActions(wallet);
@@ -61,12 +64,14 @@ export function LinkDeviceActions({
           ? 'This device makes its own passkey, then a QR code appears: scan it with your phone to approve.'
           : 'A QR code appears: scan it with your phone, save the passkey there, then approve here.'}
       </p>
-      {link.isSuccess && !link.data?.already_linked && <p className="text-sm text-success">Device added.</p>}
+      {link.isSuccess && !link.data?.already_linked && (
+        <p className="text-sm text-success">Device added.</p>
+      )}
       {link.isSuccess && link.data?.already_linked && (
         <p className="text-sm text-foreground-subtle">
-          That device already has this wallet&apos;s passkey, synced through its password manager, so it can approve
-          already and nothing was added. It is not a separate device: for a second, independent one, use a security key or
-          a device that does not sync with this one.
+          That device already has this wallet&apos;s passkey, synced through its password manager,
+          so it can approve already and nothing was added. It is not a separate device: for a
+          second, independent one, use a security key or a device that does not sync with this one.
         </p>
       )}
       {link.error && <p className="text-sm text-danger">{link.error.message}</p>}

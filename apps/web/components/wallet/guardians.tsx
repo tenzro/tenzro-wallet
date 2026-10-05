@@ -64,10 +64,14 @@ export function GuardiansPanel({
   const duplicate =
     !!card.card &&
     members.some(
-      (m) => m.p256_pubkey_hex.replace(/^0x/, '').toLowerCase() === card.card!.p256.replace(/^0x/, '').toLowerCase(),
+      (m) =>
+        m.p256_pubkey_hex.replace(/^0x/, '').toLowerCase() ===
+        card.card!.p256.replace(/^0x/, '').toLowerCase(),
     );
-  const after = card.card && !duplicate ? [...members.map(memberQuorum), cardQuorumMember(card.card)] : null;
-  const wanted = threshold ?? Math.max(guardians.data?.threshold ?? 0, Math.min(2, after?.length ?? 0));
+  const after =
+    card.card && !duplicate ? [...members.map(memberQuorum), cardQuorumMember(card.card)] : null;
+  const wanted =
+    threshold ?? Math.max(guardians.data?.threshold ?? 0, Math.min(2, after?.length ?? 0));
   const preview = after ? checkGuardianQuorum(after, wanted) : null;
 
   const add = useMutation({
@@ -132,7 +136,9 @@ export function GuardiansPanel({
             <p>
               {card.card.label || 'Unnamed guardian'} ·{' '}
               {ROLE_TEXT[card.card.role] ?? card.card.role} ·{' '}
-              {cardQuorumMember(card.card).backupEligible ? 'synced passkey' : 'device-bound passkey'}
+              {cardQuorumMember(card.card).backupEligible
+                ? 'synced passkey'
+                : 'device-bound passkey'}
             </p>
             <label className="flex items-center gap-2">
               <span>Approvals needed</span>

@@ -17,8 +17,8 @@
 
 import {
   BrowserPasskeyAuthenticator,
-  DEFAULT_RP_ID,
   DEFAULT_RPC_URL,
+  DEFAULT_RP_ID,
   HttpJsonRpcTransport,
   PasskeyCustody,
   type WalletKernel,
