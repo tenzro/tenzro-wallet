@@ -122,6 +122,7 @@ function mockNode(accountKey, credId) {
   };
   const handlers = {
     eth_chainId: () => '0x539',
+    eth_gasPrice: () => '0x3b9aca00',
     tenzro_listRoleEndpoints: () => ({ endpoints: [] }),
     tenzro_getCheckpointCertificate: () => ({ index: 1, digest: 'cd'.repeat(32) }),
     tenzro_getNonce: () => '0x7',
@@ -737,7 +738,8 @@ async function main() {
         assert.equal(node.sent.length, before + 1, 'one transaction');
         const sent = node.sent.at(-1);
         const change = sent.tx_type.KeystoreUpdate.update;
-        assert.deepEqual(change.op.add_credential.credential, joining);
+        // Sent as the network encodes it: added_at_ms is the chain's, zero here.
+        assert.deepEqual(change.op.add_credential.credential, { ...joining, added_at_ms: 0 });
         assert.deepEqual(change.possession, possession, "the provider's proof, unchanged");
         assert.deepEqual(change.approvals, []);
         await verifyTx(node, sent, accountKey.xy, 'link');

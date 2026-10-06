@@ -53,6 +53,7 @@ function mockNode(record) {
   const node = { record, sent: [], staked: new Set(['wallet.example.org']) };
   const handlers = {
     eth_chainId: () => '0x539',
+    eth_gasPrice: () => '0x3b9aca00',
     tenzro_listRoleEndpoints: () => ({ endpoints: [] }),
     tenzro_getCheckpointCertificate: () => ({ index: 1, digest: 'cd'.repeat(32) }),
     tenzro_getNonce: () => `0x${node.sent.length.toString(16)}`,

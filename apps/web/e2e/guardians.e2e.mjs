@@ -184,6 +184,7 @@ function mockNode(accountKey, accountCredId, phone, laptop) {
   };
   const handlers = {
     eth_chainId: () => '0x539',
+    eth_gasPrice: () => '0x3b9aca00',
     tenzro_listRoleEndpoints: () => ({ endpoints: [] }),
     tenzro_getCheckpointCertificate: () => ({ index: 1, digest: 'cd'.repeat(32) }),
     tenzro_getNonce: () => `0x${node.sent.length.toString(16)}`,
