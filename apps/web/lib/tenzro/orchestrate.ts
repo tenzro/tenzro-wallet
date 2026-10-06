@@ -4,7 +4,7 @@
  *
  *  detect(recipient)
  *    ├─ 20-byte 0x address, or a 32-byte Tenzro address  → Tenzro transfer
- *    │     (passkey-signed UserOperation from the account)
+ *    │     (passkey-signed transaction from the account)
  *    ├─ Solana base58                                   → another network
  *    └─ unknown                                         → reject
  *

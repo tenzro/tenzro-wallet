@@ -6,12 +6,23 @@
  */
 
 import {
+  type HybridSigner,
+  type RpcClient,
+  type SignedTransactionJson,
+  type TypedTransaction,
+  TypedTxClient,
+} from 'tenzro-sdk';
+
+import {
   type JsonRpcTransport,
   NetworkTransport,
   type NetworkTransportOptions,
   parseQuantity,
 } from '../../custody/passkey/rpc.ts';
-import type { TenzroRpcPort, UserOperationReceipt } from '../tenzro-rpc.ts';
+import type { TenzroRpcPort, TransactionReceipt } from '../tenzro-rpc.ts';
+
+const hex = (bytes: readonly number[]) =>
+  `0x${bytes.map((b) => b.toString(16).padStart(2, '0')).join('')}`;
 
 export class TenzroJsonRpcAdapter implements TenzroRpcPort {
   readonly #rpc: JsonRpcTransport;
@@ -28,29 +39,34 @@ export class TenzroJsonRpcAdapter implements TenzroRpcPort {
     return parseQuantity(await this.#rpc.call<string>('eth_chainId', []));
   }
 
-  async getEntryPoint(): Promise<string> {
-    const list = await this.#rpc.call<string[]>('eth_supportedEntryPoints', []);
-    const first = list[0];
-    if (!first) throw new Error('this node serves no EntryPoint');
-    return first;
-  }
-
-  async getAccountNonce(account: string): Promise<bigint> {
-    const acct = await this.#rpc.call<{ nonce: number | string }>('tenzro_getSmartAccount', {
-      account_address: account,
-    });
-    return parseQuantity(acct.nonce);
-  }
-
   async getGasPrice(): Promise<bigint> {
     return parseQuantity(await this.#rpc.call<string>('eth_gasPrice', []));
   }
 
-  sendUserOperation(userOp: Readonly<Record<string, string>>, entryPoint: string): Promise<string> {
-    return this.#rpc.call<string>('eth_sendUserOperation', [userOp, entryPoint]);
+  signTransaction(signer: HybridSigner, tx: TypedTransaction): Promise<SignedTransactionJson> {
+    return new TypedTxClient(this.#rpc as unknown as RpcClient).sign(signer, tx);
   }
 
-  getUserOperationReceipt(userOpHash: string): Promise<UserOperationReceipt | null> {
-    return this.#rpc.call<UserOperationReceipt | null>('eth_getUserOperationReceipt', [userOpHash]);
+  async sendTransaction(signed: SignedTransactionJson): Promise<string> {
+    const t = signed.transaction;
+    return this.#rpc.call<string>('tenzro_sendRawTransaction', {
+      from: hex(t.from),
+      to: hex(t.to),
+      nonce: t.nonce,
+      chain_id: t.chain_id,
+      gas_limit: t.gas_limit,
+      gas_price: t.gas_price,
+      timestamp: t.timestamp,
+      valid_until: t.valid_until,
+      tx_type: t.tx_type,
+      public_key: signed.public_key,
+      signature: signed.signature,
+    });
+  }
+
+  async getTransactionReceipt(hash: string): Promise<TransactionReceipt | null> {
+    const r = await this.#rpc.call<{ status?: string } | null>('eth_getTransactionReceipt', [hash]);
+    if (!r) return null;
+    return { hash, success: r.status === '0x1' };
   }
 }

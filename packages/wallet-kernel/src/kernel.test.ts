@@ -3,6 +3,7 @@
  * a Tenzro-native send through the kernel facade.
  */
 
+import type { HybridSigner, SignedTransactionJson } from 'tenzro-sdk';
 import { describe, expect, it } from 'vitest';
 import { testSigningDriver } from './custody/test-driver.ts';
 import { testIdentity } from './identity/test-identity.ts';
@@ -32,15 +33,24 @@ function progressingRpcPort(): TenzroRpcPort {
   let polls = 0;
   return {
     getChainId: async () => 20_260_901n,
-    getEntryPoint: async () => '0x0000000000000000000000000000000000004337',
-    getAccountNonce: async () => 0n,
     getGasPrice: async () => 1_000_000_000n,
-    sendUserOperation: async () => '0xfeedface',
-    getUserOperationReceipt: async (hash) => {
+    signTransaction: async (_signer, tx) =>
+      ({
+        transaction: { tx_type: { [tx.kind]: tx.fields }, to: tx.to },
+        public_key: '11'.repeat(64),
+        signature: { classical: { form: 'raw', signature: '22'.repeat(64) } },
+      }) as unknown as SignedTransactionJson,
+    sendTransaction: async () => '0xfeedface',
+    getTransactionReceipt: async (hash) => {
       polls += 1;
-      return polls < 2 ? null : { userOpHash: hash, success: true };
+      return polls < 2 ? null : { hash, success: true };
     },
   };
+}
+
+/** A stand-in passkey signer; the fake port never asks it to sign. */
+function testTransactionSigner(): HybridSigner {
+  return { label: 'passkey' } as unknown as HybridSigner;
 }
 
 /**
@@ -88,7 +98,7 @@ function buildKernel(identity: TdipIdentity): WalletKernel {
       'tenzro-native',
       tenzroNativeSurface({
         keyResolver: (d) => keyResolver(d, 'tenzro-native'),
-        signingDriver: driver,
+        transactionSigner: async () => testTransactionSigner(),
         rpc: progressingRpcPort(),
         identityPort: recipientPort,
       }),
@@ -211,13 +221,12 @@ describe('WalletKernel end-to-end', () => {
 
   it('refuses to sign when policy is violated', async () => {
     const identity = await testIdentity({ uuid: 'kernel-test-2' });
-    const driver = testSigningDriver();
     const surfaces = new Map<SurfaceName, SurfaceModule>([
       [
         'tenzro-native',
         tenzroNativeSurface({
           keyResolver: (d) => (d === identity.did ? identity.keys.get('tenzro-native') : undefined),
-          signingDriver: driver,
+          transactionSigner: async () => testTransactionSigner(),
           rpc: progressingRpcPort(),
           identityPort: recipientPort,
         }),

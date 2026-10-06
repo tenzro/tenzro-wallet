@@ -674,6 +674,76 @@ async function main() {
       },
     );
 
+    await step(
+      "link: another provider's passkey, approved here and sent from the account",
+      async () => {
+        const joining = {
+          rp_id: 'tenzro.xyz',
+          credential_id: '4c'.repeat(16),
+          public_key: randomP256().xy.toString('hex'),
+          aaguid: '00'.repeat(16),
+          backup_eligible: false,
+          backup_state: false,
+          counts_as_root_from_ms: 0,
+          label: 'Labs Wallets',
+        };
+        const possession = {
+          classical: {
+            form: 'web_authn',
+            authenticator_data: '01',
+            client_data_json: '02',
+            signature: '03',
+          },
+        };
+        const update = {
+          account: ACCOUNT,
+          anchor: null,
+          previous_commitment: 'ef'.repeat(32),
+          op: { add_credential: { credential: joining } },
+          approvals: [],
+          possession,
+        };
+        await page.goto(`${BASE}/agents`);
+        const popupPromise = ctx.waitForEvent('page');
+        await page.evaluate((u) => {
+          window.__resp = null;
+          const w = window.open('/approve', 'tenzro-approve', 'width=420,height=720');
+          window.addEventListener('message', (e) => {
+            if (e.data?.type === 'ready') {
+              w.postMessage(
+                {
+                  protocol: 'tenzro-wallet/popup/v1',
+                  type: 'request',
+                  id: 'r2',
+                  method: 'tenzro_linkCredential',
+                  params: { update: u },
+                },
+                '*',
+              );
+            }
+            if (e.data?.type === 'response') window.__resp = e.data;
+          });
+        }, update);
+        const popup = await popupPromise;
+        await holdPasskey(popup);
+        await popup.getByText('Link a passkey to your wallet?').waitFor();
+        await popup.getByText('tenzro.xyz').waitFor();
+        const before = node.sent.length;
+        await popup.getByRole('button', { name: 'Approve' }).click();
+        await page.waitForFunction(() => window.__resp !== null, null, { timeout: 30_000 });
+        const resp = await page.evaluate(() => window.__resp);
+        assert.equal(resp.error, undefined, JSON.stringify(resp.error));
+        assert.equal(resp.result.credentialsTotal, 2);
+        assert.equal(node.sent.length, before + 1, 'one transaction');
+        const sent = node.sent.at(-1);
+        const change = sent.tx_type.KeystoreUpdate.update;
+        assert.deepEqual(change.op.add_credential.credential, joining);
+        assert.deepEqual(change.possession, possession, "the provider's proof, unchanged");
+        assert.deepEqual(change.approvals, []);
+        await verifyTx(node, sent, accountKey.xy, 'link');
+      },
+    );
+
     assert.deepEqual(errors, [], 'page errors');
     console.log(`\n${passed} passed`);
   } finally {

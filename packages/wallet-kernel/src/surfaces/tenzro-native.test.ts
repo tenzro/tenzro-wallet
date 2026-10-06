@@ -1,64 +1,52 @@
 /**
- * The surface's contract: read nonce / chain id / EntryPoint / gas price from
- * the port during prepare, hand the UserOperation hash to the signing driver,
- * submit the signed operation, and watch its receipt. A fake port records
- * every call; a recording driver stands in for the passkey.
+ * The surface's contract: prepare a native Transfer to the recipient's ledger
+ * slot, sign it with the account's passkey through the port, submit the
+ * signed transaction, and watch its receipt. A fake port records every call.
  */
 
+import type { HybridSigner, SignedTransactionJson, TypedTransaction } from 'tenzro-sdk';
 import { describe, expect, it } from 'vitest';
-import { fromHex, toHex } from '../custody/passkey/bytes.ts';
-import { type UserOperation, userOperationHash } from '../custody/passkey/userop.ts';
-import { testSigningDriver } from '../custody/test-driver.ts';
 import { testIdentity } from '../identity/test-identity.ts';
 import type { TenzroRpcPort } from '../ports/tenzro-rpc.ts';
 import type { Intent, TxStatus } from '../types/intent.ts';
-import type { SigningDriver, SigningRequest } from '../types/signing-driver.ts';
-import { tenzroNativeSurface } from './tenzro-native.ts';
+import { DEFAULT_TRANSFER_GAS, tenzroNativeSurface } from './tenzro-native.ts';
 
-const ENTRY_POINT = '0x0000000000000000000000000000000000004337';
 const RECIPIENT = '0x1111111111111111111111111111111111111111';
+const RECIPIENT_SLOT = `${RECIPIENT}${'00'.repeat(12)}`;
 
 interface PortLog {
-  nonceLookups: string[];
-  chainIdLookups: number;
-  sent: Array<{ op: Readonly<Record<string, string>>; entryPoint: string }>;
+  signed: Array<{ signer: HybridSigner; tx: TypedTransaction }>;
+  sent: SignedTransactionJson[];
+}
+
+function fakeSigned(tx: TypedTransaction): SignedTransactionJson {
+  return {
+    transaction: { tx_type: { [tx.kind]: tx.fields }, to: tx.to },
+    public_key: '11'.repeat(64),
+    signature: { classical: { form: 'raw', signature: '22'.repeat(64) } },
+  } as unknown as SignedTransactionJson;
 }
 
 function fakePort(receiptSuccess = true): { port: TenzroRpcPort; log: PortLog } {
-  const log: PortLog = { nonceLookups: [], chainIdLookups: 0, sent: [] };
+  const log: PortLog = { signed: [], sent: [] };
   const port: TenzroRpcPort = {
-    getAccountNonce: async (account) => {
-      log.nonceLookups.push(account);
-      return 42n;
-    },
-    getChainId: async () => {
-      log.chainIdLookups += 1;
-      return 20_260_901n;
-    },
-    getEntryPoint: async () => ENTRY_POINT,
+    getChainId: async () => 20_260_901n,
     getGasPrice: async () => 1_000_000_000n,
-    sendUserOperation: async (op, entryPoint) => {
-      log.sent.push({ op, entryPoint });
+    signTransaction: async (signer, tx) => {
+      log.signed.push({ signer, tx });
+      return fakeSigned(tx);
+    },
+    sendTransaction: async (signed) => {
+      log.sent.push(signed);
       return `0x${'ab'.repeat(32)}`;
     },
-    getUserOperationReceipt: async (hash) => ({ userOpHash: hash, success: receiptSuccess }),
+    getTransactionReceipt: async (hash) => ({ hash, success: receiptSuccess }),
   };
   return { port, log };
 }
 
-function recordingDriver(): { driver: SigningDriver; requests: SigningRequest[] } {
-  const requests: SigningRequest[] = [];
-  return {
-    requests,
-    driver: {
-      id: 'test',
-      async sign(req) {
-        requests.push(req);
-        return { signatures: [new Uint8Array([1, 2, 3])] };
-      },
-    },
-  };
-}
+const SIGNER = { label: 'passkey' } as unknown as HybridSigner;
+const signerFor = async () => SIGNER;
 
 async function sendIntent(uuid: string, amount = 1n) {
   const identity = await testIdentity({ uuid });
@@ -73,78 +61,65 @@ async function sendIntent(uuid: string, amount = 1n) {
 }
 
 describe('tenzroNativeSurface (passkey account)', () => {
-  it('reads nonce, chain id, EntryPoint and gas price from the node during prepare', async () => {
-    const { identity, intent } = await sendIntent('native-1');
-    const { port, log } = fakePort();
+  it('prepares a native Transfer to the recipient slot with the maximum fee', async () => {
+    const { identity, intent } = await sendIntent('native-1', 5n);
     const surface = tenzroNativeSurface({
       keyResolver: () => identity.keys.get('tenzro-native'),
-      signingDriver: testSigningDriver(),
-      rpc: port,
+      transactionSigner: signerFor,
+      rpc: fakePort().port,
     });
     const prepared = await surface.prepare(intent);
     const key = identity.keys.get('tenzro-native');
     if (!key || key.surface !== 'tenzro-native') throw new Error('unreachable');
-    expect(log.nonceLookups).toEqual([key.address]);
-    expect(log.chainIdLookups).toBe(1);
+    const tx = (prepared.body as { tx: TypedTransaction }).tx;
+    expect(tx.kind).toBe('Transfer');
+    expect(tx.fields).toEqual({ amount: 5 });
+    expect(tx.to).toBe(RECIPIENT_SLOT);
+    expect(tx.from).toBe(key.address);
     expect(prepared.route).toEqual({ kind: 'native', surface: 'tenzro-native' });
-    // (100k + 500k + 50k) gas at 1 gwei.
-    expect(prepared.fees[0]?.amount).toBe(650_000n * 1_000_000_000n);
+    expect(prepared.fees[0]?.amount).toBe(BigInt(DEFAULT_TRANSFER_GAS) * 1_000_000_000n);
   });
 
-  it('signs the EIP-712 UserOperation hash with the passkey scheme', async () => {
-    const { identity, intent } = await sendIntent('native-2', 5n * 10n ** 18n);
-    const { port } = fakePort();
-    const { driver, requests } = recordingDriver();
-    const surface = tenzroNativeSurface({
-      keyResolver: () => identity.keys.get('tenzro-native'),
-      signingDriver: driver,
-      rpc: port,
-    });
-    const prepared = await surface.prepare(intent);
-    await surface.sign(prepared, { approvedAt: Date.now() });
-
-    expect(requests).toHaveLength(1);
-    const req = requests[0]!;
-    expect(req.scheme).toBe('webauthn-p256');
-    const body = prepared.body as { userOp: UserOperation };
-    expect(toHex(req.preimage, true)).toBe(
-      toHex(userOperationHash(body.userOp, 20_260_901n, ENTRY_POINT), true),
-    );
-  });
-
-  it('submits ERC-7579 execute calldata with the signature bundle', async () => {
+  it('keeps an amount above 2^53 exact as a decimal string', async () => {
     const amount = 5n * 10n ** 18n;
-    const { identity, intent } = await sendIntent('native-3', amount);
-    const { port, log } = fakePort();
+    const { identity, intent } = await sendIntent('native-2', amount);
     const surface = tenzroNativeSurface({
       keyResolver: () => identity.keys.get('tenzro-native'),
-      signingDriver: recordingDriver().driver,
+      transactionSigner: signerFor,
+      rpc: fakePort().port,
+    });
+    const tx = ((await surface.prepare(intent)).body as { tx: TypedTransaction }).tx;
+    expect(tx.fields).toEqual({ amount: amount.toString() });
+  });
+
+  it('signs with the account passkey and submits the signed transaction', async () => {
+    const { identity, intent } = await sendIntent('native-3');
+    const { port, log } = fakePort();
+    const asked: string[] = [];
+    const surface = tenzroNativeSurface({
+      keyResolver: () => identity.keys.get('tenzro-native'),
+      transactionSigner: async (did) => {
+        asked.push(did);
+        return SIGNER;
+      },
       rpc: port,
     });
     const prepared = await surface.prepare(intent);
     const signed = await surface.sign(prepared, { approvedAt: Date.now() });
+    expect(asked).toEqual([identity.did]);
+    expect(log.signed).toHaveLength(1);
+    expect(log.signed[0]?.signer).toBe(SIGNER);
+    expect(log.sent).toHaveLength(0);
     const handle = await surface.submit(signed);
-
-    expect(handle.hash).toBe(`0x${'ab'.repeat(32)}`);
     expect(log.sent).toHaveLength(1);
-    const { op, entryPoint } = log.sent[0]!;
-    expect(entryPoint).toBe(ENTRY_POINT);
-    expect(op.nonce).toBe('0x2a');
-    expect(op.signature).toBe('0x010203');
-    const callData = fromHex(op.callData ?? '');
-    // ERC-7579 execute(bytes32 mode, bytes executionCalldata), single call:
-    // selector, mode (call type 0x00), offset, length, then target || value.
-    expect(toHex(callData.slice(0, 4))).toBe('e9ae5c53');
-    expect(callData[4]).toBe(0x00);
-    expect(toHex(callData.slice(100, 120), true)).toBe(RECIPIENT);
-    expect(BigInt(toHex(callData.slice(120, 152), true))).toBe(amount);
+    expect(handle.hash).toBe(`0x${'ab'.repeat(32)}`);
   });
 
   it('refuses a send to the account itself', async () => {
     const identity = await testIdentity({ uuid: 'native-4' });
     const surface = tenzroNativeSurface({
       keyResolver: () => identity.keys.get('tenzro-native'),
-      signingDriver: testSigningDriver(),
+      transactionSigner: signerFor,
       rpc: fakePort().port,
     });
     await expect(
@@ -165,13 +140,12 @@ describe('tenzroNativeSurface (passkey account)', () => {
     const { port, log } = fakePort();
     const surface = tenzroNativeSurface({
       keyResolver: (did) => (did === me.did ? me.keys.get('tenzro-native') : undefined),
-      signingDriver: recordingDriver().driver,
+      transactionSigner: signerFor,
       rpc: port,
       identityPort: {
         async resolveTenzroAddress(did) {
           lookups.push(did);
-          // A 32-byte widened address resolves to its low 20 bytes.
-          return `0x${'00'.repeat(12)}${RECIPIENT.slice(2)}`;
+          return RECIPIENT_SLOT;
         },
       },
     });
@@ -184,8 +158,7 @@ describe('tenzroNativeSurface (passkey account)', () => {
     });
     await surface.submit(await surface.sign(prepared, { approvedAt: Date.now() }));
     expect(lookups).toEqual([them.did]);
-    const callData = fromHex(log.sent[0]?.op.callData ?? '');
-    expect(toHex(callData.slice(100, 120), true)).toBe(RECIPIENT);
+    expect(log.signed[0]?.tx.to).toBe(RECIPIENT_SLOT);
   });
 
   it('refuses a remote TDIP recipient when no identity port is wired', async () => {
@@ -193,7 +166,7 @@ describe('tenzroNativeSurface (passkey account)', () => {
     const them = await testIdentity({ uuid: 'native-6-other' });
     const surface = tenzroNativeSurface({
       keyResolver: (did) => (did === me.did ? me.keys.get('tenzro-native') : undefined),
-      signingDriver: testSigningDriver(),
+      transactionSigner: signerFor,
       rpc: fakePort().port,
     });
     await expect(
@@ -211,7 +184,7 @@ describe('tenzroNativeSurface (passkey account)', () => {
     const { identity, intent } = await sendIntent('native-7');
     const surface = tenzroNativeSurface({
       keyResolver: () => identity.keys.get('tenzro-native'),
-      signingDriver: recordingDriver().driver,
+      transactionSigner: signerFor,
       rpc: fakePort().port,
       watch: { intervalMs: 1, timeoutMs: 1_000 },
     });
@@ -222,11 +195,11 @@ describe('tenzroNativeSurface (passkey account)', () => {
     expect(phases).toEqual(['created', 'pending', 'finalized']);
   });
 
-  it('watch() reports a reverted operation as failed', async () => {
+  it('watch() reports a reverted transaction as failed', async () => {
     const { identity, intent } = await sendIntent('native-8');
     const surface = tenzroNativeSurface({
       keyResolver: () => identity.keys.get('tenzro-native'),
-      signingDriver: recordingDriver().driver,
+      transactionSigner: signerFor,
       rpc: fakePort(false).port,
       watch: { intervalMs: 1, timeoutMs: 1_000 },
     });

@@ -7,7 +7,6 @@
  *   linkDevice     link a passkey on another device or a security key
  *   removeDevice   unlink a passkey (never the last one)
  *   setSecondFactor / addGuardian / startRecovery / finishRecovery / cancelRecovery
- *   setSpendingLimit / grantSessionKey / revokeSessionKey
  *
  * A wallet is the person's devices plus its keystore on the ledger. Every
  * change to which passkeys act for the account, its policy or its recovery
@@ -183,21 +182,6 @@ function ownershipProof(
   };
 }
 
-export interface SessionKeyGrant {
-  /** 32-byte Ed25519 public key of the session key, held by the agent's device. */
-  readonly sessionPublicKeyHex: string;
-  /** 4-byte function selectors, hex. */
-  readonly allowedSelectors: readonly string[];
-  /** 20-byte targets. Empty means any target. */
-  readonly allowedTargets?: readonly string[];
-  /** Wei, decimal string. `"0"` forbids value transfer. Omit for no cap. */
-  readonly maxValuePerCallWei?: string;
-  readonly maxTotalValueWei?: string;
-  readonly validAfterUnix: number;
-  readonly validUntilUnix: number;
-  readonly label?: string;
-}
-
 /** One recovery signer, at the index a recovery's approvals name. */
 export interface GuardianMember {
   readonly index: number;
@@ -306,6 +290,19 @@ export interface PasskeyCustodyOptions {
   readonly authenticator: PasskeyAuthenticator;
   /** Sends keystore changes; defaults to the SDK's typed transaction client over `rpc`. */
   readonly sender?: TransactionSender;
+  /**
+   * Pays the fee of a keystore change for an account with no balance yet:
+   * a wallet provider, a sponsor or a friend. It sends the change from its
+   * own account and pays for it; the account's passkey still authorizes the
+   * change through the approval it carries. Without one, an account with no
+   * balance cannot change its keystore until it is funded.
+   */
+  readonly sponsor?: KeystoreSponsor;
+}
+
+/** Sends an approved keystore change from its own account and pays its fee. */
+export interface KeystoreSponsor {
+  submit(update: KeystoreUpdate): Promise<unknown>;
 }
 
 const stripped = (hex: string) => normalizeHex(hex);
@@ -322,11 +319,13 @@ export class PasskeyCustody {
   readonly rpc: JsonRpcTransport;
   readonly authenticator: PasskeyAuthenticator;
   readonly #sender: TransactionSender;
+  readonly #sponsor: KeystoreSponsor | undefined;
 
   constructor(opts: PasskeyCustodyOptions) {
     this.rpc = opts.rpc;
     this.authenticator = opts.authenticator;
     this.#sender = opts.sender ?? new TypedTxClient(opts.rpc as unknown as RpcClient);
+    this.#sponsor = opts.sponsor;
   }
 
   // ── Create ────────────────────────────────────────────────────────────
@@ -671,6 +670,47 @@ export class PasskeyCustody {
     };
   }
 
+  /**
+   * Approves linking a passkey another wallet provider made for this account
+   * on its own relying party. That provider builds the change and its new
+   * passkey signs it (proof of possession); this device's passkey approves
+   * and the change is sent from the account. Nothing else is signed: the
+   * change must add exactly one credential to this account's keystore as it
+   * stands now.
+   */
+  async approveLink(
+    account: PasskeyAccount,
+    update: KeystoreUpdate,
+  ): Promise<{ credential: KeystoreCredential; credentials_total: number }> {
+    if (stripped(update.account) !== stripped(account.account)) {
+      throw new PasskeyError('This change is for another account.', 'invalid');
+    }
+    if (typeof update.op !== 'object' || !('add_credential' in update.op)) {
+      throw new PasskeyError('Only linking a passkey can be approved here.', 'invalid');
+    }
+    if (!update.possession) {
+      throw new PasskeyError('The new passkey has not signed the change.', 'invalid');
+    }
+    const joining = update.op.add_credential.credential;
+    const view = await this.keystore(account);
+    const current = view.keystore?.credentials ?? [];
+    if (current.some((c) => stripped(c.credential_id) === stripped(joining.credential_id))) {
+      throw new PasskeyError('That passkey is already linked to the account.', 'already-enrolled');
+    }
+    if (!view.commitment || stripped(view.commitment) !== stripped(update.previous_commitment)) {
+      throw new PasskeyError(
+        'The account changed since this link was prepared. Start the link again.',
+        'invalid',
+      );
+    }
+    await this.#sendAs(account.account, await this.#signing(account), {
+      ...update,
+      anchor: view.on_chain ? null : (update.anchor ?? account.anchor ?? null),
+      approvals: [],
+    });
+    return { credential: joining, credentials_total: current.length + 1 };
+  }
+
   /** Unlinks a passkey. Refuses to remove the last one: the account would be unrecoverable. */
   async removeDevice(opts: {
     readonly account: PasskeyAccount;
@@ -794,84 +834,6 @@ export class PasskeyCustody {
     );
     if (opts.second) update = await this.#approve(view, update, opts.second, true);
     return this.#send(opts.account, view, update, [opts.approver], false);
-  }
-
-  /**
-   * Account-wide spending caps for user operations, in wei (decimal
-   * strings, `"0"` = no cap). `authenticator_pubkey_hex` identifies the
-   * approving passkey: SHA-256 of its credential id.
-   */
-  async setSpendingLimit(opts: {
-    readonly account: PasskeyAccount;
-    readonly perTxCapWei: string;
-    readonly dailyCapWei: string;
-    readonly approver: CredentialRef;
-  }): Promise<unknown> {
-    const authorization = await this.#authorize(
-      opts.account,
-      'set_spending_limit',
-      new Uint8Array(0),
-      opts.approver,
-    );
-    return this.rpc.call('tenzro_setSpendingLimit', {
-      account_address: opts.account.account,
-      per_tx_cap_wei: opts.perTxCapWei,
-      daily_cap_wei: opts.dailyCapWei,
-      authenticator_pubkey_hex: toHex(sha256(fromHex(opts.approver.id)), true),
-      authorization,
-    });
-  }
-
-  /**
-   * Lets an agent spend from this account within limits: installs a scoped
-   * session key held by the agent's own device. The challenge target is the
-   * session public key.
-   */
-  async grantSessionKey(opts: {
-    readonly account: PasskeyAccount;
-    readonly grant: SessionKeyGrant;
-    readonly approver: CredentialRef;
-  }): Promise<unknown> {
-    const key = fromHex(opts.grant.sessionPublicKeyHex);
-    if (key.length !== 32)
-      throw new PasskeyError('A session key must be 32 bytes (Ed25519).', 'invalid');
-    const authorization = await this.#authorize(
-      opts.account,
-      'grant_session_key',
-      key,
-      opts.approver,
-    );
-    const g = opts.grant;
-    return this.rpc.call('tenzro_grantSessionKey', {
-      account_address: opts.account.account,
-      session_pubkey_hex: toHex(key),
-      allowed_selectors_hex: g.allowedSelectors.map(stripped),
-      allowed_targets: g.allowedTargets ?? [],
-      ...(g.maxValuePerCallWei !== undefined
-        ? { max_value_per_call_wei: g.maxValuePerCallWei }
-        : {}),
-      ...(g.maxTotalValueWei !== undefined ? { max_total_value_wei: g.maxTotalValueWei } : {}),
-      valid_after_unix: g.validAfterUnix,
-      valid_until_unix: g.validUntilUnix,
-      ...(g.label ? { label: g.label } : {}),
-      authorization,
-    });
-  }
-
-  async revokeSessionKey(opts: {
-    readonly account: PasskeyAccount;
-    readonly approver: CredentialRef;
-  }): Promise<unknown> {
-    const authorization = await this.#authorize(
-      opts.account,
-      'revoke_session_key',
-      new Uint8Array(0),
-      opts.approver,
-    );
-    return this.rpc.call('tenzro_revokeSessionKey', {
-      account_address: opts.account.account,
-      authorization,
-    });
   }
 
   // ── Agents ────────────────────────────────────────────────────────────
@@ -1420,12 +1382,41 @@ export class PasskeyCustody {
 
   /** Sends `update` from `account`, signed by `signing`. */
   async #sendAs(account: string, signing: Signing, update: KeystoreUpdate): Promise<unknown> {
+    if (this.#sponsor && (await this.#unfunded(account))) {
+      // The sponsor sends and pays; the passkey's authority travels as an
+      // explicit approval. A recovery's authority is its guardians'
+      // approvals and the joining passkey's proof, already in the change.
+      const recovery =
+        update.op === 'finish_recovery' ||
+        (typeof update.op === 'object' && 'start_recovery' in update.op);
+      const approved = recovery
+        ? update
+        : withApproval(
+            update,
+            signing.publicKey,
+            await signKeystoreDigest(
+              this.authenticator,
+              update,
+              [signing.credential],
+              signing.hybrid ? { hybrid: true } : {},
+            ),
+          );
+      return this.#sponsor.submit(approved);
+    }
     const tx: TypedTransaction = {
       kind: 'KeystoreUpdate',
       fields: { update } as unknown as Record<string, unknown>,
       from: account,
     };
     return this.#sender.send(this.#signer(signing) as unknown as HybridSigner, tx);
+  }
+
+  /** Whether `account` holds nothing to pay a fee with. */
+  async #unfunded(account: string): Promise<boolean> {
+    const balance = await this.rpc
+      .call<string>('eth_getBalance', [account, 'latest'])
+      .catch(() => null);
+    return balance !== null && BigInt(balance) === 0n;
   }
 
   async #authorize(

@@ -32,7 +32,10 @@ import {
   type KeystoreRecord,
   type KeystoreUpdate,
   keystoreDigest,
+  prepareUpdate,
+  signKeystoreDigest,
   updateDigest,
+  withPossession,
 } from './keystore.ts';
 import { PasskeyError } from './webauthn.ts';
 
@@ -99,6 +102,79 @@ describe('createWallet', () => {
     expect(account.did).toBe(humanDidFromPasskey(cred.publicKey));
     expect(account.anchor?.public_key).toBe(toHex(cred.publicKey));
     expect(net.records.size).toBe(0);
+  });
+});
+
+describe('approveLink', () => {
+  /** A passkey another wallet provider made for the account, and the change it prepared. */
+  async function providerLink(
+    net: Awaited<ReturnType<typeof wallet>>['net'],
+    account: Awaited<ReturnType<typeof wallet>>['account'],
+  ) {
+    const provider = new FakeAuthenticator('tenzro.xyz');
+    // Fake keys follow a counter: skip the first so the key differs from this wallet's.
+    await provider.create({ userId: fromHex(account.account), userName: 'Labs' });
+    const made = await provider.create({ userId: fromHex(account.account), userName: 'Labs' });
+    const credential: KeystoreCredential = {
+      rp_id: 'tenzro.xyz',
+      credential_id: toHex(made.credentialId),
+      public_key: toHex(made.publicKey),
+      aaguid: '00'.repeat(16),
+      backup_eligible: false,
+      backup_state: false,
+      counts_as_root_from_ms: 0,
+      label: 'Labs Wallets',
+    };
+    const prepared = await prepareUpdate(
+      net.rpc,
+      account.account,
+      { add_credential: { credential } },
+      account.anchor,
+    );
+    const update = withPossession(
+      { ...prepared, anchor: null },
+      await signKeystoreDigest(provider, prepared, [{ id: credential.credential_id }]),
+    );
+    return { credential, update };
+  }
+
+  it('sends another provider’s prepared link from the account, approved by this device', async () => {
+    const { auth, net, custody, account } = await wallet();
+    const { credential, update } = await providerLink(net, account);
+    const linked = await custody.approveLink(account, update);
+    expect(linked.credentials_total).toBe(2);
+    const { key, tx } = net.sent[0]!;
+    expect(tx.kind).toBe('KeystoreUpdate');
+    expect(tx.from).toBe(account.account);
+    expect(toHex(key)).toBe(toHex(auth.credentials[0]!.publicKey));
+    const sent = (tx.fields as { update: KeystoreUpdate }).update;
+    // The wallet supplies the anchor of an account not yet on chain; the proof is the provider's.
+    expect(sent.anchor?.credential_id).toBe(account.credentialId);
+    expect(sent.possession).toEqual(update.possession);
+    const records = net.records.get(account.account.slice(2))?.credentials ?? [];
+    expect(records.map((c) => c.rp_id)).toEqual(['tenzro.com', 'tenzro.xyz']);
+    expect(records[1]?.credential_id).toBe(credential.credential_id);
+  });
+
+  it('refuses anything but a link to this account, unsigned links, and stale ones', async () => {
+    const { net, custody, account } = await wallet();
+    const { update } = await providerLink(net, account);
+    await expect(
+      custody.approveLink(account, { ...update, account: `0x${'11'.repeat(20)}` }),
+    ).rejects.toThrow(/another account/);
+    await expect(
+      custody.approveLink(account, {
+        ...update,
+        op: { set_policy: { policy: 'two_credentials' } },
+      }),
+    ).rejects.toThrow(/Only linking/);
+    await expect(custody.approveLink(account, { ...update, possession: null })).rejects.toThrow(
+      /not signed/,
+    );
+    await expect(
+      custody.approveLink(account, { ...update, previous_commitment: `0x${'22'.repeat(32)}` }),
+    ).rejects.toThrow(/changed since/);
+    expect(net.sent).toHaveLength(0);
   });
 });
 
@@ -332,5 +408,50 @@ describe('device states', () => {
     expect(devices[1]).toMatchObject({ rpId: 'wallet.example.org', countsFromMs: now + 60_000 });
     expect(devices[2]).toMatchObject({ label: 'New phone', countsFromMs: now + 3_600_000 });
     expect(auth.credentials.length).toBe(2);
+  });
+});
+
+describe('a sponsor pays for an account with no balance', () => {
+  it('sends the change from its own account, the passkey approving it', async () => {
+    const auth = new FakeAuthenticator('tenzro.com');
+    const net = network();
+    net.rpc.handlers.eth_getBalance = () => '0x0';
+    const submitted: KeystoreUpdate[] = [];
+    const custody = new PasskeyCustody({
+      rpc: net.rpc,
+      authenticator: auth,
+      sender: net.sender,
+      sponsor: {
+        async submit(update) {
+          submitted.push(update);
+          net.apply(update);
+          return '0xsponsored';
+        },
+      },
+    });
+    const account = await custody.createWallet({ displayName: 'Ada' });
+    await custody.linkDevice({ account, label: 'Phone', approver: { id: account.credentialId } });
+    expect(net.sent).toHaveLength(0);
+    expect(submitted).toHaveLength(1);
+    const [update] = submitted;
+    expect(update!.approvals.map((a) => a.public_key)).toEqual([
+      toHex(auth.credentials[0]!.publicKey),
+    ]);
+    expect(update!.possession).not.toBeNull();
+  });
+
+  it('a funded account pays for itself', async () => {
+    const auth = new FakeAuthenticator('tenzro.com');
+    const net = network();
+    net.rpc.handlers.eth_getBalance = () => '0x1';
+    const custody = new PasskeyCustody({
+      rpc: net.rpc,
+      authenticator: auth,
+      sender: net.sender,
+      sponsor: { submit: async () => expect.unreachable('the account pays') },
+    });
+    const account = await custody.createWallet({ displayName: 'Ada' });
+    await custody.linkDevice({ account, label: 'Phone', approver: { id: account.credentialId } });
+    expect(net.sent).toHaveLength(1);
   });
 });

@@ -117,11 +117,11 @@ The DID Document (W3C-compatible) lists each surface key under `verificationMeth
 
 Custody is passkeys only. The user's WebAuthn P-256 passkey signs every approval itself (webauthn-p256). The wallet derives no key, wraps no key and stores no secret; the device keeps only public data: the DID, the account address and which credential belongs to the account. There is no seed phrase. The code lives in `packages/wallet-kernel/src/custody/passkey/`:
 
-- `custody.ts` — `PasskeyCustody`: create a wallet (`tenzro_enrollPasskey`), sign in on any device, list, link and remove devices (never the last one), second-factor policy, spending limits, session keys, guardians and recovery.
+- `custody.ts` — `PasskeyCustody`: create a wallet (`tenzro_enrollPasskey`), sign in on any device, list, link and remove devices (never the last one), second-factor policy, guardians and recovery.
 - `composite.ts` — what a passkey signs. Each signature is over a digest bound to the context the message is used in: `M' = prefix || label || len(ctx) || ctx || SHA-512(message)`, and the WebAuthn challenge is `base64url(SHA-256(M'))`. The assertion travels as a bincode `PasskeySignature` bundle.
 - `gate.ts` — every custody change is authorised the same way. The node issues a single-use challenge bound to the account, the operation and its target (`tenzro_createCustodyChallenge`); the wallet recomputes the digest from those and the challenge's `nonce_hex`, so it never signs a digest it was merely handed; an enrolled passkey signs it with user verification required, and the assertion travels with the change.
 - `guardian.ts` — recovery guardians (§4.3.3).
-- `userop.ts` — ERC-4337 user operations. The account is a smart account guarded by a WebAuthn validator; the passkey signs the user-operation hash and the wallet submits it with `eth_sendUserOperation`.
+- Transactions — a native transaction from the account. A passkey the keystore links signs `signingDigest(Transaction, digest)` as its WebAuthn challenge (`PasskeyCustody.transactionSigner`), and the wallet submits it with `tenzro_sendRawTransaction`; it executes in consensus like any other transaction.
 - `recovery-kit.ts` — an instructions-only Recovery Kit with public data. It holds no key.
 
 #### 4.3.1 Enrolment
@@ -278,7 +278,7 @@ CIP-0103 maps this to `txChanged` events with states `pending → signed → exe
 
 Signing is a pluggable `SigningDriver` so other signers can be added without rewriting the kernel:
 
-- passkey driver (`custody/passkey/driver.ts`) — the preimage is the 32-byte UserOperation hash; each contributing passkey signs `signingDigest(UserOperation, hash)` as its WebAuthn challenge, and the driver returns the encoded bundle the account's WebAuthn validator verifies.
+- passkey transactions are signed through `PasskeyCustody.transactionSigner`, not a driver (see Transactions above).
 - `core-signing-participant` — Canton participant-managed parties for users who *want* validator-custodied Canton keys (e.g. exchanges). Only applies to the Canton surface key, not the rest of the identity.
 
 (`core-signing-*` driver names match Splice Wallet Kernel deliberately — we reuse those drivers where they fit.)
@@ -554,7 +554,7 @@ For Canton, the build step emits a DAML command body (`transactions[].body = {co
 
 **Already-live endpoints (consumed via existing `tenzro-sdk` clients)**
 
-- Passkey custody RPCs: `tenzro_enrollPasskey`, `tenzro_createCustodyChallenge`, `tenzro_addGuardian`, `tenzro_listGuardians`, `tenzro_initiateRecovery`, `tenzro_submitRecoverySignature`, `tenzro_finalizeRecovery`, and `eth_sendUserOperation`
+- Passkey custody RPCs: `tenzro_enrollPasskey`, `tenzro_createCustodyChallenge`, `tenzro_getKeystore`, `tenzro_resolveCredential`, `tenzro_initiateRecovery`, `tenzro_submitRecoverySignature`, `tenzro_finalizeRecovery`, and `tenzro_sendRawTransaction`
 - Canton ledger-API `/v2/{commands,state,topology,…}` (M4b)
 - AP2 / ERC-8004 / agent-payment / nanopayment / session-key / TEE-attestation / native escrow / payment-rails RPCs
 

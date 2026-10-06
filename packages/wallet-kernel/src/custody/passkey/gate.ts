@@ -33,13 +33,7 @@ import {
   type WebAuthnAssertionWire,
 } from './webauthn.ts';
 
-export type CustodyOperation =
-  | 'enroll_passkey'
-  | 'grant_session_key'
-  | 'revoke_session_key'
-  | 'set_spending_limit'
-  | 'add_hardware_signer'
-  | 'revoke_delegated_agent';
+export type CustodyOperation = 'enroll_passkey' | 'revoke_delegated_agent';
 
 export interface CustodyChallenge {
   readonly challenge_id: string;

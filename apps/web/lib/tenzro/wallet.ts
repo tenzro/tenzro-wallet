@@ -10,6 +10,7 @@
 import { type HybridSigner, WalletClient } from 'tenzro-sdk';
 import {
   BrowserPasskeyAuthenticator,
+  type KeystoreSponsor,
   type OwnershipProof,
   type PasskeyAccount,
   PasskeyCustody,
@@ -17,7 +18,7 @@ import {
   hexToBytes,
 } from 'tenzro-wallet/custody';
 
-import { TENZRO_RP_ID } from './config';
+import { TENZRO_RP_ID, TENZRO_SPONSOR_URL } from './config';
 import { sdkRpc, transport } from './rpc';
 
 const STORAGE_KEY = 'tenzro.wallet.v2';
@@ -29,10 +30,31 @@ export type EnteredWallet = StoredWallet & { readonly proof?: OwnershipProof };
 
 let custodySingleton: PasskeyCustody | null = null;
 
+/** A sponsor endpoint that sends an approved keystore change and pays its fee. */
+function sponsorAt(url: string): KeystoreSponsor {
+  return {
+    async submit(update) {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ update }),
+      });
+      const body = (await res.json().catch(() => null)) as {
+        tx_hash?: string;
+        error?: string;
+      } | null;
+      if (!res.ok || !body?.tx_hash)
+        throw new Error(body?.error ?? `The sponsor answered HTTP ${res.status}.`);
+      return body.tx_hash;
+    },
+  };
+}
+
 export function custody(): PasskeyCustody {
   custodySingleton ??= new PasskeyCustody({
     rpc: transport,
     authenticator: new BrowserPasskeyAuthenticator({ rpId: TENZRO_RP_ID }),
+    ...(TENZRO_SPONSOR_URL ? { sponsor: sponsorAt(TENZRO_SPONSOR_URL) } : {}),
   });
   return custodySingleton;
 }

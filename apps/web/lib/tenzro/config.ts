@@ -23,3 +23,11 @@ export const TENZRO_NETWORK_NAME = 'Tenzro Network 1';
 
 /** WebAuthn relying party id: this wallet provider's domain. */
 export const TENZRO_RP_ID = process.env.NEXT_PUBLIC_TENZRO_RP_ID || 'tenzro.com';
+
+/**
+ * A wallet provider's sponsor endpoint, if this deployment has one: it pays
+ * the fee of a keystore change for an account with no balance yet (POST
+ * `{ update }`, answering the transaction hash). The account's passkey still
+ * authorizes the change.
+ */
+export const TENZRO_SPONSOR_URL = process.env.NEXT_PUBLIC_TENZRO_SPONSOR_URL || undefined;

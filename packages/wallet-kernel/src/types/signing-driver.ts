@@ -13,9 +13,8 @@ import type { SurfaceKey, TdipDid } from './identity.ts';
 
 /**
  * - `webauthn-p256` — the Tenzro account scheme. A WebAuthn assertion from
- *   an enrolled passkey; the passkey is the only key. The driver returns ONE
- *   entry: the encoded signature bundle the account's
- *   WebAuthn validator verifies (`userOp.signature`).
+ *   a passkey the account's keystore links. Tenzro transactions are signed
+ *   through `PasskeyCustody.transactionSigner`, not a driver.
  * - `ed25519` — single Ed25519 signature (SVM, Canton, machine keys).
  * - `secp256k1` — single ECDSA signature (external EVM keys).
  * - `ed25519+ml-dsa-65` — composite hybrid pair for machine identities whose

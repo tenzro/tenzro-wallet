@@ -15,7 +15,7 @@
  * and dispatches the EIP-6963 announcement.
  *
  * Signing methods return a typed "not yet wired" error until they are
- * routed through the kernel's passkey-signed UserOperation path with a
+ * routed through the kernel's passkey-signed transaction path with a
  * user-confirmation step. The chain id is always read from the node.
  */
 

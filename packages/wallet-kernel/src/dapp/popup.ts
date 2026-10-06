@@ -15,6 +15,7 @@ import type { EIP1193Provider } from 'tenzro-sdk';
 
 import type { OwnershipProof } from '../custody/passkey/custody.ts';
 import type { CustodyChallenge } from '../custody/passkey/gate.ts';
+import type { KeystoreUpdate } from '../custody/passkey/keystore.ts';
 import type { StepUpRequest } from '../custody/passkey/step-up.ts';
 import type { AgentTermsWire } from '../ports/agent/agent-terms.ts';
 
@@ -27,6 +28,7 @@ export type PopupMethod =
   | 'tenzro_sendTransaction'
   | 'tenzro_addWallet'
   | 'tenzro_linkDevice'
+  | 'tenzro_linkCredential'
   | 'tenzro_signSettlementPlan'
   | 'tenzro_approveAgentTerms'
   | 'tenzro_approveAgentAction'
@@ -94,6 +96,22 @@ export interface PopupLinkedDevice {
   readonly credentialsTotal: number;
 }
 
+/**
+ * Params of `tenzro_linkCredential`: a passkey another wallet provider made for
+ * the connected account on its own relying party, as the change that adds it
+ * (`add_credential`), already signed by that passkey (`possession`). The
+ * wallet shows the provider and approves with the person's passkey; the
+ * account sends the change.
+ */
+export interface PopupLinkCredential {
+  readonly update: KeystoreUpdate;
+}
+
+/** Result of `tenzro_linkCredential`: how many passkeys the account has with it. */
+export interface PopupLinkedCredential {
+  readonly credentialsTotal: number;
+}
+
 /** Params of `tenzro_sendTransaction`: a TNZO transfer, value in base units (decimal string). */
 export interface PopupSendTransaction {
   readonly to: string;
@@ -127,6 +145,7 @@ export const POPUP_METHODS: readonly PopupMethod[] = [
   'tenzro_sendTransaction',
   'tenzro_addWallet',
   'tenzro_linkDevice',
+  'tenzro_linkCredential',
   'tenzro_signSettlementPlan',
   'tenzro_approveAgentTerms',
   'tenzro_approveAgentAction',

@@ -1,7 +1,7 @@
 export type {
   TenzroRpcPort,
   TenzroTxStatus,
-  UserOperationReceipt,
+  TransactionReceipt,
 } from './tenzro-rpc.ts';
 export { TenzroJsonRpcAdapter } from './adapters/tenzro-jsonrpc-adapter.ts';
 export {
@@ -58,9 +58,6 @@ export type { CantonProviderConfig } from './canton/canton-provider.ts';
 
 // ── Agent ports + adapters ──
 export * from './agent/index.ts';
-
-// ── Secure-Mint registry (1:1 reserve invariant for tokenized RWAs) ──
-export * from './secure-mint/index.ts';
 
 // ── Babylon Bitcoin staking ports + adapter ──
 // Read-side surface for staking dashboards; write paths exposed for

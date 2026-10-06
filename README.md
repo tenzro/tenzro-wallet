@@ -17,11 +17,12 @@ A wallet is the person's devices plus their account on the Tenzro ledger. Tenzro
 | Flow | Where | Node methods |
 |---|---|---|
 | Create a wallet | `/onboarding`, popup `tenzro_connect` | `tenzro_createCustodyChallenge`, `tenzro_enrollPasskey` |
-| Sign in | any page, popup | `tenzro_resolveIdentity`, `tenzro_getAccountRecord` |
-| Link a device (QR or this device) | Settings, popup `tenzro_linkDevice` | `tenzro_addPasskey` (new passkey signs its own addition) |
-| Remove a device | Settings | `tenzro_removePasskey` |
-| Guardians and recovery | Settings, `/guardian`, `/recover` | `tenzro_addGuardian`, `tenzro_initiateRecovery`, `tenzro_submitRecoverySignature`, `tenzro_finalizeRecovery`, `tenzro_cancelRecovery` |
-| Send TNZO | `/send`, popup `tenzro_sendTransaction` | `eth_sendUserOperation` (ERC-7579 `execute(bytes32,bytes)`) |
+| Sign in | any page, popup | `tenzro_resolveIdentity`, `tenzro_getKeystore` |
+| Link a device (QR or this device) | Settings, popup `tenzro_linkDevice` | a `KeystoreUpdate` transaction (`add_credential`; the new passkey signs it too) |
+| Link another provider's passkey | popup `tenzro_linkCredential` | the provider's prepared `add_credential` change, approved here and sent from the account |
+| Remove a device | Settings | a `KeystoreUpdate` transaction (`remove_credential`) |
+| Guardians and recovery | Settings, `/guardian`, `/recover` | `KeystoreUpdate` transactions (`set_recovery`, `start_recovery`, `finish_recovery`, `cancel_recovery`) |
+| Send TNZO | `/send`, popup `tenzro_sendTransaction` | `tenzro_sendRawTransaction` (a native transfer the passkey signs) |
 | Receive, balances | `/dashboard` | `tenzro_getTokenBalance`, `eth_getBalance` |
 | History | `/activity` | `tenzro_getTransactionHistory` |
 | Further wallets under one identity | popup `tenzro_addWallet` | `tenzro_enrollPasskey` (salt > 0) |
@@ -43,9 +44,10 @@ A site opens `https://wallet.tenzro.com/approve` (`createPopupProvider` in `tenz
 | Method | Params | Result |
 |---|---|---|
 | `tenzro_connect` | `{ challenge? }` | `{ account, did, proof? }` |
-| `tenzro_sendTransaction` | `{ to, value }` | `{ userOpHash }` |
+| `tenzro_sendTransaction` | `{ to, value }` | `{ txHash }` |
 | `tenzro_addWallet` | `{ salt }` | `{ account, did, salt }` |
 | `tenzro_linkDevice` | `{ label? }` | `{ credentialsTotal }` |
+| `tenzro_linkCredential` | `{ update }` (an `add_credential` change its new passkey signed) | `{ credentialsTotal }` |
 | `tenzro_signSettlementPlan` | `{ plan }` | `{ signedTx }` |
 | `tenzro_approveAgentTerms` | `{ operation, terms, rotate_tokens?, challenge }` | `{ authorization }` |
 | `tenzro_approveAgentAction` | `{ action, step_up }` | `{ step_up }` |

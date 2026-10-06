@@ -4,7 +4,7 @@
  * Wraps a `TenzroClient` (or any object with the same shape — useful when
  * tests want to swap a partial fake) and exposes nonce, chain id and
  * transaction status reads. Sending from a passkey account goes through
- * `TenzroJsonRpcAdapter` (UserOperations signed on the device); this adapter
+ * `TenzroJsonRpcAdapter` (transactions signed on the device); this adapter
  * never submits anything.
  *
  * Two construction paths:

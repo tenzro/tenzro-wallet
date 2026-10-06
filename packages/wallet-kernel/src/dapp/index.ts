@@ -44,6 +44,8 @@ export type {
   PopupApproveAgentTerms,
   PopupConnectParams,
   PopupConnection,
+  PopupLinkCredential,
+  PopupLinkedCredential,
   PopupHost,
   PopupMethod,
   PopupProviderOptions,

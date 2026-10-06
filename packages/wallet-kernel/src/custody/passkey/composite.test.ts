@@ -4,7 +4,6 @@ import { toHex, utf8 } from './bytes.ts';
 import {
   SignatureContext,
   compositeSignatureJson,
-  encodePasskeySignatureBundle,
   signingDigest,
   webauthnChallenge,
 } from './composite.ts';
@@ -15,11 +14,11 @@ const msg = Uint8Array.from({ length: 32 }, (_, i) => i);
 describe('signingDigest', () => {
   // Reference: python hashlib over prefix || label || len(ctx) || ctx || SHA-512(msg).
   it("is SHA-256(M') for the context", () => {
-    expect(toHex(signingDigest(SignatureContext.UserOperation, msg))).toBe(
-      '1110d86cc0d46759675c122fa33752ce34c3687c1124bc89d6f84aaa452b68cf',
+    expect(toHex(signingDigest(SignatureContext.Transaction, msg))).toBe(
+      'fc165d6a0898b279d172d70288655f55566f00be87526fdc4785dbbc3fcb5356',
     );
-    expect(webauthnChallenge(SignatureContext.UserOperation, msg)).toBe(
-      'ERDYbMDUZ1lnXBIvozdSzjTDaHwRJLyJ1vhKqkUraM8',
+    expect(webauthnChallenge(SignatureContext.Transaction, msg)).toBe(
+      '_BZdagiYsnnRctcCiGVfVVZvAL6HUm_cR4XbvD_LU1Y',
     );
   });
 
@@ -55,14 +54,6 @@ const signed = {
     user_handle: null,
   },
 };
-
-describe('encodePasskeySignatureBundle', () => {
-  it('matches bincode 1.x of Vec<PasskeySignature> with a WebAuthn proof and no pq leg', () => {
-    expect(toHex(encodePasskeySignatureBundle([signed]))).toBe(
-      '01000000000000000200000000000000aabb01000000030000000000000001020302000000000000007b7d04000000000000000909090900',
-    );
-  });
-});
 
 describe('compositeSignatureJson', () => {
   it('carries the assertion as the classical leg and omits pq', () => {

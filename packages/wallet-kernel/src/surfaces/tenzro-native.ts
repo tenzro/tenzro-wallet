@@ -1,55 +1,53 @@
 /**
  * Tenzro native surface — TNZO on the Tenzro Ledger, from a person's passkey
- * smart account.
+ * account.
  *
- *   prepare  builds an ERC-4337 v0.8 UserOperation calling the account's
- *            `execute(to, value, data)`, with the nonce, gas price, chain id
- *            and EntryPoint read from the node, and computes its hash;
- *   sign     hands the 32-byte hash to the signing driver: the passkey signs
- *            it on the device (user verification required);
- *   submit   `eth_sendUserOperation`;
- *   watch    `eth_getUserOperationReceipt`.
+ *   prepare  builds a native `Transfer` from the account, priced at the
+ *            node's gas price;
+ *   sign     a passkey the account's keystore links signs the transaction
+ *            digest on the device (user verification required); the nonce,
+ *            chain id and signing payload come from the node and the payload
+ *            is checked to be the transaction built;
+ *   submit   `tenzro_sendRawTransaction`;
+ *   watch    `eth_getTransactionReceipt`.
  *
- * The node never holds a key for the account and never signs for it.
+ * The node never holds a key for the account and never signs for it; the
+ * transfer moves value only in consensus.
  */
 
+import type { HybridSigner, SignedTransactionJson, TypedTransaction } from 'tenzro-sdk';
+
 import { fromHex, toHex } from '../custody/passkey/bytes.ts';
-import {
-  DEFAULT_USER_OP_GAS,
-  type UserOperation,
-  encodeExecuteSingle,
-  userOperationHash,
-  userOperationToJson,
-} from '../custody/passkey/userop.ts';
 import type { TenzroIdentityPort } from '../ports/tenzro-identity.ts';
-import type { TenzroRpcPort, UserOperationReceipt } from '../ports/tenzro-rpc.ts';
+import type { TenzroRpcPort, TransactionReceipt } from '../ports/tenzro-rpc.ts';
 import type { Consent } from '../types/consent.ts';
 import type { SurfaceKey, TdipDid } from '../types/identity.ts';
 import type { Intent, PreparedTx, SignedTx, TxHandle, TxStatus } from '../types/intent.ts';
-import type { SigningDriver } from '../types/signing-driver.ts';
 import type { SurfaceModule } from '../types/surface-module.ts';
 import { makeHandle } from './util.ts';
 
 interface TenzroNativeBody {
-  readonly kind: 'tenzro-native-userop';
+  readonly kind: 'tenzro-native-transfer';
   readonly from: TdipDid;
   readonly fromAddress: string;
   readonly toDid?: TdipDid;
   readonly toAddress: string;
   readonly amount: bigint;
   readonly assetSymbol: string;
-  readonly chainId: bigint;
-  readonly entryPoint: string;
-  readonly userOp: UserOperation;
-  /** The hash the passkey signs, `0x` hex. */
-  readonly userOpHash: string;
+  readonly tx: TypedTransaction;
 }
 
+/** Gas a plain transfer reserves. */
+export const DEFAULT_TRANSFER_GAS = 500_000;
+
 export interface TenzroNativeDeps {
-  /** Resolves the surface key (the passkey smart account) for a given DID. */
+  /** Resolves the surface key (the passkey account) for a given DID. */
   readonly keyResolver: (did: TdipDid) => SurfaceKey | undefined;
-  /** Normally `passkeySigningDriver(...)`. */
-  readonly signingDriver: SigningDriver;
+  /**
+   * The signer for transactions from the DID's account: a passkey its
+   * keystore links, normally `custody.transactionSigner(account)`.
+   */
+  readonly transactionSigner: (did: TdipDid) => Promise<HybridSigner>;
   /** Real builds inject `TenzroJsonRpcAdapter`; tests inject a fake. */
   readonly rpc: TenzroRpcPort;
   /**
@@ -57,15 +55,15 @@ export interface TenzroNativeDeps {
    * user's own. Without it, sends to other DIDs throw.
    */
   readonly identityPort?: TenzroIdentityPort;
-  /** Gas limits for the operation. Defaults suit a plain value transfer. */
-  readonly gas?: Partial<typeof DEFAULT_USER_OP_GAS>;
+  /** Gas limit for a transfer. */
+  readonly gasLimit?: number;
   /** Receipt polling. Defaults: 500 ms interval, 60 s timeout. */
   readonly watch?: { readonly intervalMs?: number; readonly timeoutMs?: number };
 }
 
 export function tenzroNativeSurface(deps: TenzroNativeDeps): SurfaceModule {
   const rpc = deps.rpc;
-  const gas = { ...DEFAULT_USER_OP_GAS, ...(deps.gas ?? {}) };
+  const gasLimit = deps.gasLimit ?? DEFAULT_TRANSFER_GAS;
 
   return {
     name: 'tenzro-native',
@@ -78,53 +76,43 @@ export function tenzroNativeSurface(deps: TenzroNativeDeps): SurfaceModule {
       if (!fromKey || fromKey.surface !== 'tenzro-native') {
         throw new Error(`no tenzro-native account for ${intent.from}`);
       }
-      const toAddress = executeTarget(
+      const toAddress = ledgerSlot(
         await resolveRecipientAddress(intent.to, deps.keyResolver, deps.identityPort),
       );
-      if (toAddress === normalizeAddress(fromKey.address)) {
+      if (toAddress === ledgerSlot(fromKey.address)) {
         throw new Error('cannot send to your own account');
       }
-      const [nonce, chainId, entryPoint, gasPrice] = await Promise.all([
-        rpc.getAccountNonce(fromKey.address),
-        rpc.getChainId(),
-        rpc.getEntryPoint(),
-        rpc.getGasPrice(),
-      ]);
-
-      const userOp: UserOperation = {
-        sender: fromKey.address,
-        nonce,
-        callData: encodeExecuteSingle({ to: toAddress, value: intent.amount }),
-        callGasLimit: gas.callGasLimit,
-        verificationGasLimit: gas.verificationGasLimit,
-        preVerificationGas: gas.preVerificationGas,
-        maxFeePerGas: gasPrice,
-        maxPriorityFeePerGas: gasPrice,
+      const gasPrice = await rpc.getGasPrice();
+      const tx: TypedTransaction = {
+        kind: 'Transfer',
+        fields: {
+          amount:
+            intent.amount <= BigInt(Number.MAX_SAFE_INTEGER)
+              ? Number(intent.amount)
+              : intent.amount.toString(),
+        },
+        to: toAddress,
+        from: fromKey.address,
+        gasLimit,
+        gasPrice: Number(gasPrice),
       };
-      const hash = userOperationHash(userOp, chainId, entryPoint);
-
       const body: TenzroNativeBody = {
-        kind: 'tenzro-native-userop',
+        kind: 'tenzro-native-transfer',
         from: intent.from,
         fromAddress: fromKey.address,
         ...(intent.to.kind === 'tdip' ? { toDid: intent.to.did } : {}),
         toAddress,
         amount: intent.amount,
         assetSymbol: intent.asset.symbol,
-        chainId,
-        entryPoint,
-        userOp,
-        userOpHash: toHex(hash, true),
+        tx,
       };
-
       return {
         route: { kind: 'native', surface: 'tenzro-native' },
         intent,
         fees: [
           {
             asset: intent.asset,
-            amount:
-              (gas.callGasLimit + gas.verificationGasLimit + gas.preVerificationGas) * gasPrice,
+            amount: BigInt(gasLimit) * gasPrice,
             label: 'network fee (maximum)',
           },
         ],
@@ -137,30 +125,19 @@ export function tenzroNativeSurface(deps: TenzroNativeDeps): SurfaceModule {
 
     async sign(prepared: PreparedTx, _consent: Consent): Promise<SignedTx> {
       const body = prepared.body as TenzroNativeBody;
-      const surfaceKey = deps.keyResolver(body.from);
-      if (!surfaceKey || surfaceKey.surface !== 'tenzro-native') {
-        throw new Error(`no tenzro-native account for ${body.from}`);
-      }
-      const result = await deps.signingDriver.sign({
-        did: body.from,
-        surfaceKey,
-        scheme: 'webauthn-p256',
-        preimage: fromHex(body.userOpHash),
-        purpose: 'tenzro-native-send',
-      });
-      const bundle = result.signatures[0];
-      if (!bundle || result.signatures.length !== 1) {
-        throw new Error('the signing driver must return one signature bundle');
-      }
-      return { prepared, signatures: [bundle], body };
+      const signer = await deps.transactionSigner(body.from);
+      const signed = await rpc.signTransaction(signer, body.tx);
+      return {
+        prepared,
+        signatures: [new TextEncoder().encode(JSON.stringify(signed.signature))],
+        body: { ...body, signed },
+      };
     },
 
     async submit(signed: SignedTx): Promise<TxHandle> {
-      const body = signed.body as TenzroNativeBody;
-      const signature = signed.signatures[0];
-      if (!signature) throw new Error('missing signature bundle');
-      const op = userOperationToJson({ ...body.userOp, signature });
-      const hash = await rpc.sendUserOperation(op, body.entryPoint);
+      const body = signed.body as TenzroNativeBody & { signed?: SignedTransactionJson };
+      if (!body.signed) throw new Error('the transfer is not signed');
+      const hash = await rpc.sendTransaction(body.signed);
       return makeHandle('tenzro-native', signed.prepared.intent, hash);
     },
 
@@ -172,20 +149,16 @@ export function tenzroNativeSurface(deps: TenzroNativeDeps): SurfaceModule {
 
 // --- helpers ---
 
-const normalizeAddress = (a: string): string => toHex(fromHex(a), true);
-
-/**
- * `execute` takes a 20-byte address. Tenzro addresses may arrive widened to
- * 32 bytes with 12 leading zero bytes; anything else is not reachable from
- * an account call.
- */
-function executeTarget(address: string): string {
+/** A Tenzro account in its 32-byte ledger slot, `0x` hex: a 20-byte address is widened on the right. */
+function ledgerSlot(address: string): string {
   const bytes = fromHex(address);
-  if (bytes.length === 20) return toHex(bytes, true);
-  if (bytes.length === 32 && bytes.slice(0, 12).every((b) => b === 0)) {
-    return toHex(bytes.slice(12), true);
+  if (bytes.length === 32) return toHex(bytes, true);
+  if (bytes.length === 20) {
+    const slot = new Uint8Array(32);
+    slot.set(bytes);
+    return toHex(slot, true);
   }
-  throw new Error(`recipient ${address} is not a 20-byte account address`);
+  throw new Error(`recipient ${address} is not a 20- or 32-byte account address`);
 }
 
 async function resolveRecipientAddress(
@@ -225,23 +198,23 @@ async function* watchReceipt(
 
   yield { handle, phase: 'created' };
   if (handle.hash === undefined) {
-    yield { handle, phase: 'dropped', error: 'no operation hash on handle' };
+    yield { handle, phase: 'dropped', error: 'no transaction hash on handle' };
     return;
   }
   yield { handle, phase: 'pending', hash: handle.hash };
 
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    let receipt: UserOperationReceipt | null = null;
+    let receipt: TransactionReceipt | null = null;
     try {
-      receipt = await rpc.getUserOperationReceipt(handle.hash);
+      receipt = await rpc.getTransactionReceipt(handle.hash);
     } catch {
       // Transient RPC errors fall through to the next interval.
     }
     if (receipt) {
       yield receipt.success
         ? { handle, phase: 'finalized', hash: handle.hash }
-        : { handle, phase: 'failed', hash: handle.hash, error: 'operation reverted' };
+        : { handle, phase: 'failed', hash: handle.hash, error: 'transaction failed' };
       return;
     }
     await new Promise((r) => setTimeout(r, intervalMs));

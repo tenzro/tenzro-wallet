@@ -15,6 +15,7 @@ import {
   POPUP_ERRORS,
   POPUP_PROTOCOL,
   type PopupApproveAgentTerms,
+  type PopupLinkCredential,
   type PopupRequest,
   type PopupResponse,
   type PopupSendTransaction,
@@ -89,6 +90,21 @@ function stepUp(p: unknown): StepUpRequest | null {
   } catch {
     return null;
   }
+}
+
+type LinkParams = PopupLinkCredential & {
+  readonly update: PopupLinkCredential['update'] & {
+    readonly op: {
+      readonly add_credential: { readonly credential: { rp_id: string; label: string } };
+    };
+  };
+};
+
+function isLink(p: unknown): p is LinkParams {
+  const u = (p as { update?: { account?: unknown; op?: unknown } } | undefined)?.update;
+  const cred = (u?.op as { add_credential?: { credential?: { rp_id?: unknown } } } | undefined)
+    ?.add_credential?.credential;
+  return typeof u?.account === 'string' && typeof cred?.rp_id === 'string';
 }
 
 function isSend(p: unknown): p is PopupSendTransaction {
@@ -206,6 +222,10 @@ export default function ApprovePage() {
           challenge: params.challenge,
         });
         respond({ result: { authorization } });
+      } else if (method === 'tenzro_linkCredential') {
+        if (!isLink(params)) throw new Error('The site sent an invalid passkey link.');
+        const linked = await custody().approveLink(wallet, params.update);
+        respond({ result: { credentialsTotal: linked.credentials_total } });
       } else if (method === 'tenzro_approveAgentAction') {
         const request = parseStepUpRequest(params);
         respond({ result: { step_up: await approveStepUp(wallet, request) } });
@@ -412,7 +432,9 @@ export default function ApprovePage() {
                       ? 'Approve these Terms for an agent?'
                       : pending.request.method === 'tenzro_approveAgentAction'
                         ? 'Your agent asks you to approve this action'
-                        : 'Approve this payment?'}
+                        : pending.request.method === 'tenzro_linkCredential'
+                          ? 'Link a passkey to your wallet?'
+                          : 'Approve this payment?'}
             </CardTitle>
             <CardDescription>
               <span className="font-mono">{pending.origin}</span>
@@ -460,6 +482,24 @@ export default function ApprovePage() {
                   <p className="text-danger">The site sent an invalid action.</p>
                 );
               })()
+            ) : pending.request.method === 'tenzro_linkCredential' ? (
+              isLink(pending.request.params) ? (
+                <p className="text-foreground-muted">
+                  Links the passkey{' '}
+                  <span className="font-medium text-foreground">
+                    {pending.request.params.update.op.add_credential.credential.label || 'passkey'}
+                  </span>{' '}
+                  made at{' '}
+                  <span className="font-mono">
+                    {pending.request.params.update.op.add_credential.credential.rp_id}
+                  </span>{' '}
+                  to your wallet <span className="font-mono">{shortAddress(wallet.account)}</span>.
+                  It can then approve for your wallet like your other devices. Approved with your
+                  passkey; you can remove it in Settings.
+                </p>
+              ) : (
+                <p className="text-danger">The site sent an invalid passkey link.</p>
+              )
             ) : pending.request.method === 'tenzro_signSettlementPlan' ? (
               isPlan(pending.request.params) ? (
                 <PlanReview plan={pending.request.params.plan} />

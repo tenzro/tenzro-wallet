@@ -1,28 +1,27 @@
 /**
  * TenzroRpcPort — the kernel's view of the Tenzro Ledger JSON-RPC for a
- * passkey smart account.
+ * passkey account.
  *
- * A person's account is an ERC-4337 smart account guarded by the WebAuthn
- * validator. The node never signs for it: the wallet builds a
- * UserOperation, the user's passkey signs the
- * operation hash on the device, and the node validates and executes it.
+ * A person's account acts through native transactions its keystore in
+ * consensus state authorizes. The node never signs for it: the wallet builds
+ * the transaction, a passkey the keystore links signs its digest on the
+ * device, and the network admits it like any other transaction.
  *
- * Real builds inject `TenzroJsonRpcAdapter` (plain JSON-RPC over fetch);
- * tests inject in-memory fakes. Nothing under `src/surfaces/` or
- * `src/kernel.ts` talks to the network directly.
+ * Real builds inject `TenzroJsonRpcAdapter`; tests inject in-memory fakes.
+ * Nothing under `src/surfaces/` or `src/kernel.ts` talks to the network
+ * directly.
  *
- * Node methods (crates/tenzro-node/src/rpc.rs):
- *   eth_chainId, eth_gasPrice, eth_supportedEntryPoints,
- *   tenzro_getSmartAccount (nonce), eth_sendUserOperation,
- *   eth_getUserOperationReceipt.
+ * Node methods: eth_chainId, eth_gasPrice, tenzro_getNonce,
+ * tenzro_getSigningPayload, tenzro_sendRawTransaction,
+ * eth_getTransactionReceipt.
  */
 
-/** Receipt of an executed UserOperation (`eth_getUserOperationReceipt`). */
-export interface UserOperationReceipt {
-  readonly userOpHash: string;
+import type { HybridSigner, SignedTransactionJson, TypedTransaction } from 'tenzro-sdk';
+
+/** Outcome of an executed transaction (`eth_getTransactionReceipt`). */
+export interface TransactionReceipt {
+  readonly hash: string;
   readonly success: boolean;
-  readonly actualGasUsed?: string;
-  readonly actualGasCost?: string;
 }
 
 /**
@@ -39,18 +38,19 @@ export interface TenzroRpcPort {
   /** `eth_chainId`. Read from the node; never assumed. */
   getChainId(): Promise<bigint>;
 
-  /** The EntryPoint this node serves (`eth_supportedEntryPoints[0]`). */
-  getEntryPoint(): Promise<string>;
-
-  /** Smart-account nonce (`tenzro_getSmartAccount`), default key 0. */
-  getAccountNonce(account: string): Promise<bigint>;
-
   /** Current gas price in wei (`eth_gasPrice`). */
   getGasPrice(): Promise<bigint>;
 
-  /** Submit a signed UserOperation. Returns the userOpHash. */
-  sendUserOperation(userOp: Readonly<Record<string, string>>, entryPoint: string): Promise<string>;
+  /**
+   * Sign `tx` with `signer` without submitting it: the nonce, chain id and
+   * signing payload come from the node, and the payload is checked to be
+   * the transaction built before the passkey signs.
+   */
+  signTransaction(signer: HybridSigner, tx: TypedTransaction): Promise<SignedTransactionJson>;
 
-  /** `null` while the node has not seen the operation. */
-  getUserOperationReceipt(userOpHash: string): Promise<UserOperationReceipt | null>;
+  /** `tenzro_sendRawTransaction`. Returns the transaction hash. */
+  sendTransaction(signed: SignedTransactionJson): Promise<string>;
+
+  /** `null` while the node has not executed the transaction. */
+  getTransactionReceipt(hash: string): Promise<TransactionReceipt | null>;
 }
