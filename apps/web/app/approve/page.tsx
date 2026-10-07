@@ -12,6 +12,7 @@ import {
 } from '@tenzro/ui';
 import * as React from 'react';
 import {
+  type CallBatch,
   POPUP_ERRORS,
   POPUP_PROTOCOL,
   type PopupApproveAgentTerms,
@@ -20,8 +21,18 @@ import {
   type PopupResponse,
   type PopupSendTransaction,
   type PopupSignSettlementPlan,
+  type SpendGrant,
+  WALLET_CALL_ERRORS,
+  WalletCallError,
+  agentOfContext,
+  callsStatus,
+  grantedPermissions,
   isPopupRequest,
+  parsePermissionRequest,
+  parseSendCalls,
+  permissionResponse,
 } from 'tenzro-wallet';
+import type { RawAgentTermsView } from 'tenzro-wallet/custody';
 import {
   type OwnershipProof,
   type PasskeyEntryOptions,
@@ -34,17 +45,52 @@ import { LinkDeviceActions } from '@/components/wallet/link-device';
 import { PlanReview } from '@/components/wallet/plan-review';
 import { StepUpReview } from '@/components/wallet/step-up-review';
 import { TermsReview } from '@/components/wallet/terms-review';
-import { approveStepUp } from '@/lib/tenzro/agents';
-import { ensureAgentBond } from '@/lib/tenzro/agents';
+import {
+  approveStepUp,
+  ensureAgentBond,
+  findAgentByWallet,
+  grantSpendLimit,
+  listRootedIdentities,
+  revokeSpendLimits,
+} from '@/lib/tenzro/agents';
 import { addConnection, isConnected, removeConnection } from '@/lib/tenzro/connections';
 import { TNZO_DECIMALS, formatBaseUnits, shortAddress } from '@/lib/tenzro/format';
 import { usePlatformPasskey, useWallet } from '@/lib/tenzro/hooks';
-import { signTransaction } from '@/lib/tenzro/native-tx';
+import { sendCallBatch, signTransaction } from '@/lib/tenzro/native-tx';
+import { rpcCall } from '@/lib/tenzro/rpc';
 import { type EnteredWallet, custody, sendTnzo } from '@/lib/tenzro/wallet';
 
 interface Pending {
   readonly request: PopupRequest;
   readonly origin: string;
+}
+
+/** Standard wallet methods (ERC-5792, ERC-7715) the window answers. */
+const STANDARD_METHODS: readonly string[] = [
+  'wallet_sendCalls',
+  'wallet_showCallsStatus',
+  'wallet_requestExecutionPermissions',
+  'wallet_revokeExecutionPermission',
+  'wallet_getGrantedExecutionPermissions',
+];
+
+/** A standard request, checked and resolved against the network, ready to show. */
+type Review =
+  | { readonly kind: 'calls'; readonly batch: CallBatch }
+  | {
+      readonly kind: 'grants';
+      readonly items: readonly { readonly grant: SpendGrant; readonly view: RawAgentTermsView }[];
+    }
+  | { readonly kind: 'revoke'; readonly view: RawAgentTermsView }
+  | { readonly kind: 'status'; readonly status: ReturnType<typeof callsStatus> };
+
+function first(params: unknown): unknown {
+  return Array.isArray(params) ? params[0] : params;
+}
+
+function agentLabel(view: RawAgentTermsView): string {
+  const name = (view.terms as { agent_name?: unknown }).agent_name;
+  return typeof name === 'string' ? name : view.agent_did;
 }
 
 /** The site's one-time challenge for an ownership proof, if it sent one. */
@@ -125,6 +171,7 @@ export default function ApprovePage() {
   // A wallet created here, held back from the site while a second device is offered.
   const [created, setCreated] = React.useState<EnteredWallet | null>(null);
   const [deviceName, setDeviceName] = React.useState('');
+  const [review, setReview] = React.useState<Review | null>(null);
 
   const respond = React.useCallback(
     (body: Omit<PopupResponse, 'protocol' | 'type' | 'id'>) => {
@@ -229,6 +276,20 @@ export default function ApprovePage() {
       } else if (method === 'tenzro_approveAgentAction') {
         const request = parseStepUpRequest(params);
         respond({ result: { step_up: await approveStepUp(wallet, request) } });
+      } else if (review?.kind === 'calls') {
+        respond({ result: { id: await sendCallBatch(wallet, review.batch) } });
+      } else if (review?.kind === 'grants') {
+        const result = [];
+        for (const { grant, view } of review.items) {
+          await grantSpendLimit(wallet, view, grant);
+          result.push(permissionResponse(grant, view.agent_did));
+        }
+        respond({ result });
+      } else if (review?.kind === 'revoke') {
+        await revokeSpendLimits(wallet, review.view);
+        respond({ result: {} });
+      } else if (review?.kind === 'status') {
+        respond({ result: null });
       }
       window.close();
     } catch (e) {
@@ -284,7 +345,8 @@ export default function ApprovePage() {
       pending?.request.method === 'tenzro_approveAgentTerms' ||
       pending?.request.method === 'tenzro_approveAgentAction' ||
       pending?.request.method === 'tenzro_addWallet' ||
-      pending?.request.method === 'tenzro_linkDevice') &&
+      pending?.request.method === 'tenzro_linkDevice' ||
+      STANDARD_METHODS.includes(pending?.request.method ?? '')) &&
     !connected;
 
   // The site may suggest a name for the new device; the person can change it.
@@ -304,6 +366,76 @@ export default function ApprovePage() {
       });
     }
   }, [needsConnection, pending, respond]);
+
+  // Standard requests are checked against the network before they are shown;
+  // one the wallet cannot serve is answered with its standard error code.
+  React.useEffect(() => {
+    if (!pending || !wallet || !connected || !STANDARD_METHODS.includes(pending.request.method)) {
+      return;
+    }
+    let live = true;
+    (async () => {
+      const chainId = await rpcCall<string>('eth_chainId');
+      const ctx = { chainId, account: wallet.account };
+      const { method, params } = pending.request;
+      if (method === 'wallet_getGrantedExecutionPermissions') {
+        const { agents } = await listRootedIdentities(wallet.did);
+        const result = await grantedPermissions(agents as never, ctx);
+        if (live) {
+          respond({ result });
+          window.close();
+        }
+        return;
+      }
+      let next: Review;
+      if (method === 'wallet_sendCalls') {
+        next = { kind: 'calls', batch: parseSendCalls(params, ctx) };
+      } else if (method === 'wallet_showCallsStatus') {
+        const id = first(params);
+        if (typeof id !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(id)) {
+          throw new WalletCallError(WALLET_CALL_ERRORS.unknownBundle, 'unknown call batch id');
+        }
+        const receipt = await rpcCall<never>('eth_getTransactionReceipt', [id]);
+        next = { kind: 'status', status: callsStatus(id, chainId, receipt) };
+      } else if (method === 'wallet_requestExecutionPermissions') {
+        const list = Array.isArray(params) ? params : [params];
+        const items = [];
+        for (const req of list) {
+          const grant = parsePermissionRequest(req, { ...ctx, nowMs: Date.now() });
+          const view = await findAgentByWallet(wallet.did, grant.agentWallet);
+          if (!view) {
+            throw new WalletCallError(
+              WALLET_CALL_ERRORS.invalidParams,
+              `${grant.agentWallet} is not the wallet of one of your agents`,
+            );
+          }
+          items.push({ grant, view });
+        }
+        next = { kind: 'grants', items };
+      } else {
+        const p = first(params) as { permissionContext?: unknown } | undefined;
+        const agentDid = agentOfContext(p?.permissionContext);
+        const { agents } = await listRootedIdentities(wallet.did);
+        const view = agents.find((a) => a.agent_did === agentDid);
+        if (!view) {
+          throw new WalletCallError(WALLET_CALL_ERRORS.invalidParams, 'no such permission');
+        }
+        next = { kind: 'revoke', view };
+      }
+      if (live) setReview(next);
+    })().catch((e: unknown) => {
+      if (!live) return;
+      if (e instanceof WalletCallError) {
+        respond({ error: { code: e.code, message: e.message } });
+        window.close();
+      } else {
+        setError(e instanceof Error ? e.message : String(e));
+      }
+    });
+    return () => {
+      live = false;
+    };
+  }, [pending, wallet, connected, respond]);
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-md flex-col gap-6 p-6">
@@ -434,7 +566,15 @@ export default function ApprovePage() {
                         ? 'Your agent asks you to approve this action'
                         : pending.request.method === 'tenzro_linkCredential'
                           ? 'Link a passkey to your wallet?'
-                          : 'Approve this payment?'}
+                          : review?.kind === 'calls'
+                            ? 'Approve these calls?'
+                            : review?.kind === 'grants'
+                              ? 'Give your agent a spending limit?'
+                              : review?.kind === 'revoke'
+                                ? "Withdraw your agent's spending?"
+                                : review?.kind === 'status'
+                                  ? 'Call batch'
+                                  : 'Approve this payment?'}
             </CardTitle>
             <CardDescription>
               <span className="font-mono">{pending.origin}</span>
@@ -506,6 +646,58 @@ export default function ApprovePage() {
               ) : (
                 <p className="text-danger">The site sent an invalid settlement plan.</p>
               )
+            ) : STANDARD_METHODS.includes(pending.request.method) ? (
+              !review ? (
+                <p className="text-foreground-muted">Checking the request…</p>
+              ) : review.kind === 'calls' ? (
+                <div className="space-y-2">
+                  {review.batch.calls.map((c, i) => (
+                    <p key={i} className="text-foreground-muted">
+                      {formatBaseUnits(c.value.toString(), TNZO_DECIMALS)} TNZO to{' '}
+                      <span className="font-mono">
+                        {shortAddress(
+                          `0x${c.to.map((b) => b.toString(16).padStart(2, '0')).join('')}`,
+                        )}
+                      </span>
+                      {c.data.length > 0 ? `, with ${c.data.length} bytes of call data` : ''}
+                    </p>
+                  ))}
+                  <p className="text-foreground-muted">
+                    One transaction from your wallet: every call applies, or none does.
+                  </p>
+                </div>
+              ) : review.kind === 'grants' ? (
+                <div className="space-y-2">
+                  {review.items.map(({ grant, view }) => (
+                    <p key={view.agent_did} className="text-foreground-muted">
+                      <span className="font-medium text-foreground">{agentLabel(view)}</span> may
+                      spend up to {formatBaseUnits(grant.amountWei.toString(), TNZO_DECIMALS)} TNZO
+                      per {grant.window}
+                      {grant.expiresAtMs !== null
+                        ? `, until ${new Date(grant.expiresAtMs).toLocaleString()}`
+                        : ''}
+                      .
+                    </p>
+                  ))}
+                  <p className="text-foreground-muted">
+                    The limit becomes part of the agent's Terms, which every node checks on each of
+                    its actions.
+                  </p>
+                </div>
+              ) : review.kind === 'revoke' ? (
+                <p className="text-foreground-muted">
+                  <span className="font-medium text-foreground">{agentLabel(review.view)}</span>{' '}
+                  will no longer be able to spend from its wallet.
+                </p>
+              ) : (
+                <p className="text-foreground-muted">
+                  {review.status.status === 100
+                    ? 'Waiting to be included in a block.'
+                    : review.status.status === 200
+                      ? 'Confirmed: every call applied.'
+                      : 'Reverted: no call applied.'}
+                </p>
+              )
             ) : isSend(pending.request.params) ? (
               <div className="space-y-1">
                 <p className="font-mono text-xl tabular">
@@ -519,8 +711,15 @@ export default function ApprovePage() {
               <p className="text-danger">The site sent an invalid transaction.</p>
             )}
             <div className="flex gap-2">
-              <Button onClick={approve} disabled={busy}>
-                {busy ? 'Approve with your passkey…' : 'Approve'}
+              <Button
+                onClick={approve}
+                disabled={busy || (STANDARD_METHODS.includes(pending.request.method) && !review)}
+              >
+                {busy
+                  ? 'Approve with your passkey…'
+                  : review?.kind === 'status'
+                    ? 'Close'
+                    : 'Approve'}
               </Button>
               <Button variant="outline" onClick={decline} disabled={busy}>
                 Decline

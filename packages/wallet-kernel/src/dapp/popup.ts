@@ -32,7 +32,12 @@ export type PopupMethod =
   | 'tenzro_signSettlementPlan'
   | 'tenzro_approveAgentTerms'
   | 'tenzro_approveAgentAction'
-  | 'tenzro_disconnect';
+  | 'tenzro_disconnect'
+  | 'wallet_sendCalls'
+  | 'wallet_showCallsStatus'
+  | 'wallet_requestExecutionPermissions'
+  | 'wallet_revokeExecutionPermission'
+  | 'wallet_getGrantedExecutionPermissions';
 
 export interface PopupRequest {
   readonly protocol: typeof POPUP_PROTOCOL;
@@ -150,6 +155,11 @@ export const POPUP_METHODS: readonly PopupMethod[] = [
   'tenzro_approveAgentTerms',
   'tenzro_approveAgentAction',
   'tenzro_disconnect',
+  'wallet_sendCalls',
+  'wallet_showCallsStatus',
+  'wallet_requestExecutionPermissions',
+  'wallet_revokeExecutionPermission',
+  'wallet_getGrantedExecutionPermissions',
 ];
 
 /**

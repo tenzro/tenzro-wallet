@@ -74,3 +74,24 @@ export type {
   EIP6963ProviderDetail,
   RpcTransport,
 } from 'tenzro-sdk';
+
+export {
+  CALLS_VERSION,
+  MAX_CALLS,
+  NATIVE_TOKEN_PERIODIC,
+  WALLET_CALL_ERRORS,
+  WALLET_CAPABILITIES,
+  WalletCallError,
+  agentOfContext,
+  agentWalletAddress,
+  callsStatus,
+  chainIdHex,
+  contractCallFields,
+  grantedPermissions,
+  parsePermissionRequest,
+  parseSendCalls,
+  permissionContext,
+  permissionResponse,
+  supportedExecutionPermissions,
+} from './wallet-calls.ts';
+export type { CallBatch, EvmReceipt, NativeEvmCall, SpendGrant } from './wallet-calls.ts';

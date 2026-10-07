@@ -5,7 +5,7 @@
  */
 
 import { AuthClient } from 'tenzro-sdk';
-import type { AgentTermsWire } from 'tenzro-wallet';
+import { type AgentTermsWire, type SpendGrant, agentWalletAddress } from 'tenzro-wallet';
 import type { AgentStepUp, RawAgentTermsView, StepUpRequest } from 'tenzro-wallet/custody';
 import { increaseAgentBond, postAgentBond, requiredAgentBondWei } from './native-tx';
 
@@ -127,11 +127,37 @@ export async function updateAgentLimits(
       max_daily_spend: limits.perDay,
     },
   };
-  await ensureAgentBond(wallet, view.agent_did, terms.delegation_scope ?? {});
+  return replaceTerms(wallet, view.agent_did, terms);
+}
+
+/** Approves a held action with the identity's passkey; returns the `step_up` the agent sends. */
+export function approveStepUp(wallet: StoredWallet, request: StepUpRequest): Promise<AgentStepUp> {
+  return custody().approveAgentStepUp(wallet, request);
+}
+
+/** The agent this identity roots whose wallet is `address`, with its Terms, or null. */
+export async function findAgentByWallet(
+  controllerDid: string,
+  address: string,
+): Promise<RawAgentTermsView | null> {
+  const { agents } = await listRootedIdentities(controllerDid);
+  for (const view of agents) {
+    if ((await agentWalletAddress(view.agent_did)) === address.toLowerCase()) return view;
+  }
+  return null;
+}
+
+/** Replaces an agent's Terms with `next`, approved by this device's passkey and recorded in consensus. */
+async function replaceTerms(
+  wallet: StoredWallet,
+  agentDid: string,
+  terms: AgentTermsWire,
+): Promise<unknown> {
+  await ensureAgentBond(wallet, agentDid, terms.delegation_scope ?? {});
   const auth = new AuthClient(sdkRpc());
   return auth.updateAgentTerms(
     wallet.account,
-    view.agent_did,
+    agentDid,
     terms as never,
     false,
     async (challenge) =>
@@ -144,7 +170,39 @@ export async function updateAgentLimits(
   );
 }
 
-/** Approves a held action with the identity's passkey; returns the `step_up` the agent sends. */
-export function approveStepUp(wallet: StoredWallet, request: StepUpRequest): Promise<AgentStepUp> {
-  return custody().approveAgentStepUp(wallet, request);
+/**
+ * Grants an agent an ERC-7715 spend limit: its hourly or daily ceiling in its
+ * Terms, and their expiry. Everything else in the Terms stays.
+ */
+export function grantSpendLimit(
+  wallet: StoredWallet,
+  view: RawAgentTermsView,
+  grant: SpendGrant,
+): Promise<unknown> {
+  const current = view.terms as unknown as AgentTermsWire;
+  const terms: AgentTermsWire = {
+    ...current,
+    delegation_scope: {
+      ...(current.delegation_scope ?? {}),
+      ...(grant.window === 'hour'
+        ? { max_hourly_spend: grant.amountWei.toString() }
+        : { max_daily_spend: grant.amountWei.toString() }),
+    },
+    ...(grant.expiresAtMs !== null ? { expires_at_ms: grant.expiresAtMs } : {}),
+  };
+  return replaceTerms(wallet, view.agent_did, terms);
+}
+
+/** Withdraws an agent's ERC-7715 spend permission: its spend limits become zero. */
+export function revokeSpendLimits(wallet: StoredWallet, view: RawAgentTermsView): Promise<unknown> {
+  const current = view.terms as unknown as AgentTermsWire;
+  return replaceTerms(wallet, view.agent_did, {
+    ...current,
+    delegation_scope: {
+      ...(current.delegation_scope ?? {}),
+      max_transaction_value: '0',
+      max_hourly_spend: '0',
+      max_daily_spend: '0',
+    },
+  });
 }

@@ -23,7 +23,7 @@ Today, a user who wants to do all of this needs three or four wallets: MetaMask 
 | Surface | What it is | Address/identity primitive | Native asset accounting |
 |---|---|---|---|
 | **Tenzro native** | Native VM on Tenzro Ledger — the canonical TNZO balance, escrow primitive, settlement engine | TDIP DID + Ed25519 pubkey | TNZO (canonical units) |
-| **EVM-on-Tenzro** | revm inside Tenzro runtime; sees TNZO as `wTNZO` ERC-20 at `0x7a4bcb13a6b2b384c284b5caa6e5ef3126527f93`; ERC-4337 paymaster works here | secp256k1 / 20-byte addr | wTNZO (18 dec) |
+| **EVM-on-Tenzro** | revm inside Tenzro runtime; sees TNZO as `wTNZO` ERC-20 at `0x7a4bcb13a6b2b384c284b5caa6e5ef3126527f93`; a passkey account reaches it through native contract-call transactions | secp256k1 / 20-byte addr | wTNZO (18 dec) |
 | **SVM-on-Tenzro** | solana_rbpf inside Tenzro runtime; SPL Token Adapter view of TNZO | Ed25519 pubkey (Solana-shape) | TNZO via SPL adapter (9 dec, sub-lamport truncation) |
 | **Canton (DAML)** | Two distinct things share this name. **(a)** Canton/DAML execution *inside* the Tenzro runtime — TNZO as a CIP-56 holding template, reached via CantonAdapter. **(b)** Canton Network MainNet — *external* ledger holding CC and other CIP-56 tokens; reached via Splice Wallet Kernel + a validator's Ledger API. | External Canton party id (Ed25519-keyed), e.g. `kraken::1220dd08…` | CIP-56 holdings (UTXO-style) |
 
@@ -92,7 +92,7 @@ The wallet must treat (4a) and (4b) as **two different ledgers** that happen to 
 We deliberately do **not** ship four mini-wallets glued together. There is one wallet kernel; it owns identity, custody, consent, and policy. Surfaces are *modules* — pure functions that translate user intent into the surface-appropriate transaction shape:
 
 - `surfaces/tenzroNative.ts` — builds Native VM txs
-- `surfaces/evm.ts` — builds EIP-1559 / 4337 UserOps; secp256k1 sign
+- `surfaces/evm.ts` — builds EIP-1559 transactions; secp256k1 sign
 - `surfaces/svm.ts` — builds Solana txs/instructions; Ed25519 sign
 - `surfaces/cantonInternal.ts` — Canton-on-Tenzro via CantonAdapter
 - `surfaces/cantonExternal.ts` — Canton MainNet via Splice Wallet SDK
@@ -435,14 +435,11 @@ All four are payment-protocol modules in the kernel ([payments overview](https:/
 
 For Mastercard Agent Pay specifically, KYA tier maps to a per-session cap; the wallet refuses to issue a session token that exceeds the user's KYA tier (and surfaces the upgrade path).
 
-### 7.5 Paymaster / gas sponsorship
+### 7.5 Gas sponsorship
 
-ERC-4337 v0.8 on the EVM-on-Tenzro side. The wallet:
-- Constructs UserOps for any EVM call where the user has no TNZO (or for app-sponsored calls).
-- Talks to a registered paymaster (the dApp's own, or a default Tenzro public paymaster).
-- Per [paymaster docs](https://tenzro.com/docs/paymaster), the user never sees gas costs in sponsored flows.
+A passkey account's transactions are native and the network verifies the passkey in consensus; there are no user operations and no paymaster contract. A sponsor (a wallet provider's endpoint, or the node that relays an agent's Terms) can send a keystore change or an agent's Terms with the passkey's approval inside and pay the fee. Everything else, including an ERC-5792 call batch, is paid by the account that sends it, so `wallet_getCapabilities` reports `paymasterService` as unsupported.
 
-SVM and Canton don't have direct paymaster equivalents documented. For SVM-on-Tenzro we provide a *fee delegation* shim: the wallet asks the Tenzro RPC to fee-delegate via the same paymaster master wallet, deducting in TNZO. For Canton MainNet, the *provider* of a transfer-preapproval pays fees by design — that *is* Canton's paymaster, and the wallet uses it transparently.
+For Canton MainNet, the provider of a transfer-preapproval pays fees by design, and the wallet uses it transparently.
 
 ---
 

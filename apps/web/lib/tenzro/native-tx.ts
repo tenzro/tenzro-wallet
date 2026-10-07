@@ -14,6 +14,8 @@ import {
   TypedTxClient,
   validateSplitRule,
 } from 'tenzro-sdk';
+import type { CallBatch } from 'tenzro-wallet';
+import { contractCallFields } from 'tenzro-wallet';
 
 import { sdkRpc } from './rpc';
 import { type StoredWallet, custody } from './wallet';
@@ -98,4 +100,19 @@ export async function increaseAgentBond(
 /** Starts withdrawing an agent's bond, or returns it once the cooldown has passed. */
 export async function withdrawAgentBond(wallet: StoredWallet, agentDid: string): Promise<unknown> {
   return sendFromAccount(wallet, { kind: 'WithdrawAgentBond', fields: { agent_did: agentDid } });
+}
+
+/**
+ * Sends an ERC-5792 call batch as one contract-call transaction from the
+ * wallet's account: the network runs the calls in order and applies all of
+ * them or none. Returns the transaction hash, which is the batch id.
+ */
+export async function sendCallBatch(wallet: StoredWallet, batch: CallBatch): Promise<string> {
+  const hash = await sendFromAccount(wallet, {
+    kind: 'ContractCall',
+    fields: contractCallFields(batch) as unknown as Record<string, unknown>,
+    gasLimit: Math.min(3_000_000, 100_000 + 200_000 * batch.calls.length),
+  });
+  if (typeof hash !== 'string') throw new Error('The network answered no transaction hash.');
+  return hash.startsWith('0x') ? hash : `0x${hash}`;
 }

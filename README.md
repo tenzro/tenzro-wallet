@@ -52,12 +52,19 @@ A site opens `https://wallet.tenzro.com/approve` (`createPopupProvider` in `tenz
 | `tenzro_approveAgentTerms` | `{ operation, terms, rotate_tokens?, challenge }` | `{ authorization }` |
 | `tenzro_approveAgentAction` | `{ action, step_up }` | `{ step_up }` |
 | `tenzro_disconnect` | none | `null` |
+| `wallet_sendCalls` | ERC-5792 `[{ version, chainId, from?, atomicRequired, calls, capabilities? }]`, at most 16 calls | `{ id }`, the hash of the one contract-call transaction (all calls apply or none) |
+| `wallet_showCallsStatus` | `[id]` | `null`, after showing the batch |
+| `wallet_requestExecutionPermissions` | ERC-7715 requests of type `native-token-periodic` (`periodDuration` 3600 or 86400) with an optional `expiry` rule; `to` is the wallet address of one of your agents | the requests as granted, with `context` naming the agent and `delegationManager` the zero address |
+| `wallet_revokeExecutionPermission` | `[{ permissionContext }]` | `{}`; the agent's spend limits become zero |
+| `wallet_getGrantedExecutionPermissions` | none | the spend limits your agents hold |
+
+`wallet_getCapabilities`, `wallet_getCallsStatus` and `wallet_getSupportedExecutionPermissions` need no window: the page's provider answers them (`atomic` is supported, `paymasterService` is not, since a batch's fee is paid by its sender). A permission is written into the agent's Terms, which every validator checks on each of the agent's actions.
 
 The wallet signs only what it can check: Terms are compared with what the node completed, and a held action's digest and custody challenge are recomputed from the action shown.
 
 ## What's in this repo
 
-- **`packages/wallet-kernel/`** (`tenzro-wallet` on npm): passkey custody, ERC-4337 user operations, agent Terms and step-up checks, the popup protocol, surfaces for native, EVM, SVM and Canton.
+- **`packages/wallet-kernel/`** (`tenzro-wallet` on npm): passkey custody, agent Terms and step-up checks, ERC-5792 call batches and ERC-7715 permissions, the popup protocol, surfaces for native, EVM, SVM and Canton.
 - **`packages/ui/`** (`@tenzro/ui`): the design system.
 - **`apps/web/`**: the hosted wallet at `wallet.tenzro.com` (Next.js, static export).
 - **`apps/extension/`**, **`apps/wallet/`**: browser extension and host scaffold.
