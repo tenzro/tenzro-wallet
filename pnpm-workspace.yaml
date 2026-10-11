@@ -2,3 +2,11 @@ packages:
   - "packages/*"
   - "apps/*"
 
+# tenzro-sdk 0.8 is built from github.com/tenzro/tenzro-sdk-typescript,
+# checked out beside this repository, until it is published to npm.
+overrides:
+  tenzro-sdk: "link:../tenzro-sdk-typescript"
+
+onlyBuiltDependencies:
+  - "@biomejs/biome"
+  - esbuild

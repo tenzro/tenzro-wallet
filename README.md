@@ -1,136 +1,128 @@
 # Tenzro Wallet
 
-**The wallet for people and the agents that act for them on Tenzro Network.**
+The open reference wallet for the Tenzro Network. Any wallet provider can
+deploy it on its own domain: passkeys are created on that domain, each one
+records its domain on chain, and no other provider is involved.
 
-Tenzro Wallet is the official wallet for [Tenzro Network](https://tenzro.com), which runs its native VM, EVM contracts, SVM programs and a Canton/DAML view over one ledger. This wallet is how a person holds TNZO and their identity, and decides what their agents may do.
+An account is a smart account whose keystore on chain lists the passkeys that
+act for it. The wallet builds every change with the open SDK
+([`tenzro-sdk`](https://github.com/tenzro/tenzro-sdk-typescript)); it holds
+no key and runs no server of its own.
 
-## What it is
+## What it does
 
-A wallet is the person's devices plus their account on the Tenzro ledger. Tenzro websites and RPC providers only carry messages: the wallet keeps working if any of them disappears, holds no secret, and stores only public data (DID, account address, which passkey this device uses).
+- **One-tap account.** A passkey on this device creates the account. No seed
+  phrase, nothing to write down.
+- **A second root before balances grow.** Spending needs two independent
+  passkeys; the wallet asks for a second device until there is one.
+- **Devices.** Link a device with an invite and a request code (nothing
+  secret moves between devices). A device linked while the account has fewer
+  than two independent passkeys waits before it counts, and any other
+  passkey can cancel it. Remove devices; optionally require two passkeys for
+  everything.
+- **Two passkeys for high-risk changes.** Once the account has two
+  independent passkeys, removing a device, changing recovery or the policy
+  needs both.
+- **Guardians and a hardware key.** People you trust and hardware security
+  keys you keep, with a threshold, can add a new passkey if every device is
+  lost.
+- **Optional one-time recovery code.** Off unless turned on. Generated in the
+  browser; the account holds only a commitment. What you download is the code
+  kit, never a key. Using it takes a claim sent by another account, then the
+  code after a delay.
+- **Recovery you can see.** Every open device shows a recovery in progress,
+  its remaining wait, and a cancel button.
+- **Approvals show what the network says.** Before a passkey signs a
+  transaction, a node executes it on a copy of its state at a named block and
+  a node of another operator does the same; the wallet shows the effects only
+  when both agree, and nothing otherwise.
+- **Agents.** Delegate an agent with limits per payment and per day, an
+  allow-list of accounts and an expiry, approved by your passkey. The wallet
+  signs only if the terms the node completes match what you approved.
+- **Sites.** A site opens `/approve` as a popup to connect or to ask for a
+  transaction; see [Sites](#sites).
 
-- **Passkeys only.** The passkey (Touch ID, Face ID, Windows Hello, a phone over QR, a security key) signs every approval itself. There is no seed phrase and no exportable key. The relying party is `tenzro.com`.
-- **Linked devices are redundancy.** Any linked device opens the account; guardians (their own passkeys) approve a recovery onto a new device, with a waiting period the owner can cancel.
-- **Agents act under Terms the owner approved.** An agent's Terms (limits, operations, networks, counterparties, step-up rules) live in consensus, signed by the passkey the identity was created with. The wallet shows each agent's Terms, spend and bond, changes its limits, revokes it, and approves the actions its Terms hold for the owner.
+Every wait (adding a device, recovery, the recovery code) is a governed
+network parameter. The wallet reads the current values from chain state.
 
-## Flows (Network 1)
+## Deploy your own
 
-| Flow | Where | Node methods |
-|---|---|---|
-| Create a wallet | `/onboarding`, popup `tenzro_connect` | `tenzro_createCustodyChallenge`, `tenzro_enrollPasskey` |
-| Sign in | any page, popup | `tenzro_resolveIdentity`, `tenzro_getKeystore` |
-| Link a device (QR or this device) | Settings, popup `tenzro_linkDevice` | a `KeystoreUpdate` transaction (`add_credential`; the new passkey signs it too) |
-| Link another provider's passkey | popup `tenzro_linkCredential` | the provider's prepared `add_credential` change, approved here and sent from the account |
-| Remove a device | Settings | a `KeystoreUpdate` transaction (`remove_credential`) |
-| Guardians and recovery | Settings, `/guardian`, `/recover` | `KeystoreUpdate` transactions (`set_recovery`, `start_recovery`, `finish_recovery`, `cancel_recovery`) |
-| Send TNZO | `/send`, popup `tenzro_sendTransaction` | `tenzro_sendRawTransaction` (a native transfer the passkey signs) |
-| Receive, balances | `/dashboard` | `tenzro_getTokenBalance`, `eth_getBalance` |
-| History | `/activity` | `tenzro_getTransactionHistory` |
-| Further wallets under one identity | popup `tenzro_addWallet` | `tenzro_enrollPasskey` (salt > 0) |
-| Settlement plan (x402 `plan`) | popup `tenzro_signSettlementPlan` | signed `SettlementPlan` open, submitted by the site |
-| Publisher split and payouts | `/publisher` | `tenzro_getPayeeSplit`, `tenzro_previewSplit`, `tenzro_listPayments` |
-| Create an agent | popup `tenzro_approveAgentTerms` (`delegate_agent`) | the site calls `tenzro_onboardDelegatedAgent` with the approval |
-| Agent Terms, spend, bond | `/agents` | `tenzro_getAgentTerms`, `tenzro_getAgentBond` |
-| Change an agent's limits | `/agents`, popup `tenzro_approveAgentTerms` (`update_agent_terms`) | `tenzro_updateAgentTerms` |
-| Approve a held agent action (step-up) | `/agents` (paste), popup `tenzro_approveAgentAction` | the agent resends `tenzro_agentAct` with `step_up` |
-| Revoke an agent or machine | `/agents` | `tenzro_revokeIdentity` with the passkey approval |
-| Machines under the identity | `/agents` | `tenzro_resolveIdentity` |
+The wallet is a static site. Build it with your settings and serve `apps/web/out`.
 
-Not in the wallet: paying an x402 or MPP challenge from the wallet's own account (`tenzro_payX402` / `tenzro_payMpp` with a signed credential) and bridging to other chains. Agent and machine approvals are signed by the passkey the identity was created with; a linked device's passkey cannot root an agent, so the wallet asks for that passkey (on this device or over QR).
-
-### Popup API for sites and agents
-
-A site opens `https://wallet.tenzro.com/approve` (`createPopupProvider` in `tenzro-wallet`) and sends one request at a time:
-
-| Method | Params | Result |
-|---|---|---|
-| `tenzro_connect` | `{ challenge? }` | `{ account, did, proof? }` |
-| `tenzro_sendTransaction` | `{ to, value }` | `{ txHash }` |
-| `tenzro_addWallet` | `{ salt }` | `{ account, did, salt }` |
-| `tenzro_linkDevice` | `{ label? }` | `{ credentialsTotal }` |
-| `tenzro_linkCredential` | `{ update }` (an `add_credential` change its new passkey signed) | `{ credentialsTotal }` |
-| `tenzro_signSettlementPlan` | `{ plan }` | `{ signedTx }` |
-| `tenzro_approveAgentTerms` | `{ operation, terms, rotate_tokens?, challenge }` | `{ authorization }` |
-| `tenzro_approveAgentAction` | `{ action, step_up }` | `{ step_up }` |
-| `tenzro_disconnect` | none | `null` |
-| `wallet_sendCalls` | ERC-5792 `[{ version, chainId, from?, atomicRequired, calls, capabilities? }]`, at most 16 calls | `{ id }`, the hash of the one contract-call transaction (all calls apply or none) |
-| `wallet_showCallsStatus` | `[id]` | `null`, after showing the batch |
-| `wallet_requestExecutionPermissions` | ERC-7715 requests of type `native-token-periodic` (`periodDuration` 3600 or 86400) with an optional `expiry` rule; `to` is the wallet address of one of your agents | the requests as granted, with `context` naming the agent and `delegationManager` the zero address |
-| `wallet_revokeExecutionPermission` | `[{ permissionContext }]` | `{}`; the agent's spend limits become zero |
-| `wallet_getGrantedExecutionPermissions` | none | the spend limits your agents hold |
-
-`wallet_getCapabilities`, `wallet_getCallsStatus` and `wallet_getSupportedExecutionPermissions` need no window: the page's provider answers them (`atomic` is supported, `paymasterService` is not, since a batch's fee is paid by its sender). A permission is written into the agent's Terms, which every validator checks on each of the agent's actions.
-
-The wallet signs only what it can check: Terms are compared with what the node completed, and a held action's digest and custody challenge are recomputed from the action shown.
-
-## What's in this repo
-
-- **`packages/wallet-kernel/`** (`tenzro-wallet` on npm): passkey custody, agent Terms and step-up checks, ERC-5792 call batches and ERC-7715 permissions, the popup protocol, surfaces for native, EVM, SVM and Canton.
-- **`packages/ui/`** (`@tenzro/ui`): the design system.
-- **`apps/web/`**: the hosted wallet at `wallet.tenzro.com` (Next.js, static export).
-- **`apps/extension/`**, **`apps/wallet/`**: browser extension and host scaffold.
-
-Design notes: [`docs/DESIGN.md`](./docs/DESIGN.md).
-
-## Layout
-
-```
-packages/
-  wallet-kernel/src/
-    custody/passkey/   # PasskeyCustody: create, sign in, link, recover, guardians,
-                       #   custody challenges, agent Terms and step-up approvals, user ops
-    dapp/              # popup protocol, EIP-6963
-    ports/agent/       # Terms target, agent payments, bonds, escrow, fee estimates
-    ports/canton/      # Canton ledger API, content verification
-    surfaces/          # tenzro-native, evm-on-tenzro, svm-on-tenzro, canton
-    identity/ balance/ consent/ router/ crypto/ types/
-  ui/
-apps/
-  web/                 # wallet.tenzro.com
-  extension/
-  wallet/
-```
-
-## Build
+| Variable | Meaning |
+|---|---|
+| `NEXT_PUBLIC_WALLET_RP_ID` | Your WebAuthn relying party: your domain. Defaults to the host serving the wallet. |
+| `NEXT_PUBLIC_WALLET_NAME` | The name the wallet shows. |
+| `NEXT_PUBLIC_WALLET_SEEDS` | Nodes to start from, comma-separated. Hints only: the wallet reads the RPC operators from chain state. Defaults to the SDK's seeds. |
+| `NEXT_PUBLIC_WALLET_CHAIN_ID` | The chain every node must answer for. Defaults to the SDK's. |
+| `NEXT_PUBLIC_WALLET_SECOND_RPC` | A node of another operator to cross-check effects. By default the wallet picks one from the network's list. |
+| `NEXT_PUBLIC_WALLET_SPONSOR_URL` | Optional. Your sponsor, which pays the fee of a keystore change for an account that holds nothing yet: `POST { update }`, answering `{ tx_hash }`. It cannot change anything the passkeys did not approve. |
 
 ```bash
 pnpm install
-pnpm turbo run build typecheck test
+pnpm --filter @tenzro/ui build
+NEXT_PUBLIC_WALLET_RP_ID=wallet.example pnpm --filter @tenzro/web build
+```
+
+To be listed as a staked wallet provider, serve
+`/.well-known/tenzro-provider` and bond for your domain as the network guide
+describes. The wallet works without it.
+
+Serve these headers with the site (a static export cannot set them):
+
+```
+Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https:; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
+X-Frame-Options: DENY
+X-Content-Type-Options: nosniff
+Referrer-Policy: strict-origin-when-cross-origin
+Permissions-Policy: camera=(), microphone=(), geolocation=()
+Strict-Transport-Security: max-age=31536000
+```
+
+`connect-src` must reach your seeds and the network's RPC operators; list
+them instead of `https:` if you prefer.
+
+## Sites
+
+A site opens `https://<wallet>/approve` with `window.open`, waits for
+`{ protocol: 'tenzro-wallet/popup/v1', type: 'ready' }`, then posts one
+request at a time:
+
+```js
+{ protocol: 'tenzro-wallet/popup/v1', type: 'request', id, method, params }
+```
+
+| Method | Params | Result |
+|---|---|---|
+| `tenzro_connect` | none | `{ account, did }` |
+| `tenzro_sendTransaction` | a typed transaction `{ kind, fields, to? }` | `{ tx_hash }` |
+| `tenzro_disconnect` | none | `null` |
+
+The wallet answers `{ protocol, type: 'response', id, result }` or
+`{ ..., error: { code, message } }` to the requesting origin only. A site
+never chooses the sending account, and every transaction is shown with its
+node-derived effects before the passkey signs.
+
+## Develop
+
+```
+apps/web/          the wallet (Next.js, static export)
+  app/             pages: account, send, devices, recovery, recover, agents, requests, approve
+  lib/             flows on the SDK, each with tests
+packages/ui/       design system: components and tokens
+```
+
+`tenzro-sdk` 0.8 is linked from a checkout of
+[tenzro-sdk-typescript](https://github.com/tenzro/tenzro-sdk-typescript)
+beside this repository (`../tenzro-sdk-typescript`, built with
+`npm ci && npx tsc -b`) until that version is on npm.
+
+```bash
+pnpm --filter @tenzro/web test        # unit tests
+pnpm --filter @tenzro/web typecheck
 pnpm lint
 ```
 
-Toolchain: pnpm 10.33.2, Node 22 or later, TypeScript 5.7.3, Vitest 4.1.5, Turborepo 2.3.3, Biome 1.9.4.
-
-The wallet depends on **`tenzro-sdk` 0.8.0** exactly (the SDK on node main: payments signed against a node challenge, `getAgentTerms`, chain bond records, step-ups that follow the Terms root). Until 0.8.0 is on npm, `pnpm install` cannot resolve it; once it is, run `pnpm install` once and commit the refreshed `pnpm-lock.yaml`.
-
-The hosted wallet is a static export: `TENZRO_STATIC_EXPORT=1 pnpm --filter @tenzro/web build` writes `apps/web/out`. The static host must send the headers `next.config.ts` lists.
-
-## Architectural rules
-
-These are load-bearing and described in detail in `docs/DESIGN.md §3` and `§4`:
-
-1. **Ports + adapters.** Surfaces and the kernel only depend on port interfaces. The only files allowed to import `tenzro-sdk` are adapters under `src/ports/*/adapters/`. SDK shape changes break exactly one file.
-2. **Four surfaces, one identity.** TDIP `did:tenzro:` is the root; native, EVM and SVM are views of one balance on Tenzro.
-3. **Cross-VM moves on Tenzro are pointer ops, not bridges.** Native, EVM and SVM are views of one balance; moving between them never leaves Tenzro.
-4. **Custody is passkeys only.** No seed phrases. The user's WebAuthn P-256 passkey signs every approval itself; the wallet derives, wraps and stores no key and keeps only public data (DID, account address, which credential). Passkeys that sync through one provider count as one root.
-5. **Decimals are not interchangeable.** Native + EVM = 18 decimals; SVM = 9 decimals; Canton CC = `Numeric 10`. The router surfaces dust-truncation warnings; surfaces enforce per-view precision.
-6. **Browser-clean kernel.** No `node:` imports, no `process.env` reads in `src/` outside `integration/`. Use Web Crypto, `fetch`, `TextEncoder`.
-
-## Documentation
-
-| Document | Purpose |
-|----------|---------|
-| [`docs/DESIGN.md`](docs/DESIGN.md) | Authoritative design: ports + adapters, kernel architecture, four VM surfaces, milestones |
-
-## Contributing
-
-Before merging:
-
-```bash
-pnpm turbo run build typecheck test && pnpm lint
-```
-
-Tests are co-located with source (`*.test.ts` next to `*.ts`); integration smokes live under `src/integration/`. Keep adapters narrow — if the SDK shape changes, exactly one file should break.
-
 ## License
 
-Apache-2.0. See [LICENSE](./LICENSE).
+Apache-2.0

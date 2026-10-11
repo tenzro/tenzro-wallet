@@ -1,734 +1,141 @@
 'use client';
 
-import {
-  Button,
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-  Input,
-  Logo,
-} from '@tenzro/ui';
-import * as React from 'react';
-import {
-  type CallBatch,
-  POPUP_ERRORS,
-  POPUP_PROTOCOL,
-  type PopupApproveAgentTerms,
-  type PopupLinkCredential,
-  type PopupRequest,
-  type PopupResponse,
-  type PopupSendTransaction,
-  type PopupSignSettlementPlan,
-  type SpendGrant,
-  WALLET_CALL_ERRORS,
-  WalletCallError,
-  agentOfContext,
-  callsStatus,
-  grantedPermissions,
-  isPopupRequest,
-  parsePermissionRequest,
-  parseSendCalls,
-  permissionResponse,
-} from 'tenzro-wallet';
-import type { RawAgentTermsView } from 'tenzro-wallet/custody';
-import {
-  type OwnershipProof,
-  type PasskeyEntryOptions,
-  type StepUpRequest,
-  hexToBytes,
-  parseStepUpRequest,
-} from 'tenzro-wallet/custody';
+import { Button } from '@tenzro/ui';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import type { TypedTransaction } from 'tenzro-sdk';
 
-import { LinkDeviceActions } from '@/components/wallet/link-device';
-import { PlanReview } from '@/components/wallet/plan-review';
-import { StepUpReview } from '@/components/wallet/step-up-review';
-import { TermsReview } from '@/components/wallet/terms-review';
+import { Effects } from '@/components/effects';
+import { Mono, Notice, Section, useAction } from '@/components/ui';
+import { useWallet } from '@/components/wallet-context';
+import { signerOf } from '@/lib/account';
 import {
-  approveStepUp,
-  ensureAgentBond,
-  findAgentByWallet,
-  grantSpendLimit,
-  listRootedIdentities,
-  revokeSpendLimits,
-} from '@/lib/tenzro/agents';
-import { addConnection, isConnected, removeConnection } from '@/lib/tenzro/connections';
-import { TNZO_DECIMALS, formatBaseUnits, shortAddress } from '@/lib/tenzro/format';
-import { usePlatformPasskey, useWallet } from '@/lib/tenzro/hooks';
-import { sendCallBatch, signTransaction } from '@/lib/tenzro/native-tx';
-import { rpcCall } from '@/lib/tenzro/rpc';
-import { type EnteredWallet, custody, sendTnzo } from '@/lib/tenzro/wallet';
+  POPUP_PROTOCOL,
+  type PopupError,
+  type PopupRequest,
+  USER_REJECTED,
+  readRequest,
+  readTransaction,
+  response,
+} from '@/lib/popup';
+import { sendFromAccount } from '@/lib/send';
 
 interface Pending {
   readonly request: PopupRequest;
   readonly origin: string;
+  readonly tx: TypedTransaction | null;
+  readonly problem: string | null;
 }
 
-/** Standard wallet methods (ERC-5792, ERC-7715) the window answers. */
-const STANDARD_METHODS: readonly string[] = [
-  'wallet_sendCalls',
-  'wallet_showCallsStatus',
-  'wallet_requestExecutionPermissions',
-  'wallet_revokeExecutionPermission',
-  'wallet_getGrantedExecutionPermissions',
-];
+/** The popup a site opens to connect to the wallet or ask it to send a transaction. */
+export default function Approve() {
+  const { wallet, net } = useWallet();
+  const [pending, setPending] = useState<Pending | null>(null);
+  const [effectsOk, setEffectsOk] = useState(false);
+  const action = useAction();
+  const opener = useRef<Window | null>(null);
 
-/** A standard request, checked and resolved against the network, ready to show. */
-type Review =
-  | { readonly kind: 'calls'; readonly batch: CallBatch }
-  | {
-      readonly kind: 'grants';
-      readonly items: readonly { readonly grant: SpendGrant; readonly view: RawAgentTermsView }[];
-    }
-  | { readonly kind: 'revoke'; readonly view: RawAgentTermsView }
-  | { readonly kind: 'status'; readonly status: ReturnType<typeof callsStatus> };
-
-function first(params: unknown): unknown {
-  return Array.isArray(params) ? params[0] : params;
-}
-
-function agentLabel(view: RawAgentTermsView): string {
-  const name = (view.terms as { agent_name?: unknown }).agent_name;
-  return typeof name === 'string' ? name : view.agent_did;
-}
-
-/** The site's one-time challenge for an ownership proof, if it sent one. */
-function connectChallenge(request: PopupRequest): Uint8Array | undefined {
-  const challenge = (request.params as { challenge?: unknown } | undefined)?.challenge;
-  if (challenge === undefined) return undefined;
-  if (typeof challenge !== 'string' || !/^(0x)?([0-9a-fA-F]{2}){16,64}$/.test(challenge)) {
-    throw new Error('The site sent an invalid challenge.');
-  }
-  return hexToBytes(challenge);
-}
-
-function isPlan(p: unknown): p is PopupSignSettlementPlan {
-  const plan = (p as Partial<PopupSignSettlementPlan> | null)?.plan;
-  return (
-    !!plan &&
-    Number.isInteger(plan.nonce) &&
-    typeof plan.quote_digest === 'string' &&
-    typeof plan.split_hash === 'string' &&
-    Array.isArray(plan.split?.lines) &&
-    Array.isArray(plan.legs) &&
-    plan.legs.length >= 1 &&
-    plan.legs.length <= 16 &&
-    Number.isInteger(plan.decide_deadline_ms)
-  );
-}
-
-function isTerms(p: unknown): p is PopupApproveAgentTerms {
-  const v = p as Partial<PopupApproveAgentTerms> | null;
-  return (
-    !!v &&
-    (v.operation === 'delegate_agent' || v.operation === 'update_agent_terms') &&
-    typeof v.terms?.agent_name === 'string' &&
-    Array.isArray(v.terms.serving_nodes) &&
-    typeof v.challenge?.challenge_id === 'string' &&
-    typeof v.challenge.challenge_hex === 'string'
-  );
-}
-
-function stepUp(p: unknown): StepUpRequest | null {
-  try {
-    return parseStepUpRequest(p);
-  } catch {
-    return null;
-  }
-}
-
-type LinkParams = PopupLinkCredential & {
-  readonly update: PopupLinkCredential['update'] & {
-    readonly op: {
-      readonly add_credential: { readonly credential: { rp_id: string; label: string } };
-    };
-  };
-};
-
-function isLink(p: unknown): p is LinkParams {
-  const u = (p as { update?: { account?: unknown; op?: unknown } } | undefined)?.update;
-  const cred = (u?.op as { add_credential?: { credential?: { rp_id?: unknown } } } | undefined)
-    ?.add_credential?.credential;
-  return typeof u?.account === 'string' && typeof cred?.rp_id === 'string';
-}
-
-function isSend(p: unknown): p is PopupSendTransaction {
-  const v = p as Partial<PopupSendTransaction> | null;
-  return !!v && typeof v.to === 'string' && typeof v.value === 'string' && /^\d+$/.test(v.value);
-}
-
-export default function ApprovePage() {
-  const { wallet, signIn, create, loading, error: walletError } = useWallet();
-  const [name, setName] = React.useState('');
-  const [pending, setPending] = React.useState<Pending | null>(null);
-  const [busy, setBusy] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
-  const [noOpener, setNoOpener] = React.useState(false);
-  const platform = usePlatformPasskey();
-  const [phoneChosen, setPhoneChosen] = React.useState(false);
-  const phone = phoneChosen || platform === false;
-  // A wallet created here, held back from the site while a second device is offered.
-  const [created, setCreated] = React.useState<EnteredWallet | null>(null);
-  const [deviceName, setDeviceName] = React.useState('');
-  const [review, setReview] = React.useState<Review | null>(null);
-
-  const respond = React.useCallback(
-    (body: Omit<PopupResponse, 'protocol' | 'type' | 'id'>) => {
-      if (!pending || !window.opener) return;
-      const msg: PopupResponse = {
-        protocol: POPUP_PROTOCOL,
-        type: 'response',
-        id: pending.request.id,
-        ...body,
-      };
-      // Only the site that asked receives the answer.
-      (window.opener as Window).postMessage(msg, pending.origin);
+  const answer = useCallback(
+    (body: { result: unknown } | { error: PopupError }) => {
+      if (!pending || !opener.current) return;
+      opener.current.postMessage(response(pending.request.id, body), pending.origin);
       setPending(null);
+      setEffectsOk(false);
     },
     [pending],
   );
 
-  React.useEffect(() => {
-    const opener = window.opener as Window | null;
-    if (!opener) {
-      setNoOpener(true);
-      return;
-    }
-    const onMessage = (e: MessageEvent) => {
-      if (e.source !== opener || !isPopupRequest(e.data)) return;
-      setPending((cur) => cur ?? { request: e.data as PopupRequest, origin: e.origin });
+  useEffect(() => {
+    opener.current = window.opener as Window | null;
+    if (!opener.current) return;
+    const onMessage = (event: MessageEvent) => {
+      if (event.source !== opener.current) return;
+      const read = readRequest(event.data);
+      if (!read) return;
+      if ('error' in read) {
+        opener.current?.postMessage(response(read.id, { error: read.error }), event.origin);
+        return;
+      }
+      if (read.request.method === 'tenzro_disconnect') {
+        opener.current?.postMessage(response(read.request.id, { result: null }), event.origin);
+        return;
+      }
+      let tx: TypedTransaction | null = null;
+      let problem: string | null = null;
+      if (read.request.method === 'tenzro_sendTransaction') {
+        try {
+          tx = readTransaction(read.request.params);
+        } catch (e) {
+          problem = (e as Error).message;
+        }
+      }
+      setPending({ request: read.request, origin: event.origin, tx, problem });
     };
     window.addEventListener('message', onMessage);
-    // The ready signal carries nothing, so it may go to whichever page opened us.
-    opener.postMessage({ protocol: POPUP_PROTOCOL, type: 'ready' }, '*');
+    opener.current.postMessage({ protocol: POPUP_PROTOCOL, type: 'ready' }, '*');
     return () => window.removeEventListener('message', onMessage);
   }, []);
 
-  // Disconnecting needs no approval, only the wallet that holds the connection.
-  React.useEffect(() => {
-    if (pending?.request.method === 'tenzro_disconnect' && wallet) {
-      removeConnection(pending.origin, wallet.account);
-      respond({ result: null });
-      window.close();
-    }
-  }, [pending, wallet, respond]);
-
-  async function approve() {
-    if (!pending || !wallet) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const { method, params } = pending.request;
-      if (method === 'tenzro_connect') {
-        const challenge = connectChallenge(pending.request);
-        const proof: OwnershipProof | undefined = challenge
-          ? await custody().proveOwnership(wallet, challenge)
-          : undefined;
-        addConnection(pending.origin, wallet.account);
-        respond({
-          result: { account: wallet.account, did: wallet.did, ...(proof ? { proof } : {}) },
-        });
-      } else if (method === 'tenzro_addWallet') {
-        const salt = (params as { salt?: unknown } | undefined)?.salt;
-        if (typeof salt !== 'number' || !Number.isInteger(salt) || salt < 1) {
-          throw new Error('The site asked for an invalid wallet.');
-        }
-        const added = await custody().addWallet(wallet, { salt });
-        respond({
-          result: {
-            account: added.account,
-            did: added.did,
-            salt,
-            ...(added.anchor ? { anchor: added.anchor } : {}),
-          },
-        });
-      } else if (method === 'tenzro_sendTransaction') {
-        if (!isSend(params)) throw new Error('The site sent an invalid transaction.');
-        const { txHash } = await sendTnzo(wallet, params.to, BigInt(params.value));
-        respond({ result: { txHash } });
-      } else if (method === 'tenzro_signSettlementPlan') {
-        if (!isPlan(params)) throw new Error('The site sent an invalid settlement plan.');
-        const signedTx = await signTransaction(wallet, {
-          kind: 'SettlementPlan',
-          fields: { op: { open: params.plan } },
-        });
-        respond({ result: { signedTx } });
-      } else if (method === 'tenzro_approveAgentTerms') {
-        if (!isTerms(params)) throw new Error('The site sent invalid Terms.');
-        // The network refuses Terms the agent's bond does not cover: post or
-        // top it up from this account first, signed by this passkey.
-        const agentDid = (params.challenge as { agent_did?: string }).agent_did;
-        if (agentDid) {
-          await ensureAgentBond(wallet, agentDid, params.terms.delegation_scope ?? {});
-        }
-        const authorization = await custody().approveAgentTerms(wallet, {
-          operation: params.operation,
-          terms: params.terms,
-          ...(params.rotate_tokens !== undefined ? { rotateTokens: params.rotate_tokens } : {}),
-          challenge: params.challenge,
-        });
-        respond({ result: { authorization } });
-      } else if (method === 'tenzro_linkCredential') {
-        if (!isLink(params)) throw new Error('The site sent an invalid passkey link.');
-        const linked = await custody().approveLink(wallet, params.update);
-        respond({ result: { credentialsTotal: linked.credentials_total } });
-      } else if (method === 'tenzro_approveAgentAction') {
-        const request = parseStepUpRequest(params);
-        respond({ result: { step_up: await approveStepUp(wallet, request) } });
-      } else if (review?.kind === 'calls') {
-        respond({ result: { id: await sendCallBatch(wallet, review.batch) } });
-      } else if (review?.kind === 'grants') {
-        const result = [];
-        for (const { grant, view } of review.items) {
-          await grantSpendLimit(wallet, view, grant);
-          result.push(permissionResponse(grant, view.agent_did));
-        }
-        respond({ result });
-      } else if (review?.kind === 'revoke') {
-        await revokeSpendLimits(wallet, review.view);
-        respond({ result: {} });
-      } else if (review?.kind === 'status') {
-        respond({ result: null });
-      }
-      window.close();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBusy(false);
-    }
+  if (!opener.current && typeof window !== 'undefined' && !window.opener) {
+    return <Notice>This page opens from a site that asks for your wallet.</Notice>;
+  }
+  if (!pending) return <Notice>Waiting for the site.</Notice>;
+  if (!wallet || !net) {
+    return (
+      <Notice tone="warning">
+        Open this wallet in a tab and sign in or create your account first, then try again from{' '}
+        {pending.origin}.
+      </Notice>
+    );
   }
 
-  /** Answers a connect request with a wallet just entered here: no second approval. */
-  function connectWith(w: EnteredWallet) {
-    if (!pending) return;
-    addConnection(pending.origin, w.account);
-    respond({ result: { account: w.account, did: w.did, ...(w.proof ? { proof: w.proof } : {}) } });
-    window.close();
-  }
-
-  /**
-   * Signing in or creating on a connect request is the consent to connect, so
-   * the approval that opens the wallet also signs the site's challenge.
-   */
-  async function enter(kind: 'sign-in' | 'create') {
-    if (!pending) return;
-    setError(null);
-    try {
-      const isConnect = pending.request.method === 'tenzro_connect';
-      const challenge = isConnect ? connectChallenge(pending.request) : undefined;
-      const opts: PasskeyEntryOptions = {
-        ...(challenge ? { challenge } : {}),
-        ...(phone ? { hints: ['hybrid'] as const } : {}),
-      };
-      const w =
-        kind === 'create' ? await create(name.trim() || 'Tenzro wallet', opts) : await signIn(opts);
-      if (!isConnect) return;
-      // Creating on a device that already held a Tenzro passkey opened that
-      // wallet instead: connect it as a sign-in would.
-      if (kind === 'create' && !('existing' in w && w.existing)) setCreated(w);
-      else connectWith(w);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    }
-  }
-
-  function decline() {
-    respond({ error: { code: POPUP_ERRORS.rejected, message: 'The request was declined.' } });
-    window.close();
-  }
-
-  const connected = pending && wallet ? isConnected(pending.origin, wallet.account) : false;
-  const needsConnection =
-    (pending?.request.method === 'tenzro_sendTransaction' ||
-      pending?.request.method === 'tenzro_signSettlementPlan' ||
-      pending?.request.method === 'tenzro_approveAgentTerms' ||
-      pending?.request.method === 'tenzro_approveAgentAction' ||
-      pending?.request.method === 'tenzro_addWallet' ||
-      pending?.request.method === 'tenzro_linkDevice' ||
-      STANDARD_METHODS.includes(pending?.request.method ?? '')) &&
-    !connected;
-
-  // The site may suggest a name for the new device; the person can change it.
-  React.useEffect(() => {
-    if (pending?.request.method !== 'tenzro_linkDevice') return;
-    const label = (pending.request.params as { label?: unknown } | undefined)?.label;
-    if (typeof label === 'string') setDeviceName(label.slice(0, 40));
-  }, [pending]);
-
-  React.useEffect(() => {
-    if (needsConnection && pending) {
-      respond({
-        error: {
-          code: POPUP_ERRORS.unauthorized,
-          message: 'Connect this site to the wallet first.',
-        },
-      });
-    }
-  }, [needsConnection, pending, respond]);
-
-  // Standard requests are checked against the network before they are shown;
-  // one the wallet cannot serve is answered with its standard error code.
-  React.useEffect(() => {
-    if (!pending || !wallet || !connected || !STANDARD_METHODS.includes(pending.request.method)) {
-      return;
-    }
-    let live = true;
-    (async () => {
-      const chainId = await rpcCall<string>('eth_chainId');
-      const ctx = { chainId, account: wallet.account };
-      const { method, params } = pending.request;
-      if (method === 'wallet_getGrantedExecutionPermissions') {
-        const { agents } = await listRootedIdentities(wallet.did);
-        const result = await grantedPermissions(agents as never, ctx);
-        if (live) {
-          respond({ result });
-          window.close();
-        }
-        return;
-      }
-      let next: Review;
-      if (method === 'wallet_sendCalls') {
-        next = { kind: 'calls', batch: parseSendCalls(params, ctx) };
-      } else if (method === 'wallet_showCallsStatus') {
-        const id = first(params);
-        if (typeof id !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(id)) {
-          throw new WalletCallError(WALLET_CALL_ERRORS.unknownBundle, 'unknown call batch id');
-        }
-        const receipt = await rpcCall<never>('eth_getTransactionReceipt', [id]);
-        next = { kind: 'status', status: callsStatus(id, chainId, receipt) };
-      } else if (method === 'wallet_requestExecutionPermissions') {
-        const list = Array.isArray(params) ? params : [params];
-        const items = [];
-        for (const req of list) {
-          const grant = parsePermissionRequest(req, { ...ctx, nowMs: Date.now() });
-          const view = await findAgentByWallet(wallet.did, grant.agentWallet);
-          if (!view) {
-            throw new WalletCallError(
-              WALLET_CALL_ERRORS.invalidParams,
-              `${grant.agentWallet} is not the wallet of one of your agents`,
-            );
-          }
-          items.push({ grant, view });
-        }
-        next = { kind: 'grants', items };
-      } else {
-        const p = first(params) as { permissionContext?: unknown } | undefined;
-        const agentDid = agentOfContext(p?.permissionContext);
-        const { agents } = await listRootedIdentities(wallet.did);
-        const view = agents.find((a) => a.agent_did === agentDid);
-        if (!view) {
-          throw new WalletCallError(WALLET_CALL_ERRORS.invalidParams, 'no such permission');
-        }
-        next = { kind: 'revoke', view };
-      }
-      if (live) setReview(next);
-    })().catch((e: unknown) => {
-      if (!live) return;
-      if (e instanceof WalletCallError) {
-        respond({ error: { code: e.code, message: e.message } });
-        window.close();
-      } else {
-        setError(e instanceof Error ? e.message : String(e));
-      }
-    });
-    return () => {
-      live = false;
-    };
-  }, [pending, wallet, connected, respond]);
+  const { request, origin } = pending;
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-md flex-col gap-6 p-6">
-      <Logo />
-      {noOpener ? (
-        <p className="text-sm text-foreground-muted">
-          This page answers requests from sites that use Tenzro Wallet. Open it from such a site.
+    <Section
+      title={request.method === 'tenzro_connect' ? 'Connect' : 'Approve a transaction'}
+      description={
+        <>
+          Requested by <Mono>{origin}</Mono>
+        </>
+      }
+    >
+      {request.method === 'tenzro_connect' ? (
+        <p className="text-sm">
+          The site will see your account <Mono>{wallet.account}</Mono> and identity. It cannot move
+          anything without asking you here.
         </p>
-      ) : !pending ? (
-        <p className="text-sm text-foreground-muted">Waiting for the site's request…</p>
-      ) : created ? (
-        <Card variant="raised">
-          <CardHeader>
-            <CardTitle>Your wallet is ready</CardTitle>
-            <CardDescription>
-              Add a second device now, so losing this one never locks you out. You can also do it
-              later in Settings.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <LinkDeviceActions onLinked={() => connectWith(created)} />
-            <Button variant="ghost" onClick={() => connectWith(created)}>
-              Later, continue to <span className="font-mono">{new URL(pending.origin).host}</span>
-            </Button>
-          </CardContent>
-        </Card>
-      ) : !wallet ? (
-        <Card variant="raised">
-          <CardHeader>
-            <CardTitle>Your Tenzro wallet</CardTitle>
-            <CardDescription>
-              <span className="font-mono">{pending.origin}</span> wants to use your Tenzro wallet.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <Button width="full" onClick={() => enter('sign-in')} disabled={loading}>
-              Sign in with your passkey
-            </Button>
-            <p className="text-sm text-foreground-muted">
-              New to Tenzro? Create a wallet with a passkey.
-            </p>
-            <Input
-              placeholder="Your name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              disabled={loading}
-            />
-            <Button
-              width="full"
-              variant="outline"
-              onClick={() => enter('create')}
-              disabled={loading}
-            >
-              Create a wallet
-            </Button>
-            {phone ? (
-              <p className="text-sm text-foreground-muted">
-                {platform === false ? 'This device cannot hold a passkey. ' : ''}A QR code will
-                appear: scan it with your phone and approve there.
-              </p>
-            ) : (
-              <button
-                type="button"
-                className="block w-full text-center text-sm text-foreground-muted underline underline-offset-2"
-                onClick={() => setPhoneChosen(true)}
-              >
-                Use a phone instead (QR code)
-              </button>
-            )}
-            {pending.request.method === 'tenzro_connect' && (
-              <p className="text-xs text-foreground-subtle">
-                Signing in connects this site: it will see your address and identity, and cannot
-                move funds without your approval.
-              </p>
-            )}
-            {error && <p className="text-sm text-danger">{error}</p>}
-          </CardContent>
-        </Card>
-      ) : pending.request.method === 'tenzro_disconnect' ? null : pending.request.method ===
-        'tenzro_linkDevice' ? (
-        <Card variant="raised">
-          <CardHeader>
-            <CardTitle>Add a device</CardTitle>
-            <CardDescription>
-              <span className="font-mono">{pending.origin}</span> asks you to add a device to your
-              wallet <span className="font-mono">{shortAddress(wallet.account)}</span>. Any linked
-              device can open and approve for it.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <Input
-              placeholder="Device name, e.g. Phone"
-              maxLength={40}
-              value={deviceName}
-              onChange={(e) => setDeviceName(e.target.value)}
-            />
-            <LinkDeviceActions
-              label={deviceName}
-              onLinked={(linked) => {
-                respond({
-                  result: {
-                    credentialsTotal: linked.credentials_total,
-                    alreadyLinked: linked.already_linked === true,
-                  },
-                });
-                // A device that already held the passkey gets the explanation before the window closes.
-                if (!linked.already_linked) window.close();
-              }}
-            />
-            <Button variant="ghost" onClick={decline}>
-              Cancel
-            </Button>
-          </CardContent>
-        </Card>
-      ) : (
-        <Card variant="raised">
-          <CardHeader>
-            <CardTitle>
-              {pending.request.method === 'tenzro_connect'
-                ? 'Connect to this site?'
-                : pending.request.method === 'tenzro_addWallet'
-                  ? 'Add a wallet?'
-                  : pending.request.method === 'tenzro_signSettlementPlan'
-                    ? 'Review this settlement plan'
-                    : pending.request.method === 'tenzro_approveAgentTerms'
-                      ? 'Approve these Terms for an agent?'
-                      : pending.request.method === 'tenzro_approveAgentAction'
-                        ? 'Your agent asks you to approve this action'
-                        : pending.request.method === 'tenzro_linkCredential'
-                          ? 'Link a passkey to your wallet?'
-                          : review?.kind === 'calls'
-                            ? 'Approve these calls?'
-                            : review?.kind === 'grants'
-                              ? 'Give your agent a spending limit?'
-                              : review?.kind === 'revoke'
-                                ? "Withdraw your agent's spending?"
-                                : review?.kind === 'status'
-                                  ? 'Call batch'
-                                  : 'Approve this payment?'}
-            </CardTitle>
-            <CardDescription>
-              <span className="font-mono">{pending.origin}</span>
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4 text-sm">
-            {pending.request.method === 'tenzro_connect' ? (
-              <p className="text-foreground-muted">
-                The site will see your address{' '}
-                <span className="font-mono">{shortAddress(wallet.account)}</span> and your identity,
-                and may ask you to approve payments. It cannot move funds without your approval.
-              </p>
-            ) : pending.request.method === 'tenzro_addWallet' ? (
-              <p className="text-foreground-muted">
-                Creates another wallet under your identity{' '}
-                <span className="font-mono">{wallet.did}</span>, approved with your passkey. The
-                site learns the new wallet's address.
-              </p>
-            ) : pending.request.method === 'tenzro_approveAgentTerms' ? (
-              isTerms(pending.request.params) ? (
-                <>
-                  <TermsReview terms={pending.request.params.terms} />
-                  <p className="text-foreground-muted">
-                    {pending.request.params.operation === 'delegate_agent'
-                      ? 'The agent acts on your behalf within these Terms, on every node, until you revoke it.'
-                      : "These Terms replace the agent's current ones on every node."}{' '}
-                    The passkey your identity was created with approves them.
-                  </p>
-                </>
-              ) : (
-                <p className="text-danger">The site sent invalid Terms.</p>
-              )
-            ) : pending.request.method === 'tenzro_approveAgentAction' ? (
-              (() => {
-                const req = stepUp(pending.request.params);
-                return req ? (
-                  <>
-                    <StepUpReview action={req.action} />
-                    <p className="text-foreground-muted">
-                      The agent's Terms hold this action for you. Approving lets it take this one
-                      action, nothing else.
-                    </p>
-                  </>
-                ) : (
-                  <p className="text-danger">The site sent an invalid action.</p>
+      ) : pending.problem ? (
+        <Notice tone="danger">{pending.problem}</Notice>
+      ) : pending.tx ? (
+        <Effects net={net} tx={pending.tx} from={wallet.account} onReady={setEffectsOk} />
+      ) : null}
+      {action.error ? <Notice tone="danger">{action.error}</Notice> : null}
+      <div className="flex gap-2">
+        <Button
+          pending={action.pending}
+          disabled={request.method === 'tenzro_sendTransaction' && (!pending.tx || !effectsOk)}
+          onClick={() =>
+            action.run(async () => {
+              if (request.method === 'tenzro_connect') {
+                answer({ result: { account: wallet.account, did: wallet.did } });
+              } else if (pending.tx) {
+                const hash = await sendFromAccount(
+                  net.rpc,
+                  signerOf(wallet),
+                  wallet.account,
+                  pending.tx,
                 );
-              })()
-            ) : pending.request.method === 'tenzro_linkCredential' ? (
-              isLink(pending.request.params) ? (
-                <p className="text-foreground-muted">
-                  Links the passkey{' '}
-                  <span className="font-medium text-foreground">
-                    {pending.request.params.update.op.add_credential.credential.label || 'passkey'}
-                  </span>{' '}
-                  made at{' '}
-                  <span className="font-mono">
-                    {pending.request.params.update.op.add_credential.credential.rp_id}
-                  </span>{' '}
-                  to your wallet <span className="font-mono">{shortAddress(wallet.account)}</span>.
-                  It can then approve for your wallet like your other devices. Approved with your
-                  passkey; you can remove it in Settings.
-                </p>
-              ) : (
-                <p className="text-danger">The site sent an invalid passkey link.</p>
-              )
-            ) : pending.request.method === 'tenzro_signSettlementPlan' ? (
-              isPlan(pending.request.params) ? (
-                <PlanReview plan={pending.request.params.plan} />
-              ) : (
-                <p className="text-danger">The site sent an invalid settlement plan.</p>
-              )
-            ) : STANDARD_METHODS.includes(pending.request.method) ? (
-              !review ? (
-                <p className="text-foreground-muted">Checking the request…</p>
-              ) : review.kind === 'calls' ? (
-                <div className="space-y-2">
-                  {review.batch.calls.map((c, i) => (
-                    <p key={i} className="text-foreground-muted">
-                      {formatBaseUnits(c.value.toString(), TNZO_DECIMALS)} TNZO to{' '}
-                      <span className="font-mono">
-                        {shortAddress(
-                          `0x${c.to.map((b) => b.toString(16).padStart(2, '0')).join('')}`,
-                        )}
-                      </span>
-                      {c.data.length > 0 ? `, with ${c.data.length} bytes of call data` : ''}
-                    </p>
-                  ))}
-                  <p className="text-foreground-muted">
-                    One transaction from your wallet: every call applies, or none does.
-                  </p>
-                </div>
-              ) : review.kind === 'grants' ? (
-                <div className="space-y-2">
-                  {review.items.map(({ grant, view }) => (
-                    <p key={view.agent_did} className="text-foreground-muted">
-                      <span className="font-medium text-foreground">{agentLabel(view)}</span> may
-                      spend up to {formatBaseUnits(grant.amountWei.toString(), TNZO_DECIMALS)} TNZO
-                      per {grant.window}
-                      {grant.expiresAtMs !== null
-                        ? `, until ${new Date(grant.expiresAtMs).toLocaleString()}`
-                        : ''}
-                      .
-                    </p>
-                  ))}
-                  <p className="text-foreground-muted">
-                    The limit becomes part of the agent's Terms, which every node checks on each of
-                    its actions.
-                  </p>
-                </div>
-              ) : review.kind === 'revoke' ? (
-                <p className="text-foreground-muted">
-                  <span className="font-medium text-foreground">{agentLabel(review.view)}</span>{' '}
-                  will no longer be able to spend from its wallet.
-                </p>
-              ) : (
-                <p className="text-foreground-muted">
-                  {review.status.status === 100
-                    ? 'Waiting to be included in a block.'
-                    : review.status.status === 200
-                      ? 'Confirmed: every call applied.'
-                      : 'Reverted: no call applied.'}
-                </p>
-              )
-            ) : isSend(pending.request.params) ? (
-              <div className="space-y-1">
-                <p className="font-mono text-xl tabular">
-                  {formatBaseUnits(pending.request.params.value, TNZO_DECIMALS)} TNZO
-                </p>
-                <p className="text-foreground-muted">
-                  to <span className="font-mono">{pending.request.params.to}</span>
-                </p>
-              </div>
-            ) : (
-              <p className="text-danger">The site sent an invalid transaction.</p>
-            )}
-            <div className="flex gap-2">
-              <Button
-                onClick={approve}
-                disabled={busy || (STANDARD_METHODS.includes(pending.request.method) && !review)}
-              >
-                {busy
-                  ? 'Approve with your passkey…'
-                  : review?.kind === 'status'
-                    ? 'Close'
-                    : 'Approve'}
-              </Button>
-              <Button variant="outline" onClick={decline} disabled={busy}>
-                Decline
-              </Button>
-            </div>
-            {error && <p className="text-danger">{error}</p>}
-          </CardContent>
-        </Card>
-      )}
-    </main>
+                answer({ result: { tx_hash: hash } });
+              }
+            })
+          }
+        >
+          {request.method === 'tenzro_connect' ? 'Connect' : 'Approve with passkey'}
+        </Button>
+        <Button variant="ghost" onClick={() => answer({ error: USER_REJECTED })}>
+          Decline
+        </Button>
+      </div>
+    </Section>
   );
 }

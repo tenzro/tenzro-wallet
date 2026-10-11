@@ -1,18 +1,18 @@
 /*
- * Tenzro Wallet service worker.
+ * Wallet service worker.
  *
  * Caches only this app's own static files and pages, so the wallet opens
  * offline and installs as an app. It never caches RPC responses, anything
  * cross-origin, or any request other than GET: balances, history and
  * signatures always come live from the network.
  */
-const CACHE = 'tenzro-wallet-v1';
+const CACHE = 'wallet-v2';
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches
       .open(CACHE)
-      .then((c) => c.addAll(['/', '/dashboard']))
+      .then((c) => c.addAll(['/']))
       .then(() => self.skipWaiting()),
   );
 });

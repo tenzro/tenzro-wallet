@@ -6,20 +6,6 @@
  * canvas drawings, chart colors) can pull them without re-parsing CSS.
  */
 
-export const surfaceColor = {
-  native: 'var(--color-surface-native)',
-  evm: 'var(--color-surface-evm)',
-  svm: 'var(--color-surface-svm)',
-  canton: 'var(--color-surface-canton)',
-} as const;
-
-export const surfaceGlow = {
-  native: 'var(--color-surface-native-glow)',
-  evm: 'var(--color-surface-evm-glow)',
-  svm: 'var(--color-surface-svm-glow)',
-  canton: 'var(--color-surface-canton-glow)',
-} as const;
-
 export const motion = {
   /** Snappy spring, used for primary actions and toggles */
   spring: { type: 'spring' as const, stiffness: 380, damping: 30 },
@@ -30,7 +16,5 @@ export const motion = {
   /** Slower tween for hero transitions */
   tweenLong: { duration: 0.6, ease: [0.19, 1, 0.22, 1] as const },
 } as const;
-
-export type SurfaceKind = keyof typeof surfaceColor;
 
 export { applyTheme, resetTheme, tenzroTheme, type TenzroTheme, type ThemeMode } from './theme';

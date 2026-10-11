@@ -5,7 +5,6 @@
  *   - primary: brand-glow, used for "send", "approve", "confirm"
  *   - secondary: outlined, used for "cancel", "back"
  *   - ghost: chromeless, used inline (chip rows, table cells)
- *   - surface: tied to a Tenzro execution surface (native/evm/svm/canton)
  *   - danger: destructive ops only (revoke, delete, reject)
  *   - agent: agentic-stack actions (approve mandate, sign session key)
  *
@@ -52,10 +51,6 @@ const buttonVariants = cva(
         agent: [
           'bg-agent-soft text-agent border border-agent/30',
           'hover:bg-agent hover:text-brand-foreground',
-        ],
-        surface: [
-          'bg-surface-2 text-foreground border border-border-default',
-          'hover:border-border-strong',
         ],
       },
       size: {

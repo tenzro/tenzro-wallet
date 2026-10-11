@@ -12,7 +12,6 @@
       "**/.turbo/**",
       "**/.next/**",
       "**/.output/**",
-      "**/.wxt/**",
       "**/next-env.d.ts",
       "**/fixtures/**"
     ]
@@ -31,31 +30,9 @@
   },
   "overrides": [
     {
-      "include": ["packages/wallet-kernel/**"],
-      "linter": {
-        "rules": {
-          "style": {
-            "noNonNullAssertion": "off",
-            "useTemplate": "off",
-            "noUnusedTemplateLiteral": "off"
-          },
-          "complexity": {
-            "useLiteralKeys": "off"
-          },
-          "performance": {
-            "noDelete": "off"
-          },
-          "correctness": {
-            "useYield": "off"
-          },
-          "suspicious": {
-            "noArrayIndexKey": "off"
-          }
-        }
-      }
-    },
-    {
-      "include": ["apps/web/**"],
+      "include": [
+        "apps/web/**"
+      ],
       "linter": {
         "rules": {
           "style": {
@@ -68,7 +45,9 @@
             "noLabelWithoutControl": {
               "level": "error",
               "options": {
-                "inputComponents": ["Input"]
+                "inputComponents": [
+                  "Input"
+                ]
               }
             }
           }

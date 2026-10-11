@@ -112,9 +112,6 @@
   --color-surface-svm: color-mix(in oklab, var(--tz-foreground) 74%, var(--tz-background));
   --color-surface-svm-soft: color-mix(in oklab, var(--tz-foreground) 8%, transparent);
   --color-surface-svm-glow: color-mix(in oklab, var(--tz-foreground) 16%, transparent);
-  --color-surface-canton: color-mix(in oklab, var(--tz-foreground) 58%, var(--tz-background));
-  --color-surface-canton-soft: color-mix(in oklab, var(--tz-foreground) 8%, transparent);
-  --color-surface-canton-glow: color-mix(in oklab, var(--tz-foreground) 16%, transparent);
 
   --color-agent: var(--tz-accent);
   --color-agent-soft: var(--tz-accent-soft);

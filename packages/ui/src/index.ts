@@ -4,10 +4,9 @@
  * Three layers:
  *   1. tokens     → CSS variables + TS constants
  *   2. components → low-level primitives (Button, Card, Dialog…)
- *   3. wallet/    → wallet-specific compositions, including the
- *                   chain registry that drives ChainBadge / ChainLogo
+ *   3. wallet/    → small wallet compositions (logo, empty state, status)
  *
- * Consumers import: `import { Button, AssetRow } from '@tenzro/ui';`
+ * Consumers import: `import { Button, Card } from '@tenzro/ui';`
  * and the stylesheet once: `@import "@tenzro/ui/styles.css";`
  */
 
@@ -16,15 +15,10 @@ export {
   formatAddress,
   formatAmount,
   formatRelativeTime,
-  formatUsd,
-  type SurfaceForAmount,
 } from './utils/format';
 
 export {
-  surfaceColor,
-  surfaceGlow,
   motion as motionTokens,
-  type SurfaceKind,
   applyTheme,
   resetTheme,
   tenzroTheme,
@@ -74,32 +68,7 @@ export {
 } from './components/dropdown';
 export { ScrollArea } from './components/scroll-area';
 
-// Wallet-specific
-export {
-  CHAINS,
-  ALL_CHAINS,
-  chainDecimals,
-  classifyRoute,
-  type ChainId,
-  type ChainMeta,
-} from './wallet/chain';
-export {
-  ChainBadge,
-  ChainLogo,
-  type ChainBadgeProps,
-  type ChainLogoProps,
-} from './wallet/chain-badge';
-export { SurfaceBadge, type SurfaceBadgeProps } from './wallet/surface-badge';
-export { AssetRow, type AssetRowProps } from './wallet/asset-row';
-export { CrossVmRoute, type CrossVmRouteProps } from './wallet/cross-vm-route';
+// Wallet compositions
 export { TxStatus, type TxStatusProps, type TxState } from './wallet/tx-status';
-export { IdentityCard, type IdentityCardProps } from './wallet/identity-card';
-export {
-  AgentMandateCard,
-  type AgentMandateCardProps,
-  type MandateKind,
-} from './wallet/agent-mandate-card';
-export { BalanceHero, type BalanceHeroProps, type ChainLeg } from './wallet/balance-hero';
 export { EmptyState, type EmptyStateProps } from './wallet/empty-state';
 export { Logo, type LogoProps } from './wallet/logo';
-export { KeyStat, type KeyStatProps } from './wallet/key-stat';
