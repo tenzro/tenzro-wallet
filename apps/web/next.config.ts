@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import type { NextConfig } from 'next';
 
 /**
@@ -10,6 +11,8 @@ const nextConfig: NextConfig = {
   output: 'export',
   trailingSlash: false,
   transpilePackages: ['@tenzro/ui'],
+  // tenzro-sdk is linked from the checkout beside this repository.
+  turbopack: { root: fileURLToPath(new URL('../../..', import.meta.url)) },
 };
 
 export default nextConfig;
