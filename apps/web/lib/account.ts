@@ -119,7 +119,7 @@ export async function enrollPasskey(
   );
   if (!auth.pq) {
     throw new Error(
-      'This passkey cannot derive the account’s post-quantum key (the WebAuthn PRF extension). Use a passkey on a current browser, device or security key.',
+      'This passkey cannot make an account here. The network needs a second, post-quantum key, and the wallet derives it from the passkey with the WebAuthn PRF extension, which this browser or authenticator does not offer. Use Chrome or Edge 116 or newer, Safari 18 or newer, or Firefox 139 or newer, with a platform passkey (Touch ID, Windows Hello, Android) or a FIDO2.1 security key that supports hmac-secret.',
     );
   }
   const enrolled = await passkeys.enroll({

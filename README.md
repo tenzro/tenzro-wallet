@@ -114,7 +114,9 @@ extension**: the authenticator answers a fixed salt with a secret only that
 credential can produce, and the wallet derives the ML-DSA-65 key from it
 (HKDF-SHA-256). Nothing is stored; every device holding the passkey (a synced
 passkey included) derives the same key. A passkey or browser that cannot
-answer the PRF cannot create an account here, and the wallet says so.
+answer the PRF cannot create an account here, and the wallet says so in plain words.
+
+Supported: Chrome or Edge 116+, Safari 18+, Firefox 139+, with a platform passkey (Touch ID, Windows Hello, Android) or a FIDO2.1 security key that supports hmac-secret. The wallet reports the PRF answer; some passkey providers do not return it yet.
 
 - **Relying party.** Passkeys are created on `NEXT_PUBLIC_WALLET_RP_ID` (the
   serving host by default; `wallet.tenzro.com` for the reference deployment).
