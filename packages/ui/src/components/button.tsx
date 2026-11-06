@@ -25,20 +25,20 @@ import { cn } from '../utils/cn';
 const buttonVariants = cva(
   [
     'group relative inline-flex items-center justify-center gap-2 whitespace-nowrap',
-    'font-medium tracking-tight',
+    'tracking-tight',
     'transition-all duration-200 ease-out',
     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-background',
     'disabled:pointer-events-none disabled:opacity-50',
-    'select-none cursor-pointer active:scale-[0.98]',
+    'select-none cursor-pointer ',
   ],
   {
     variants: {
       variant: {
-        primary: ['bg-brand text-brand-foreground', 'hover:bg-brand-hover'],
-        secondary: [
-          'bg-surface-2 text-foreground border border-border-default',
-          'hover:bg-surface-3 hover:border-border-strong',
+        primary: [
+          'bg-foreground text-background border border-foreground',
+          'hover:bg-brand hover:border-brand hover:text-brand-foreground',
         ],
+        secondary: ['text-foreground border border-border-strong', 'hover:border-foreground'],
         ghost: ['text-foreground-muted hover:text-foreground hover:bg-surface-2'],
         outline: [
           'border border-border-default bg-transparent text-foreground',
@@ -54,13 +54,13 @@ const buttonVariants = cva(
         ],
       },
       size: {
-        xs: 'h-7 px-2.5 text-xs rounded-md',
-        sm: 'h-8 px-3 text-sm rounded-lg',
-        md: 'h-10 px-4 text-sm rounded-xl',
-        lg: 'h-12 px-6 text-base rounded-xl',
-        xl: 'h-14 px-8 text-base rounded-2xl',
-        icon: 'h-10 w-10 rounded-xl',
-        'icon-sm': 'h-8 w-8 rounded-lg',
+        xs: 'h-7 px-2.5 text-xs rounded-sm',
+        sm: 'h-8 px-3 text-sm rounded-sm',
+        md: 'h-10 px-4 text-sm rounded-sm',
+        lg: 'h-12 px-6 text-base rounded-sm',
+        xl: 'h-14 px-8 text-base rounded-sm',
+        icon: 'h-10 w-10 rounded-sm',
+        'icon-sm': 'h-8 w-8 rounded-sm',
       },
       width: {
         auto: '',

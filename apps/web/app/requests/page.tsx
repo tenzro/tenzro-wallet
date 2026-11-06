@@ -43,7 +43,7 @@ export default function Requests() {
               setProblem(null);
             }}
             rows={4}
-            className="w-full rounded-xl border border-border-default bg-surface-2 p-3 font-mono text-xs"
+            className="w-full rounded-sm border border-border-default bg-surface-2 p-3 font-mono text-xs"
             placeholder="tzk1..."
           />
         </Field>

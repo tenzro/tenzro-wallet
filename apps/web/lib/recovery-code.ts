@@ -20,9 +20,12 @@ export interface RecoveryCodeSetup {
 }
 
 /** A fresh code and the change that puts its commitment on the account. */
-export async function newRecoveryCode(account: string): Promise<RecoveryCodeSetup> {
+export async function newRecoveryCode(
+  chainId: number,
+  account: string,
+): Promise<RecoveryCodeSetup> {
   const code = generateRecoveryCode();
-  const commitment = await recoveryCodeCommitment(account, code);
+  const commitment = await recoveryCodeCommitment(chainId, account, code);
   return { code, op: { set_recovery_code: { commitment } } };
 }
 
@@ -30,21 +33,25 @@ export const TURN_OFF_RECOVERY_CODE: KeystoreOp = { set_recovery_code: { commitm
 
 /** Whether `code` is the one the account committed to. */
 export async function matchesCommitment(
+  chainId: number,
   account: string,
   code: string,
   commitment: string,
 ): Promise<boolean> {
-  const c = await recoveryCodeCommitment(account, code);
+  const c = await recoveryCodeCommitment(chainId, account, code);
   return c.replace(/^0x/, '').toLowerCase() === commitment.replace(/^0x/, '').toLowerCase();
 }
 
 /** Step one of recovering with the code: the claim binding it to the new passkey. */
 export async function claimOp(
+  chainId: number,
   account: string,
   code: string,
   credential: KeystoreCredential,
 ): Promise<KeystoreOp> {
-  return { claim_recovery_code: { claim: await recoveryCodeClaim(account, code, credential) } };
+  return {
+    claim_recovery_code: { claim: await recoveryCodeClaim(chainId, account, code, credential) },
+  };
 }
 
 /** Step two, once the claim has aged: the code revealed with the same passkey. */

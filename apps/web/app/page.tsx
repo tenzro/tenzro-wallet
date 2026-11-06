@@ -2,13 +2,14 @@
 
 import { Button, Input, formatAmount } from '@tenzro/ui';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { CodeBox, Field, Mono, Notice, Section, useAction } from '@/components/ui';
 import { useWallet } from '@/components/wallet-context';
-import { createAccount, signIn } from '@/lib/account';
+import { createAccount, signIn, signerOf } from '@/lib/account';
 import { WALLET_NAME, rpId } from '@/lib/config';
 import { deviceLabel } from '@/lib/device';
+import { NeedsFunds, enrollOnChain, feeAccount } from '@/lib/enrol';
 import { roots } from '@/lib/keystore';
 
 export default function Home() {
@@ -90,6 +91,7 @@ function Account() {
   const guardians = view?.keystore?.recovery_signers.length ?? 0;
   return (
     <>
+      {wallet.pqEnrolled === false ? <FinishSetup /> : null}
       <Section title="Balance">
         <p className="text-display-sm font-medium tabular">
           {balance === null ? '...' : `${formatAmount(balance)} TNZO`}
@@ -133,5 +135,47 @@ function Account() {
         Sign out on this device
       </Button>
     </>
+  );
+}
+
+/**
+ * A new account's passkey must enrol its post-quantum key in chain state
+ * before the account can act on chain. The enrolment is paid from the
+ * passkey's own account, which starts empty.
+ */
+function FinishSetup() {
+  const { wallet, net, setWallet } = useWallet();
+  const [fee, setFee] = useState<string | null>(null);
+  const enrol = useAction();
+  useEffect(() => {
+    if (wallet) feeAccount(wallet.passkey).then(setFee);
+  }, [wallet]);
+  if (!wallet || !net) return null;
+  return (
+    <Section
+      title="Finish setting up"
+      description="Before this account can act on the network, your passkey enrols its post-quantum key. The fee is paid from the passkey's own account, which starts empty: send it a little TNZO, wait a few seconds, then enrol."
+    >
+      {fee ? <CodeBox code={fee} /> : null}
+      {enrol.error ? <Notice tone="danger">{enrol.error}</Notice> : null}
+      <Button
+        pending={enrol.pending}
+        onClick={() =>
+          enrol.run(async () => {
+            try {
+              await enrollOnChain(net.rpc, signerOf(wallet), wallet.passkey);
+            } catch (e) {
+              if (e instanceof NeedsFunds) {
+                throw new Error('The passkey’s account holds nothing yet. Send it TNZO first.');
+              }
+              throw e;
+            }
+            setWallet({ ...wallet, pqEnrolled: true });
+          })
+        }
+      >
+        Enrol the key
+      </Button>
+    </Section>
   );
 }

@@ -58,3 +58,10 @@ CLAUDE.md
 .codeium/
 .github/copilot/
 apps/web/e2e/screenshots/
+
+# Playwright
+test-results/
+playwright-report/
+
+# Extension build (built by extension/build.mjs)
+extension/*.zip

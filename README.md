@@ -6,8 +6,9 @@ records its domain on chain, and no other provider is involved.
 
 An account is a smart account whose keystore on chain lists the passkeys that
 act for it. The wallet builds every change with the open SDK
-([`tenzro-sdk`](https://github.com/tenzro/tenzro-sdk-typescript)); it holds
-no key and runs no server of its own.
+([`tenzro-sdk`](https://github.com/tenzro/tenzro-network/tree/main/sdk/tenzro-ts-sdk));
+it holds no key and runs no server of its own. It is built for the Tenzro
+Network, chain id `13380` (`0x3444`).
 
 ## What it does
 
@@ -48,6 +49,7 @@ network parameter. The wallet reads the current values from chain state.
 ## Deploy your own
 
 The wallet is a static site. Build it with your settings and serve `apps/web/out`.
+The reference deployment is https://wallet.tenzro.com (chain id `13380`).
 
 | Variable | Meaning |
 |---|---|
@@ -103,6 +105,32 @@ The wallet answers `{ protocol, type: 'response', id, result }` or
 never chooses the sending account, and every transaction is shown with its
 node-derived effects before the passkey signs.
 
+## Passkeys and the post-quantum key
+
+An account's signatures carry two legs: the passkey's WebAuthn assertion
+(P-256) and an ML-DSA-65 signature. A browser has no ML-DSA hardware, so the
+wallet derives that key from the passkey itself with the WebAuthn **PRF
+extension**: the authenticator answers a fixed salt with a secret only that
+credential can produce, and the wallet derives the ML-DSA-65 key from it
+(HKDF-SHA-256). Nothing is stored; every device holding the passkey (a synced
+passkey included) derives the same key. A passkey or browser that cannot
+answer the PRF cannot create an account here, and the wallet says so.
+
+- **Relying party.** Passkeys are created on `NEXT_PUBLIC_WALLET_RP_ID` (the
+  serving host by default; `wallet.tenzro.com` for the reference deployment).
+  Each passkey records its relying party in the account's keystore. The
+  network accepts an assertion whose origin is an `https://` page on that
+  domain (or `localhost` for development).
+- **An account is on chain after its first keystore change.** Until then the
+  wallet keeps the passkey's public facts on the device; signing in on another
+  device needs the account to have made one change, which takes a balance (or
+  a sponsor).
+- **Chain id.** `0.9` of the SDK binds the chain id into every keystore
+  change digest and recovery-code claim. The wallet refuses endpoints that do
+  not answer for `NEXT_PUBLIC_WALLET_CHAIN_ID` (default `13380`).
+- **Browser extension.** `extension/` holds a Manifest V3 scaffold; read its
+  README for what a Chrome extension can and cannot sign today.
+
 ## Develop
 
 ```
@@ -110,18 +138,60 @@ apps/web/          the wallet (Next.js, static export)
   app/             pages: account, send, devices, recovery, recover, agents, requests, approve
   lib/             flows on the SDK, each with tests
 packages/ui/       design system: components and tokens
+extension/         Manifest V3 extension scaffold
+tests/e2e/         Playwright tests with a virtual authenticator
+vendor/sdk/        the packed tenzro-sdk 0.9.0 (see below)
 ```
 
-`tenzro-sdk` 0.8 is linked from a checkout of
-[tenzro-sdk-typescript](https://github.com/tenzro/tenzro-sdk-typescript)
-beside this repository (`../tenzro-sdk-typescript`, built with
-`npm ci && npx tsc -b`) until that version is on npm.
+### The SDK
+
+`tenzro-sdk` `0.9.0` is not on npm yet. It is built from
+[`sdk/tenzro-ts-sdk`](https://github.com/tenzro/tenzro-network/tree/main/sdk/tenzro-ts-sdk)
+in the Tenzro repository and packed into `vendor/sdk/` (the SDK and its
+seven `@tenzro/*` packages as `.tgz`). `pnpm-workspace.yaml` points every one
+of them at those files, so `pnpm-lock.yaml` records exactly what was built.
+When 0.9.0 is published, delete `vendor/` and the `overrides` block and set
+the version.
+
+To refresh the packed SDK from a checkout of the Tenzro repository:
 
 ```bash
+cd tenzro-network/sdk/tenzro-ts-sdk
+npm ci && npx tsc -b
+npm pack --pack-destination ../../../tenzro-wallet/vendor/sdk --workspaces .
+npm pack --pack-destination ../../../tenzro-wallet/vendor/sdk
+```
+
+### Run, test, build
+
+```bash
+pnpm install
+pnpm --filter @tenzro/ui build
 pnpm --filter @tenzro/web test        # unit tests
 pnpm --filter @tenzro/web typecheck
 pnpm lint
+NEXT_PUBLIC_WALLET_RP_ID=localhost pnpm --filter @tenzro/web dev
 ```
+
+### End-to-end tests
+
+The tests in `tests/e2e` drive the built wallet in Chromium with a CDP
+virtual authenticator (CTAP2, internal, resident keys, user verification,
+PRF) against a Tenzro node you run. A solo node on the launch genesis is
+enough; it makes a block only when a transaction arrives, and has no faucet,
+so give the tests a command that funds an address.
+
+```bash
+export WALLET_E2E_RPC=http://127.0.0.1:8545      # the node's JSON-RPC
+export WALLET_E2E_FUND="ssh node-host /path/fund.sh"   # <address> <TNZO>
+NEXT_PUBLIC_WALLET_RP_ID=localhost NEXT_PUBLIC_WALLET_SEEDS=$WALLET_E2E_RPC \
+  NEXT_PUBLIC_WALLET_CHAIN_ID=13380 pnpm --filter @tenzro/web build
+pnpm exec playwright test -c tests/e2e/playwright.config.ts
+```
+
+The node must list the test origin in `cors_allowed_origins`
+(`http://localhost:4173`). Set `CHROMIUM` to a Chromium binary if
+Playwright's own is not installed.
 
 ## License
 

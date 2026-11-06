@@ -30,9 +30,7 @@
   },
   "overrides": [
     {
-      "include": [
-        "apps/web/**"
-      ],
+      "include": ["apps/web/**"],
       "linter": {
         "rules": {
           "style": {
@@ -45,9 +43,7 @@
             "noLabelWithoutControl": {
               "level": "error",
               "options": {
-                "inputComponents": [
-                  "Input"
-                ]
+                "inputComponents": ["Input"]
               }
             }
           }

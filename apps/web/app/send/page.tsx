@@ -1,7 +1,7 @@
 'use client';
 
 import { Button, Input, formatAmount } from '@tenzro/ui';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { TypedTransaction } from 'tenzro-sdk';
 
 import { Effects } from '@/components/effects';
@@ -17,6 +17,12 @@ export default function Send() {
   const [to, setTo] = useState('');
   const [amount, setAmount] = useState('');
   const [review, setReview] = useState<TypedTransaction | null>(null);
+  // The browser extension opens this page with the draft in the fragment.
+  useEffect(() => {
+    const h = new URLSearchParams(window.location.hash.slice(1));
+    if (h.get('to')) setTo(h.get('to') as string);
+    if (h.get('amount')) setAmount(h.get('amount') as string);
+  }, []);
   const [effectsOk, setEffectsOk] = useState(false);
   const [sent, setSent] = useState<string | null>(null);
   const { pending, error, setError, run } = useAction();

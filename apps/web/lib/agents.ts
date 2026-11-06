@@ -5,7 +5,13 @@
  * here.
  */
 
-import { type AgentTerms, AuthClient, type DelegatedAgent, type RpcClient } from 'tenzro-sdk';
+import {
+  type AgentTerms,
+  AuthClient,
+  type DelegatedAgent,
+  type RpcClient,
+  passkeyRootApproval,
+} from 'tenzro-sdk';
 
 import { type Wallet, authorize, signerOf } from './account';
 import { isAccount, parseTnzo } from './bytes';
@@ -113,9 +119,14 @@ export function delegate(
 
 export function revoke(rpc: RpcClient, wallet: Wallet, agentDid: string) {
   const signer = signerOf(wallet);
-  return new AuthClient(rpc).revokeDelegatedAgent(wallet.account, agentDid, (challenge) =>
-    authorize(wallet, challenge, signer),
-  );
+  return new AuthClient(rpc).revokeIdentity(signer, wallet.account, agentDid, async (challenge) => {
+    const a = await signer.assertChallenge(challenge.webauthn_challenge);
+    return passkeyRootApproval(signer.p256PublicKey(), {
+      authenticatorData: Uint8Array.from(a.authenticator_data as number[]),
+      clientDataJSON: Uint8Array.from(a.client_data_json as number[]),
+      signature: Uint8Array.from(a.signature as number[]),
+    });
+  });
 }
 
 export interface AgentRecord {

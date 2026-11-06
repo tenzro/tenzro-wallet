@@ -170,7 +170,12 @@ export function hasApproved(update: KeystoreUpdate, publicKey: string): boolean 
 
 /** The digest every approval of `update` signs; shown so two screens can be compared. */
 export async function fingerprint(update: KeystoreUpdate): Promise<string> {
-  const d = await keystoreDigest(update.account, update.previous_commitment, update.op);
+  const d = await keystoreDigest(
+    update.chain_id,
+    update.account,
+    update.previous_commitment,
+    update.op,
+  );
   return toHex(d).slice(0, 16);
 }
 

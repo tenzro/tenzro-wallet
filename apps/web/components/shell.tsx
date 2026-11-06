@@ -40,7 +40,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
               key={n.href}
               href={n.href}
               className={cn(
-                'whitespace-nowrap rounded-lg px-3 py-1.5 text-sm',
+                'whitespace-nowrap rounded-sm px-3 py-1.5 text-sm',
                 path === n.href
                   ? 'bg-surface-2 text-foreground'
                   : 'text-foreground-muted hover:text-foreground',

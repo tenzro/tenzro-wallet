@@ -29,8 +29,8 @@ export function EmptyState({
         className,
       )}
     >
-      <div className="relative flex items-center justify-center size-16 rounded-2xl bg-surface-2 border border-border-subtle">
-        <div className="absolute inset-0 rounded-2xl bg-linear-to-br from-brand/10 to-transparent" />
+      <div className="relative flex items-center justify-center size-16 rounded-sm bg-surface-2 border border-border-subtle">
+        <div className="absolute inset-0 rounded-sm bg-linear-to-br from-brand/10 to-transparent" />
         <Icon className="size-7 text-foreground-muted relative" />
       </div>
       <div>

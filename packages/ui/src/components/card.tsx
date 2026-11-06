@@ -24,7 +24,7 @@ export const Card = React.forwardRef<HTMLDivElement, CardProps>(
       <div
         ref={ref}
         className={cn(
-          'rounded-2xl bg-surface-1 border border-border-subtle',
+          'rounded-sm bg-surface-1 border border-border-subtle',
           variant === 'raised' && 'border-border-default',
           interactive &&
             'transition-colors duration-200 hover:border-border-default cursor-pointer',

@@ -8,6 +8,7 @@ import { type KeystoreAnchor, KeystoreClient, PasskeyRpcClient, type RpcClient }
 
 import { toHex } from './bytes';
 import {
+  type CreatedPasskey,
   type CredentialsApi,
   type Passkey,
   PasskeySigner,
@@ -25,6 +26,8 @@ export interface Wallet {
   readonly passkey: Passkey;
   /** The account's first passkey while its keystore is not yet on chain. */
   readonly anchor: KeystoreAnchor | null;
+  /** Whether this passkey's post-quantum key is enrolled in chain state. */
+  readonly pqEnrolled?: boolean;
 }
 
 const STORE_KEY = 'wallet';
@@ -69,13 +72,15 @@ export function signerOf(wallet: Wallet, api?: CredentialsApi): PasskeySigner {
 /** A custody authorization by this device's passkey, for the challenge the node issued. */
 export async function authorize(
   wallet: Wallet,
-  challenge: { challenge_id: string; webauthn_challenge: string },
+  challenge: { challenge_id: string; webauthn_challenge: string; challenge_hex?: string },
   signer: PasskeySigner = signerOf(wallet),
 ) {
+  const a = await signer.authorizeChallenge(challenge.webauthn_challenge, challenge.challenge_hex);
   return {
     challenge_id: challenge.challenge_id,
     credential_id_hex: `0x${wallet.passkey.credentialId}`,
-    assertion: await signer.assertChallenge(challenge.webauthn_challenge),
+    assertion: a.assertion,
+    ...(a.mlDsaSignatureHex ? { ml_dsa_signature_hex: a.mlDsaSignatureHex } : {}),
     ...(wallet.anchor ? { anchor: wallet.anchor } : {}),
   };
 }
@@ -86,6 +91,55 @@ export interface CreateAccountOptions {
   readonly name: string;
   readonly deviceLabel: string;
   readonly api?: CredentialsApi;
+}
+
+/**
+ * A new passkey enrols with the network: it proves possession of itself and
+ * of the ML-DSA-65 key its PRF derives, and the node registers both. Every
+ * passkey the network accepts, a device about to be linked or a recovery's new
+ * passkey included, is enrolled first: the chain verifies its signatures with
+ * the enrolled key.
+ */
+export async function enrollPasskey(
+  rpc: RpcClient,
+  created: CreatedPasskey,
+  displayName: string,
+  api: CredentialsApi = browserCredentials(),
+) {
+  const passkeys = new PasskeyRpcClient(rpc);
+  const challenge = await passkeys.createCustodyChallenge({
+    account_address: `0x${created.publicKey}`,
+    operation: 'enroll_passkey',
+    target_hex: `0x${created.credentialId}`,
+  });
+  const signer = new PasskeySigner(created, api);
+  const auth = await signer.authorizeChallenge(
+    challenge.webauthn_challenge,
+    challenge.challenge_hex,
+  );
+  if (!auth.pq) {
+    throw new Error(
+      'This passkey cannot derive the account’s post-quantum key (the WebAuthn PRF extension). Use a passkey on a current browser, device or security key.',
+    );
+  }
+  const enrolled = await passkeys.enroll({
+    ml_dsa_public_key_hex: `0x${toHex(auth.pq.publicKey)}`,
+    display_name: displayName,
+    passkey_public_key_hex: `0x${created.publicKey}`,
+    credential_id_hex: `0x${created.credentialId}`,
+    registration_authenticator_data_hex: `0x${toHex(created.registrationAuthenticatorData)}`,
+    rp_id: created.rpId,
+    salt: 0,
+    authorization: {
+      challenge_id: challenge.challenge_id,
+      credential_id_hex: `0x${created.credentialId}`,
+      assertion: auth.assertion,
+      ...(auth.mlDsaSignatureHex ? { ml_dsa_signature_hex: auth.mlDsaSignatureHex } : {}),
+    },
+  });
+  const { registrationAuthenticatorData: _, ...made } = created;
+  const passkey: Passkey = { ...made, pqPublicKey: toHex(auth.pq.publicKey) };
+  return { enrolled, passkey };
 }
 
 /**
@@ -104,34 +158,20 @@ export async function createAccount(
     { rpId: opts.rpId, rpName: opts.rpName, userName: opts.name, label: opts.deviceLabel },
     api,
   );
-  const passkeys = new PasskeyRpcClient(rpc);
-  const challenge = await passkeys.createCustodyChallenge({
-    account_address: `0x${created.publicKey}`,
-    operation: 'enroll_passkey',
-    target_hex: `0x${created.credentialId}`,
-  });
-  const signer = new PasskeySigner(created, api);
-  const enrolled = await passkeys.enroll({
-    display_name: opts.name,
-    passkey_public_key_hex: `0x${created.publicKey}`,
-    credential_id_hex: `0x${created.credentialId}`,
-    registration_authenticator_data_hex: `0x${toHex(created.registrationAuthenticatorData)}`,
-    rp_id: opts.rpId,
-    salt: 0,
-    authorization: {
-      challenge_id: challenge.challenge_id,
-      credential_id_hex: `0x${created.credentialId}`,
-      assertion: await signer.assertChallenge(challenge.webauthn_challenge),
-    },
-  });
+  const { enrolled, passkey } = await enrollPasskey(rpc, created, opts.name, api);
   const anchor = enrolled.anchor;
   const check = new KeystoreClient(second ?? rpc);
   const view = await check.getKeystore(enrolled.smart_account_address, anchor ?? undefined);
   if (sameAccount(view.account, enrolled.smart_account_address) === false) {
     throw new Error('Two nodes derived different accounts for this passkey.');
   }
-  const { registrationAuthenticatorData: _, ...passkey } = created;
-  return { account: enrolled.smart_account_address, did: enrolled.did, passkey, anchor };
+  return {
+    account: enrolled.smart_account_address,
+    did: enrolled.did,
+    passkey,
+    anchor,
+    pqEnrolled: false,
+  };
 }
 
 export function sameAccount(a: string, b: string): boolean {
@@ -170,5 +210,11 @@ export async function signIn(
   if (!view.keystore || !credential) {
     throw new Error('The account no longer links this passkey.');
   }
-  return { account, did: view.keystore.owner_did, passkey: passkeyOf(credential), anchor: null };
+  return {
+    account,
+    did: view.keystore.owner_did,
+    passkey: passkeyOf(credential),
+    anchor: null,
+    pqEnrolled: true,
+  };
 }

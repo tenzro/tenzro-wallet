@@ -80,7 +80,7 @@ function view(rec: KeystoreRecord, independent: number): KeystoreView {
 }
 
 function chain(v: KeystoreView) {
-  return scriptedRpc({ tenzro_getKeystore: () => v });
+  return scriptedRpc({ tenzro_getKeystore: () => v, eth_chainId: () => '0x3444' });
 }
 
 function walletOf(p: Passkey): Wallet {
@@ -204,6 +204,7 @@ describe('sending changes', () => {
     const { rpc } = chain(view(record([credential(a.passkey), credential(b.passkey)]), 2));
     const { sender } = recordingSender();
     const update: KeystoreUpdate = {
+      chain_id: 13380,
       account: ACCOUNT,
       anchor: null,
       previous_commitment: `0x${'99'.repeat(32)}`,
@@ -252,7 +253,7 @@ describe('linking a device', () => {
     const req = decodeRequest(code);
     expect(describeOp(req.update.op)).toContain('Phone');
     expect(req.update.possession).not.toBeNull();
-    const digest = await keystoreDigest(ACCOUNT, COMMITMENT, req.update.op);
+    const digest = await keystoreDigest(13380, ACCOUNT, COMMITMENT, req.update.op);
     expect(n.api.assertions[0]!.challenge).toBe(await passkeyChallenge(digest));
     expect(await verifies(n.passkey.publicKey, n.api.assertions[0]!)).toBe(true);
 
@@ -304,7 +305,7 @@ describe('recovery by guardians and hardware keys', () => {
     const twice = await approveRecovery(rpc, once, g2.signer);
     expect(twice.kind).toBe('send');
 
-    const digest = await keystoreDigest(ACCOUNT, COMMITMENT, started.update.op);
+    const digest = await keystoreDigest(13380, ACCOUNT, COMMITMENT, started.update.op);
     expect(g1.api.assertions[0]!.challenge).toBe(
       await passkeyChallenge(digest, RECOVERY_APPROVAL_SIGNATURE_CONTEXT),
     );

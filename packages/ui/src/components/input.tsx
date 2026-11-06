@@ -23,10 +23,9 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
     return (
       <div
         className={cn(
-          'group relative flex items-center gap-2 rounded-xl border border-border-default bg-surface-1 px-3.5 transition-all',
-          'focus-within:border-brand focus-within:bg-surface-2 focus-within:shadow-[0_0_0_3px_var(--color-brand-soft)]',
-          invalid &&
-            'border-danger focus-within:border-danger focus-within:shadow-[0_0_0_3px_var(--color-danger-soft)]',
+          'group relative flex items-center gap-2 rounded-sm border border-border-default bg-surface-1 px-3.5 transition-all',
+          'focus-within:border-brand focus-within:bg-surface-2',
+          invalid && 'border-danger focus-within:border-danger',
           containerClassName,
         )}
       >
@@ -60,7 +59,7 @@ export interface AmountInputProps
 export const AmountInput = React.forwardRef<HTMLInputElement, AmountInputProps>(
   ({ className, symbol, usdValue, onMax, available, ...props }, ref) => {
     return (
-      <div className="rounded-2xl border border-border-default bg-surface-1 p-4 transition-all focus-within:border-brand focus-within:bg-surface-2 focus-within:shadow-[0_0_0_3px_var(--color-brand-soft)]">
+      <div className="rounded-sm border border-border-default bg-surface-1 p-4 transition-all focus-within:border-brand focus-within:bg-surface-2">
         <div className="flex items-baseline gap-3">
           <input
             ref={ref}
@@ -81,7 +80,7 @@ export const AmountInput = React.forwardRef<HTMLInputElement, AmountInputProps>(
             <button
               type="button"
               onClick={onMax}
-              className="rounded-md bg-brand-soft px-2 py-1 text-xs font-medium text-brand hover:bg-brand/20 transition-colors cursor-pointer"
+              className="rounded-sm bg-brand-soft px-2 py-1 text-xs font-medium text-brand hover:bg-brand/20 transition-colors cursor-pointer"
             >
               {available} MAX
             </button>

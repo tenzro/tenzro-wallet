@@ -10,11 +10,12 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@noble/post-quantum": "0.7.1",
     "@tenzro/ui": "workspace:*",
     "next": "16.3.6",
     "react": "19.2.5",
     "react-dom": "19.2.5",
-    "tenzro-sdk": "0.8.0"
+    "tenzro-sdk": "0.9.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "4.2.4",

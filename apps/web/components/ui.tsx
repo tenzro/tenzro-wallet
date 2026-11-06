@@ -60,7 +60,7 @@ export function Notice({
   return (
     <div
       role={tone === 'danger' ? 'alert' : 'status'}
-      className={cn('rounded-xl border px-4 py-3 text-sm', tones[tone])}
+      className={cn('rounded-sm border px-4 py-3 text-sm', tones[tone])}
     >
       {children}
     </div>
@@ -76,7 +76,7 @@ export function CodeBox({ code, fileName }: { code: string; fileName?: string })
         readOnly
         value={code}
         rows={4}
-        className="w-full resize-none rounded-xl border border-border-default bg-surface-2 p-3 font-mono text-xs text-foreground break-all"
+        className="w-full resize-none rounded-sm border border-border-default bg-surface-2 p-3 font-mono text-xs text-foreground break-all"
         onFocus={(e) => e.currentTarget.select()}
       />
       <div className="flex gap-2">

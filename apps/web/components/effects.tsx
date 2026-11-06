@@ -67,7 +67,7 @@ export function Effects({
   if (state.status === 'blocked') return <Notice tone="danger">{state.reason}</Notice>;
   const e = state.effects;
   return (
-    <div className="space-y-3 rounded-xl border border-border-default bg-surface-2 p-4 text-sm">
+    <div className="space-y-3 rounded-sm border border-border-default bg-surface-2 p-4 text-sm">
       <div className="flex items-center justify-between">
         <span className="font-medium">What this does</span>
         <span className={e.outcome === 'applied' ? 'text-success' : 'text-danger'}>

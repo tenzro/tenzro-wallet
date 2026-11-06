@@ -7,7 +7,7 @@ import type { KeystoreOp, RecoverySigner } from 'tenzro-sdk';
 import { ChangePanel } from '@/components/change-panel';
 import { CodeBox, Field, Notice, Section, download, useAction } from '@/components/ui';
 import { useWallet } from '@/components/wallet-context';
-import { WALLET_NAME, rpId } from '@/lib/config';
+import { CHAIN_ID, WALLET_NAME, rpId } from '@/lib/config';
 import { decodeSigner, encodeSigner, setRecoveryOp } from '@/lib/keystore';
 import { createPasskey } from '@/lib/passkey';
 import { TURN_OFF_RECOVERY_CODE, codeKit, newRecoveryCode } from '@/lib/recovery-code';
@@ -231,7 +231,7 @@ function RecoveryCode({ waits }: { waits: Waits | null }) {
         <div className="flex gap-2">
           <Button
             variant="secondary"
-            onClick={async () => setSetup(await newRecoveryCode(wallet.account))}
+            onClick={async () => setSetup(await newRecoveryCode(CHAIN_ID, wallet.account))}
           >
             {on ? 'Replace the code' : 'Turn on'}
           </Button>

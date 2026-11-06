@@ -25,11 +25,23 @@ function concat(...parts: Uint8Array[]): Uint8Array {
   return out;
 }
 
+async function hmac(secret: Uint8Array, data: Uint8Array): Promise<Uint8Array> {
+  const k = await subtle.importKey(
+    'raw',
+    secret as BufferSource,
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  );
+  return new Uint8Array(await subtle.sign('HMAC', k, data as BufferSource));
+}
+
 interface Key {
   readonly id: Uint8Array;
   readonly rpId: string;
   readonly pair: CryptoKeyPair;
   readonly raw: Uint8Array;
+  readonly prfSecret: Uint8Array;
 }
 
 export interface SignedAssertion {
@@ -46,7 +58,11 @@ export class SoftAuthenticator implements CredentialsApi {
   readonly keys: Key[] = [];
   readonly assertions: SignedAssertion[] = [];
 
-  constructor(private readonly synced = false) {}
+  constructor(
+    private readonly synced = false,
+    /** Whether the authenticator answers the PRF extension. */
+    private readonly prf = true,
+  ) {}
 
   async create(options: CredentialCreationOptions): Promise<Credential | null> {
     const o = options.publicKey as PublicKeyCredentialCreationOptions;
@@ -58,7 +74,13 @@ export class SoftAuthenticator implements CredentialsApi {
     const raw = new Uint8Array(await subtle.exportKey('raw', pair.publicKey));
     const spki = new Uint8Array(await subtle.exportKey('spki', pair.publicKey));
     const id = globalThis.crypto.getRandomValues(new Uint8Array(16));
-    this.keys.push({ id, rpId, pair, raw });
+    this.keys.push({
+      id,
+      rpId,
+      pair,
+      raw,
+      prfSecret: globalThis.crypto.getRandomValues(new Uint8Array(32)),
+    });
     const flags = 0x45 | (this.synced ? 0x18 : 0);
     const aaguid = new Uint8Array(16).fill(0xaa);
     const authData = concat(
@@ -67,6 +89,11 @@ export class SoftAuthenticator implements CredentialsApi {
       aaguid,
       Uint8Array.of(0, id.length),
       id,
+      // The credential public key, COSE_Key (EC2, P-256, ES256).
+      Uint8Array.of(0xa5, 0x01, 0x02, 0x03, 0x26, 0x20, 0x01, 0x21, 0x58, 0x20),
+      raw.slice(1, 33),
+      Uint8Array.of(0x22, 0x58, 0x20),
+      raw.slice(33, 65),
     );
     return {
       id: toBase64Url(id),
@@ -110,8 +137,12 @@ export class SoftAuthenticator implements CredentialsApi {
       clientDataJson,
       signature,
     });
+    const salt = (o as unknown as { extensions?: { prf?: { eval?: { first?: Uint8Array } } } })
+      .extensions?.prf?.eval?.first;
+    const prf = salt && this.prf ? await hmac(key.prfSecret, salt) : null;
     return {
       rawId: key.id.buffer,
+      getClientExtensionResults: () => (prf ? { prf: { results: { first: prf.buffer } } } : {}),
       response: {
         authenticatorData: authData.buffer,
         clientDataJSON: clientDataJson.buffer,

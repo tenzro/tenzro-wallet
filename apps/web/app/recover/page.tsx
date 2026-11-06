@@ -6,8 +6,9 @@ import { KeystoreClient, type KeystoreView } from 'tenzro-sdk';
 
 import { CodeBox, Field, Mono, Notice, Section, useAction } from '@/components/ui';
 import { useWallet } from '@/components/wallet-context';
+import { enrollPasskey } from '@/lib/account';
 import { isAccount } from '@/lib/bytes';
-import { SPONSOR_URL, WALLET_NAME, rpId } from '@/lib/config';
+import { CHAIN_ID, SPONSOR_URL, WALLET_NAME, rpId } from '@/lib/config';
 import { deviceLabel } from '@/lib/device';
 import {
   type ChangeRequest,
@@ -113,7 +114,7 @@ export default function Recover() {
                 userName: WALLET_NAME,
                 label: deviceLabel(),
               });
-              const { registrationAuthenticatorData: _, ...passkey } = created;
+              const { passkey } = await enrollPasskey(net.rpc, created, WALLET_NAME);
               update({ account, passkey });
             })
           }
@@ -151,6 +152,7 @@ export default function Recover() {
                   did: record.owner_did,
                   passkey: rec.passkey,
                   anchor: null,
+                  pqEnrolled: true,
                 });
                 update(null);
                 window.location.href = '/';
@@ -285,15 +287,19 @@ function WithSigners({
               pending={pending}
               onClick={() =>
                 run(async () => {
-                  const signer = new PasskeySigner({
-                    rpId: k.rp_id,
-                    credentialId: '',
-                    publicKey: k.public_key.replace(/^0x/, ''),
-                    aaguid: k.aaguid,
-                    backupEligible: k.backup_eligible,
-                    backupState: k.backup_state,
-                    label: k.label,
-                  });
+                  const signer = new PasskeySigner(
+                    {
+                      rpId: k.rp_id,
+                      credentialId: '',
+                      publicKey: k.public_key.replace(/^0x/, ''),
+                      aaguid: k.aaguid,
+                      backupEligible: k.backup_eligible,
+                      backupState: k.backup_state,
+                      label: k.label,
+                    },
+                    undefined,
+                    false,
+                  );
                   setReq(await approveRecovery(net.rpc, req, signer));
                 })
               }
@@ -361,7 +367,7 @@ function WithCode({
 
   const code = async () => {
     const { code: c } = readKit(text);
-    if (!(await matchesCommitment(rec.account, c, commitment))) {
+    if (!(await matchesCommitment(CHAIN_ID, rec.account, c, commitment))) {
       throw new Error('This is not the code this account set.');
     }
     return c;
@@ -377,7 +383,7 @@ function WithCode({
           value={text}
           onChange={(e) => setText(e.target.value)}
           rows={3}
-          className="w-full rounded-xl border border-border-default bg-surface-2 p-3 font-mono text-xs"
+          className="w-full rounded-sm border border-border-default bg-surface-2 p-3 font-mono text-xs"
         />
       </Field>
       {req ? (
@@ -393,7 +399,12 @@ function WithCode({
           disabled={!text.trim()}
           onClick={() =>
             run(async () => {
-              const op = await claimOp(rec.account, await code(), keystoreCredential(rec.passkey));
+              const op = await claimOp(
+                CHAIN_ID,
+                rec.account,
+                await code(),
+                keystoreCredential(rec.passkey),
+              );
               setReq(await openChange(net.rpc, rec.account, op));
             })
           }

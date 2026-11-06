@@ -7,9 +7,11 @@ import { KeystoreClient } from 'tenzro-sdk';
 import { ChangePanel } from '@/components/change-panel';
 import { CodeBox, Field, Notice, Section, useAction } from '@/components/ui';
 import { useWallet } from '@/components/wallet-context';
+import { enrollPasskey } from '@/lib/account';
 import { WALLET_NAME, rpId } from '@/lib/config';
 import { deviceLabel } from '@/lib/device';
-import { decodeInvite, encodeInvite, isWaiting, linkRequest } from '@/lib/keystore';
+import { NeedsFunds, enrollOnChain } from '@/lib/enrol';
+import { type Invite, decodeInvite, encodeInvite, isWaiting, linkRequest } from '@/lib/keystore';
 import { PasskeySigner, createPasskey, keystoreCredential } from '@/lib/passkey';
 import type { Passkey } from '@/lib/passkey';
 import { remaining } from '@/lib/waits';
@@ -161,7 +163,32 @@ function Join() {
     account: string;
     passkey: Passkey;
   } | null>(null);
+  const [funding, setFunding] = useState<{
+    address: string;
+    passkey: Passkey;
+    invite: Invite;
+  } | null>(null);
   const { pending, error, setError, run } = useAction();
+
+  /** Enrols the new passkey's key on chain from its own account, then asks the account to link it. */
+  async function finish(passkey: Passkey, invite: Invite) {
+    if (!net) return;
+    const signer = new PasskeySigner(passkey);
+    try {
+      await enrollOnChain(net.rpc, signer, passkey);
+    } catch (e) {
+      if (e instanceof NeedsFunds) {
+        setFunding({ address: e.address, passkey, invite });
+        throw new Error(
+          'This device’s key account holds nothing yet. Send it a little TNZO, wait a few seconds, then continue.',
+        );
+      }
+      throw e;
+    }
+    const code = await linkRequest(net.rpc, invite, keystoreCredential(passkey), signer);
+    setFunding(null);
+    setRequest({ code, account: invite.account, passkey });
+  }
 
   if (request) {
     return (
@@ -189,6 +216,7 @@ function Join() {
                 did: view.keystore.owner_did,
                 passkey: request.passkey,
                 anchor: null,
+                pqEnrolled: true,
               });
               window.location.hash = '';
               window.location.reload();
@@ -196,6 +224,24 @@ function Join() {
           }
         >
           It is approved
+        </Button>
+      </Section>
+    );
+  }
+
+  if (funding) {
+    return (
+      <Section
+        title="Fund this device's key"
+        description="The network enrols a passkey's post-quantum key from the passkey's own account, which pays a small fee. Send a little TNZO to this address from your other device, wait a few seconds, then continue."
+      >
+        <CodeBox code={funding.address} />
+        {error ? <Notice tone="danger">{error}</Notice> : null}
+        <Button
+          pending={pending}
+          onClick={() => run(() => finish(funding.passkey, funding.invite))}
+        >
+          Continue
         </Button>
       </Section>
     );
@@ -227,14 +273,8 @@ function Join() {
               userName: WALLET_NAME,
               label: deviceLabel(),
             });
-            const { registrationAuthenticatorData: _, ...passkey } = created;
-            const code = await linkRequest(
-              net.rpc,
-              invite,
-              keystoreCredential(passkey),
-              new PasskeySigner(passkey),
-            );
-            setRequest({ code, account: invite.account, passkey });
+            const { passkey } = await enrollPasskey(net.rpc, created, WALLET_NAME);
+            await finish(passkey, invite);
           })
         }
       >

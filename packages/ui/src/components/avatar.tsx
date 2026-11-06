@@ -21,11 +21,8 @@ function hashSeed(seed: string): number {
 }
 
 function gradientFor(seed: string): string {
-  const h = hashSeed(seed);
-  const hue1 = h % 360;
-  const hue2 = (hue1 + 60 + ((h >> 8) % 60)) % 360;
-  const angle = (h >> 16) % 360;
-  return `linear-gradient(${angle}deg, oklch(0.7 0.16 ${hue1}), oklch(0.7 0.16 ${hue2}))`;
+  const angle = hashSeed(seed) % 360;
+  return `linear-gradient(${angle}deg, oklch(0.55 0 0), oklch(0.3 0 0))`;
 }
 
 interface AvatarProps extends React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Root> {

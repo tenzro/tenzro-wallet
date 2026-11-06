@@ -1,11 +1,20 @@
 packages:
   - "packages/*"
   - "apps/*"
+  - extension
 
-# tenzro-sdk 0.8 is built from github.com/tenzro/tenzro-sdk-typescript,
-# checked out beside this repository, until it is published to npm.
+# tenzro-sdk 0.9.0 is not on npm yet. It is built from the open Tenzro
+# repository (sdk/tenzro-ts-sdk) and packed into vendor/sdk; every package of
+# the SDK resolves from there, so the lockfile records exactly what was built.
 overrides:
-  tenzro-sdk: "link:../tenzro-sdk-typescript"
+  tenzro-sdk: "file:vendor/sdk/tenzro-sdk-0.9.0.tgz"
+  "@tenzro/core": "file:vendor/sdk/tenzro-core-0.9.0.tgz"
+  "@tenzro/payments": "file:vendor/sdk/tenzro-payments-0.9.0.tgz"
+  "@tenzro/settlement": "file:vendor/sdk/tenzro-settlement-0.9.0.tgz"
+  "@tenzro/agents": "file:vendor/sdk/tenzro-agents-0.9.0.tgz"
+  "@tenzro/bridge": "file:vendor/sdk/tenzro-bridge-0.9.0.tgz"
+  "@tenzro/inference": "file:vendor/sdk/tenzro-inference-0.9.0.tgz"
+  "@tenzro/chain": "file:vendor/sdk/tenzro-chain-0.9.0.tgz"
 
 onlyBuiltDependencies:
   - "@biomejs/biome"

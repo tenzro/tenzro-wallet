@@ -116,7 +116,7 @@ export default function Agents() {
             value={form.allowList}
             onChange={(e) => set({ allowList: e.target.value })}
             rows={3}
-            className="w-full rounded-xl border border-border-default bg-surface-2 p-3 font-mono text-xs"
+            className="w-full rounded-sm border border-border-default bg-surface-2 p-3 font-mono text-xs"
           />
         </Field>
         <div className="grid gap-4 sm:grid-cols-2">
