@@ -61,7 +61,7 @@ test.describe('error and edge states', () => {
     const create = page.getByRole('button', { name: 'Create with a passkey' });
     await expect(create).toBeEnabled({ timeout: 30_000 });
     await create.click();
-    await expect(page.getByText(/cannot derive the account/)).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText(/cannot make an account here/)).toBeVisible({ timeout: 30_000 });
     await page.screenshot({ path: info.outputPath('no-prf.png') });
   });
 
