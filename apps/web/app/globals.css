@@ -1,0 +1,23 @@
+/**
+ * App stylesheet — pulls in the shared design system tokens, then layers
+ * on web-specific tweaks (Geist font binding, page-level reset).
+ *
+ * The shared @tenzro/ui token file already does @import "tailwindcss"
+ * so we don't repeat it here.
+ */
+@import "@tenzro/ui/styles.css";
+
+@layer base {
+  :root {
+    font-family: var(--font-geist-sans), var(--font-sans);
+  }
+
+  /* Page-level: keep the gradient bedrock pinned to the viewport */
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    min-height: 100dvh;
+  }
+}

@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="color-scheme" content="light dark">
+<title>Tenzro Wallet</title>
+<link rel="stylesheet" href="popup.css">
+</head>
+<body style="width:auto;max-width:420px;margin:48px auto;padding:0 16px">
+<h1 id="what" class="text-lg font-medium tracking-tight"></h1>
+<p class="text-sm text-foreground-muted">Your passkey signs on your wallet provider's page, not in the extension. This tab passes the request over and waits for the answer from that page.</p>
+<p><button id="continue" type="button" class="inline-flex h-10 items-center justify-center rounded-sm border border-foreground bg-foreground px-4 text-sm text-background">Continue in wallet</button></p>
+<p id="status" role="status" class="text-sm"></p>
+<script type="module" src="bridge.js"></script>
+</body>
+</html>

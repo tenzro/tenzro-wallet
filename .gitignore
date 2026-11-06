@@ -1,0 +1,68 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+build/
+out/
+.next/
+.output/
+*.tsbuildinfo
+
+# Test + coverage
+coverage/
+.vitest/
+
+# Turbo
+.turbo/
+
+# Env (keep .env.example checked in)
+.env
+.env.local
+.env.*
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+*.swp
+*.swo
+*~
+
+# Local tooling / editor scratch
+CLAUDE.md
+**/CLAUDE.md
+.claude/
+.claude.json
+.claude.local.json
+**/.claude/
+.cursor/
+.cursorrules
+.cursorrules.local
+.aider*
+.continue/
+.copilot/
+.windsurf/
+.codeium/
+.github/copilot/
+apps/web/e2e/screenshots/
+
+# Playwright
+test-results/
+playwright-report/
+
+# Extension build (built by extension/build.mjs)
+extension/*.zip

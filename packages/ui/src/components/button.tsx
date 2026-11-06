@@ -1,0 +1,133 @@
+/**
+ * Button — the workhorse interactive primitive.
+ *
+ * Variants are designed for crypto-wallet density:
+ *   - primary: brand-glow, used for "send", "approve", "confirm"
+ *   - secondary: outlined, used for "cancel", "back"
+ *   - ghost: chromeless, used inline (chip rows, table cells)
+ *   - danger: destructive ops only (revoke, delete, reject)
+ *   - agent: agentic-stack actions (approve mandate, sign session key)
+ *
+ * `pending` and `success` are first-class — wallet UIs need a visible
+ * "in flight" state for every signature, and the API encourages it
+ * rather than forcing every consumer to spin up their own loader.
+ */
+
+'use client';
+
+import { Slot, Slottable } from '@radix-ui/react-slot';
+import { type VariantProps, cva } from 'class-variance-authority';
+import { Check, Loader2 } from 'lucide-react';
+import * as React from 'react';
+
+import { cn } from '../utils/cn';
+
+const buttonVariants = cva(
+  [
+    'group relative inline-flex items-center justify-center gap-2 whitespace-nowrap',
+    'tracking-tight',
+    'transition-all duration-200 ease-out',
+    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+    'disabled:pointer-events-none disabled:opacity-50',
+    'select-none cursor-pointer ',
+  ],
+  {
+    variants: {
+      variant: {
+        primary: [
+          'bg-foreground text-background border border-foreground',
+          'hover:bg-brand hover:border-brand hover:text-brand-foreground',
+        ],
+        secondary: ['text-foreground border border-border-strong', 'hover:border-foreground'],
+        ghost: ['text-foreground-muted hover:text-foreground hover:bg-surface-2'],
+        outline: [
+          'border border-border-default bg-transparent text-foreground',
+          'hover:bg-surface-2 hover:border-border-strong',
+        ],
+        danger: [
+          'bg-danger-soft text-danger border border-danger/30',
+          'hover:bg-danger hover:text-background',
+        ],
+        agent: [
+          'bg-agent-soft text-agent border border-agent/30',
+          'hover:bg-agent hover:text-brand-foreground',
+        ],
+      },
+      size: {
+        xs: 'h-7 px-2.5 text-xs rounded-sm',
+        sm: 'h-8 px-3 text-sm rounded-sm',
+        md: 'h-10 px-4 text-sm rounded-sm',
+        lg: 'h-12 px-6 text-base rounded-sm',
+        xl: 'h-14 px-8 text-base rounded-sm',
+        icon: 'h-10 w-10 rounded-sm',
+        'icon-sm': 'h-8 w-8 rounded-sm',
+      },
+      width: {
+        auto: '',
+        full: 'w-full',
+      },
+    },
+    defaultVariants: {
+      variant: 'primary',
+      size: 'md',
+      width: 'auto',
+    },
+  },
+);
+
+export interface ButtonProps
+  extends React.ButtonHTMLAttributes<HTMLButtonElement>,
+    VariantProps<typeof buttonVariants> {
+  asChild?: boolean;
+  pending?: boolean;
+  success?: boolean;
+  leftIcon?: React.ReactNode;
+  rightIcon?: React.ReactNode;
+}
+
+export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
+  (
+    {
+      className,
+      variant,
+      size,
+      width,
+      asChild,
+      pending,
+      success,
+      leftIcon,
+      rightIcon,
+      children,
+      disabled,
+      ...props
+    },
+    ref,
+  ) => {
+    const Comp = asChild ? Slot : 'button';
+    const isBusy = pending || success;
+    return (
+      <Comp
+        ref={ref}
+        className={cn(buttonVariants({ variant, size, width }), className)}
+        disabled={disabled || pending}
+        data-state={success ? 'success' : pending ? 'pending' : 'idle'}
+        {...props}
+      >
+        {pending ? (
+          <Loader2 className="size-4 animate-spin" aria-hidden />
+        ) : success ? (
+          <Check className="size-4" aria-hidden />
+        ) : (
+          leftIcon
+        )}
+        <Slottable>
+          <span className={cn('contents', isBusy && 'opacity-90')}>{children}</span>
+        </Slottable>
+        {!isBusy && rightIcon}
+      </Comp>
+    );
+  },
+);
+Button.displayName = 'Button';
+
+export { buttonVariants };

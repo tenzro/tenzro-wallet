@@ -1,0 +1,29 @@
+{
+  "name": "@tenzro/extension",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "tenzro-sdk": "0.9.0",
+    "@noble/post-quantum": "0.7.1",
+    "@tenzro/ui": "workspace:*",
+    "react": "19.2.5",
+    "react-dom": "19.2.5"
+  },
+  "devDependencies": {
+    "@types/chrome": "0.3.7",
+    "esbuild": "0.28.2",
+    "fflate": "0.8.2",
+    "typescript": "5.7.3",
+    "@types/node": "22.10.5",
+    "@types/react": "19.2.7",
+    "@types/react-dom": "19.2.3",
+    "geist": "1.5.1",
+    "@tailwindcss/cli": "4.2.4",
+    "tailwindcss": "4.2.4"
+  }
+}

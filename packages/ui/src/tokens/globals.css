@@ -1,0 +1,270 @@
+/**
+ * Tenzro Wallet — design tokens.
+ *
+ * The defaults are tenzro.com's design language: white / black, neutral greys,
+ * hairline borders and one slate-blue accent, in light and dark. Every
+ * component reads the wallet tokens below, and every wallet token derives from
+ * a small set of `--tz-*` base variables, so an app embedding the wallet can
+ * restyle all of it by overriding those few (in CSS, or with `applyTheme()`).
+ *
+ * Dark mode follows the system unless the page sets `data-theme="light"` or
+ * `data-theme="dark"` on an ancestor.
+ */
+
+@import "tailwindcss";
+
+/* The components' own classes. This file ships as dist/styles.css, so the
+   path covers src/ in the repo and dist/ once installed. */
+@source "../";
+
+/* ── Base variables: the customisation surface ────────────────────── */
+:root {
+  --tz-background: #ffffff;
+  --tz-foreground: #0a0a0a;
+  --tz-muted: #5f6672;
+  --tz-muted-foreground: #4b5563;
+  --tz-border: #e5e7eb;
+  --tz-border-strong: #d4d4d8;
+  --tz-surface: #fafafa;
+  --tz-accent: #3d4a6b;
+  --tz-accent-hover: #2c3654;
+  --tz-accent-soft: #eef1f8;
+  --tz-accent-foreground: #ffffff;
+  --tz-success: oklch(0.52 0.11 150);
+  --tz-warning: oklch(0.6 0.12 70);
+  --tz-danger: oklch(0.55 0.17 25);
+  --tz-radius: 0.25rem;
+  --tz-font-sans: "Geist", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --tz-font-mono: "Geist Mono", "JetBrains Mono", ui-monospace, monospace;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --tz-background: #000000;
+    --tz-foreground: #ffffff;
+    --tz-muted: #8e8e98;
+    --tz-muted-foreground: #a1a1aa;
+    --tz-border: #232327;
+    --tz-border-strong: #34343a;
+    --tz-surface: #0b0b0d;
+    --tz-accent: #8a9bc7;
+    --tz-accent-hover: #a8b6d6;
+    --tz-accent-soft: #11151f;
+    --tz-accent-foreground: #0a0a0a;
+    --tz-success: oklch(0.74 0.09 145);
+    --tz-warning: oklch(0.78 0.09 75);
+    --tz-danger: oklch(0.66 0.13 25);
+    color-scheme: dark;
+  }
+}
+
+[data-theme="dark"] {
+  --tz-background: #000000;
+  --tz-foreground: #ffffff;
+  --tz-muted: #8e8e98;
+  --tz-muted-foreground: #a1a1aa;
+  --tz-border: #232327;
+  --tz-border-strong: #34343a;
+  --tz-surface: #0b0b0d;
+  --tz-accent: #8a9bc7;
+  --tz-accent-hover: #a8b6d6;
+  --tz-accent-soft: #11151f;
+  --tz-accent-foreground: #0a0a0a;
+  --tz-success: oklch(0.74 0.09 145);
+  --tz-warning: oklch(0.78 0.09 75);
+  --tz-danger: oklch(0.66 0.13 25);
+  color-scheme: dark;
+}
+
+/* ── Wallet tokens, derived from the base variables ───────────────── */
+@theme inline {
+  --color-background: var(--tz-background);
+  --color-background-elevated: var(--tz-surface);
+  --color-surface-1: var(--tz-surface);
+  --color-surface-2: color-mix(in oklab, var(--tz-foreground) 5%, var(--tz-background));
+  --color-surface-3: color-mix(in oklab, var(--tz-foreground) 9%, var(--tz-background));
+  --color-overlay: color-mix(in oklab, var(--tz-background) 70%, transparent);
+
+  --color-border-subtle: color-mix(in oklab, var(--tz-border) 70%, transparent);
+  --color-border-default: var(--tz-border);
+  --color-border-strong: var(--tz-border-strong);
+
+  --color-foreground: var(--tz-foreground);
+  --color-foreground-muted: var(--tz-muted-foreground);
+  --color-foreground-subtle: var(--tz-muted);
+  --color-foreground-disabled: color-mix(in oklab, var(--tz-muted) 55%, var(--tz-background));
+
+  --color-brand: var(--tz-accent);
+  --color-brand-hover: var(--tz-accent-hover);
+  --color-brand-press: var(--tz-accent-hover);
+  --color-brand-soft: var(--tz-accent-soft);
+  --color-brand-glow: color-mix(in oklab, var(--tz-accent) 30%, transparent);
+  --color-brand-foreground: var(--tz-accent-foreground);
+
+  /* Mono tonal greys for the cross-VM route preview; no hue by design. */
+  --color-surface-native: color-mix(in oklab, var(--tz-foreground) 82%, var(--tz-background));
+  --color-surface-native-soft: color-mix(in oklab, var(--tz-foreground) 8%, transparent);
+  --color-surface-native-glow: color-mix(in oklab, var(--tz-foreground) 16%, transparent);
+  --color-surface-evm: color-mix(in oklab, var(--tz-foreground) 66%, var(--tz-background));
+  --color-surface-evm-soft: color-mix(in oklab, var(--tz-foreground) 8%, transparent);
+  --color-surface-evm-glow: color-mix(in oklab, var(--tz-foreground) 16%, transparent);
+  --color-surface-svm: color-mix(in oklab, var(--tz-foreground) 74%, var(--tz-background));
+  --color-surface-svm-soft: color-mix(in oklab, var(--tz-foreground) 8%, transparent);
+  --color-surface-svm-glow: color-mix(in oklab, var(--tz-foreground) 16%, transparent);
+
+  --color-agent: var(--tz-accent);
+  --color-agent-soft: var(--tz-accent-soft);
+  --color-agent-glow: color-mix(in oklab, var(--tz-accent) 28%, transparent);
+
+  --color-success: var(--tz-success);
+  --color-success-soft: color-mix(in oklab, var(--tz-success) 12%, transparent);
+  --color-warning: var(--tz-warning);
+  --color-warning-soft: color-mix(in oklab, var(--tz-warning) 12%, transparent);
+  --color-danger: var(--tz-danger);
+  --color-danger-soft: color-mix(in oklab, var(--tz-danger) 12%, transparent);
+  --color-info: var(--tz-accent);
+  --color-info-soft: var(--tz-accent-soft);
+
+  --font-sans: var(--tz-font-sans);
+  --font-mono: var(--tz-font-mono);
+  --font-display: var(--tz-font-sans);
+
+  /* Radii scale from one base value. */
+  --radius-xs: calc(var(--tz-radius) * 0.75);
+  --radius-sm: var(--tz-radius);
+  --radius-md: calc(var(--tz-radius) * 1.5);
+  --radius-lg: calc(var(--tz-radius) * 2);
+  --radius-xl: calc(var(--tz-radius) * 2.5);
+  --radius-2xl: calc(var(--tz-radius) * 3);
+  --radius-3xl: calc(var(--tz-radius) * 4);
+  --radius-full: 9999px;
+}
+
+@theme {
+  --text-display-2xl: 4.5rem;
+  --text-display-xl: 3.75rem;
+  --text-display-lg: 3rem;
+  --text-display-md: 2.25rem;
+  --text-display-sm: 1.875rem;
+  --text-display-xs: 1.5rem;
+
+  /* ── Motion ──────────────────────────────────────────────────────── */
+  --ease-out-expo: cubic-bezier(0.19, 1, 0.22, 1);
+  --ease-in-out-quart: cubic-bezier(0.76, 0, 0.24, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  --animate-pulse-soft: pulse-soft 2.4s var(--ease-in-out-quart) infinite;
+  --animate-shimmer: shimmer 1.6s linear infinite;
+  --animate-fade-up: fade-up 0.36s var(--ease-out-expo);
+  --animate-fade-in: fade-in 0.24s var(--ease-out-expo);
+  --animate-scale-in: scale-in 0.2s var(--ease-out-expo);
+}
+
+@keyframes pulse-soft {
+  0%,
+  100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 8px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* ── Base layer ───────────────────────────────────────────────────── */
+@layer base {
+  html,
+  body {
+    background: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    font-feature-settings: "ss01", "cv01", "cv11";
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    background: var(--color-brand-soft);
+    color: var(--color-foreground);
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: color-mix(in oklab, var(--tz-foreground) 10%, transparent);
+    border-radius: 9999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in oklab, var(--tz-foreground) 18%, transparent);
+  }
+
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* ── Utility components ───────────────────────────────────────────── */
+@layer components {
+  .skeleton {
+    background: linear-gradient(
+      90deg,
+      var(--color-surface-2) 0%,
+      var(--color-surface-3) 50%,
+      var(--color-surface-2) 100%
+    );
+    background-size: 200% 100%;
+    animation: var(--animate-shimmer);
+  }
+
+  /* Hairline divider — same colour as border-subtle, but explicit name
+     so consumers don't reach for arbitrary opacities. */
+  .hairline {
+    border-color: var(--color-border-subtle);
+  }
+}
