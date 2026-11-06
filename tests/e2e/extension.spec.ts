@@ -68,7 +68,7 @@ test('the package is MV3 with minimal permissions and a strict CSP', async () =>
   expect(csp).not.toMatch(/script-src[^;]*https?:/);
 });
 
-test('signed out and connected to the network', async (_fixtures, info) => {
+test('signed out and connected to the network', async ({}, info) => {
   await seed(null);
   const page = await popup();
   await expect(page.getByRole('button', { name: 'Open wallet' })).toBeVisible();
@@ -76,7 +76,7 @@ test('signed out and connected to the network', async (_fixtures, info) => {
   await page.screenshot({ path: info.outputPath('popup-signed-out.png') });
 });
 
-test('an account shows its balance, receive and send', async (_fixtures, info) => {
+test('an account shows its balance, receive and send', async ({}, info) => {
   const chain = Number.parseInt(await rpc<string>('eth_chainId'), 16);
   expect(chain).toBe(Number(process.env.WALLET_E2E_CHAIN ?? 13380));
   await seed(SEEDED);
@@ -97,11 +97,16 @@ test('an account shows its balance, receive and send', async (_fixtures, info) =
   await expect(review).toBeEnabled();
   const opened = context.waitForEvent('page');
   await review.click();
-  const wallet = await opened;
-  expect(wallet.url()).toContain('localhost:4173/send#to=');
+  const bridge = await opened;
+  // The extension never signs: it opens its bridge tab, which hands the request to the wallet page.
+  expect(bridge.url()).toContain(`chrome-extension://${id}/bridge.html`);
+  await expect(bridge.getByText('Approve a payment in your wallet')).toBeVisible();
+  const wallet = context.waitForEvent('page');
+  await bridge.getByRole('button', { name: 'Continue in wallet' }).click();
+  expect((await wallet).url()).toContain('localhost:4173/approve');
 });
 
-test('a node that answers for another chain is refused', async (_fixtures, info) => {
+test('a node that answers for another chain is refused', async ({}, info) => {
   await seed(SEEDED);
   const page = await context.newPage();
   await page.setViewportSize({ width: 360, height: 600 });
@@ -121,15 +126,13 @@ test('a node that answers for another chain is refused', async (_fixtures, info)
   await page.screenshot({ path: info.outputPath('popup-error.png') });
 });
 
-test('a passkey made in the extension: what the network says', async (_fixtures, info) => {
+test('signed out: connect hands over to the bridge; no passkey is made in the extension', async (_fixtures, info) => {
   await seed(null);
   const page = await popup();
-  await addAuthenticator(context, page);
-  await page.getByPlaceholder('Alex').fill('Extension');
-  await page.getByRole('button', { name: 'Create with a passkey' }).click();
-  // Recorded either way: the chain checks a passkey assertion's origin against its relying party.
-  await page.waitForTimeout(8000);
-  const text = await page.locator('main').innerText();
-  info.annotations.push({ type: 'result', description: text.slice(0, 300) });
-  await page.screenshot({ path: info.outputPath('popup-create-in-extension.png') });
+  await expect(page.getByPlaceholder('Alex')).toHaveCount(0);
+  const opened = context.waitForEvent('page');
+  await page.getByRole('button', { name: 'Connect wallet' }).click();
+  const bridge = await opened;
+  await expect(bridge.getByText('Connect your wallet')).toBeVisible();
+  await bridge.screenshot({ path: info.outputPath('bridge-connect.png') });
 });

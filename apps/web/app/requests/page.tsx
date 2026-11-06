@@ -2,21 +2,27 @@
 
 import { Button } from '@tenzro/ui';
 import { useEffect, useState } from 'react';
+import { KeystoreClient, type KeystoreUpdate } from 'tenzro-sdk';
 
 import { Effects } from '@/components/effects';
 import { CodeBox, Field, Mono, Notice, Section, useAction } from '@/components/ui';
 import { useWallet } from '@/components/wallet-context';
 import { sameAccount, signerOf } from '@/lib/account';
+import { toHex } from '@/lib/bytes';
 import {
   type ChangeRequest,
+  approvalsNeeded,
   approveRecovery,
+  approveUpdate,
   coApprove,
+  completesWith,
   decodeRequest,
   describe,
   encodeRequest,
   fingerprint,
   networkSender,
   relay,
+  sendChange,
 } from '@/lib/keystore';
 
 /**
@@ -80,9 +86,36 @@ function Review({ req }: { req: ChangeRequest }) {
     fingerprint(req.update).then(setPrint);
   }, [req]);
 
+  // Whether this device's approval completes the request, so that it is sent from
+  // this account right after. Only then is there an effect to check, and nodes can
+  // only simulate the change once it carries that approval: approve, check, send.
+  const [completes, setCompletes] = useState<boolean | null>(null);
+  const [approved, setApproved] = useState<KeystoreUpdate | null>(null);
+  const account = wallet?.account;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: re-derive when the request or account changes
+  useEffect(() => {
+    if (!net || !wallet || req.kind !== 'approve') return;
+    let live = true;
+    (async () => {
+      const view = await new KeystoreClient(net.rpc).getKeystore(
+        wallet.account,
+        wallet.anchor ?? undefined,
+      );
+      const needed = approvalsNeeded(req.update.op, view, Date.now());
+      return completesWith(req.update, toHex(signerOf(wallet).p256PublicKey()), needed);
+    })()
+      .then((c) => live && setCompletes(c))
+      .catch(() => live && setCompletes(true));
+    return () => {
+      live = false;
+    };
+  }, [req, net, account]);
+
   if (!wallet || !net || balance === null) return <Notice>Sign in to act on requests.</Notice>;
   const ownAccount = sameAccount(req.update.account, wallet.account);
-  const fromOwn = req.kind === 'send' || (req.kind === 'approve' && ownAccount && balance > 0n);
+  const finalApproval = req.kind === 'approve' && ownAccount && balance > 0n && completes !== false;
+  const fromOwn = req.kind === 'send' || finalApproval;
+  const simulate = req.kind === 'send' ? req.update : approved;
 
   return (
     <Section title="What it asks">
@@ -107,12 +140,17 @@ function Review({ req }: { req: ChangeRequest }) {
           This is your own account’s change; another account has to send it.
         </Notice>
       ) : null}
-      {fromOwn &&
-      !(req.kind === 'send' && ownAccount) &&
-      !(req.kind === 'approve' && !ownAccount) ? (
+      {finalApproval && !approved ? (
+        <Notice>
+          {completes === null
+            ? 'Reading the account.'
+            : 'Your approval completes this change. Approve with your passkey first; two nodes then work out what it does, and nothing is sent until you press Send.'}
+        </Notice>
+      ) : null}
+      {fromOwn && simulate && !(req.kind === 'send' && ownAccount) ? (
         <Effects
           net={net}
-          tx={{ kind: 'KeystoreUpdate', fields: { update: req.update } }}
+          tx={{ kind: 'KeystoreUpdate', fields: { update: simulate } }}
           from={wallet.account}
           onReady={setEffectsOk}
         />
@@ -134,19 +172,45 @@ function Review({ req }: { req: ChangeRequest }) {
           <CodeBox code={result.code} />
         </>
       ) : null}
-      {result ? null : (
+      {result ? null : approved ? (
+        <Button
+          pending={pending}
+          disabled={pending || !effectsOk}
+          onClick={() =>
+            run(async () => {
+              const sent = await sendChange(
+                net.rpc,
+                networkSender(net.rpc),
+                wallet,
+                signerOf(wallet),
+                approved,
+                balance,
+              );
+              setResult({ sent });
+              await refresh();
+            })
+          }
+        >
+          Send the approved change
+        </Button>
+      ) : (
         <Button
           pending={pending}
           disabled={
             pending ||
             (req.kind === 'approve' && !ownAccount) ||
             (req.kind === 'send' && (ownAccount || balance === 0n)) ||
-            (fromOwn && !effectsOk)
+            (req.kind === 'send' && !effectsOk) ||
+            (req.kind === 'approve' && ownAccount && completes === null)
           }
           onClick={() =>
             run(async () => {
               const signer = signerOf(wallet);
               const sender = networkSender(net.rpc);
+              if (finalApproval) {
+                setApproved(await approveUpdate(net.rpc, req.update, signer));
+                return;
+              }
               if (req.kind === 'approve') {
                 const o = await coApprove(net.rpc, sender, wallet, signer, req, balance);
                 setResult(

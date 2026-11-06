@@ -9,9 +9,11 @@ import { SPONSOR_URL } from '@/lib/config';
 import {
   type ChangeOutcome,
   approvalsNeeded,
+  approveUpdate,
   change,
   describe,
   networkSender,
+  sendChange,
 } from '@/lib/keystore';
 
 import { Effects } from './effects';
@@ -37,6 +39,7 @@ export function ChangePanel({
   const { wallet, net, view, balance, now, refresh } = useWallet();
   const [update, setUpdate] = useState<KeystoreUpdate | null>(null);
   const [effectsOk, setEffectsOk] = useState(false);
+  const [approved, setApproved] = useState<KeystoreUpdate | null>(null);
   const [outcome, setOutcome] = useState<ChangeOutcome | null>(null);
   const { pending, error, run } = useAction();
   const opKey = JSON.stringify(op);
@@ -78,13 +81,18 @@ export function ChangePanel({
         <Notice>Two of your passkeys approve this: this device now, another one next.</Notice>
       ) : null}
       {funded && needed === 1 ? (
-        update ? (
+        approved ? (
           <Effects
             net={net}
-            tx={{ kind: 'KeystoreUpdate', fields: { update } }}
+            tx={{ kind: 'KeystoreUpdate', fields: { update: approved } }}
             from={wallet.account}
             onReady={setEffectsOk}
           />
+        ) : update ? (
+          <Notice>
+            Approve with this passkey first. Two nodes then work out what the change does, and
+            nothing is sent until you have seen it and pressed Send.
+          </Notice>
         ) : (
           <Notice>Preparing the change.</Notice>
         )
@@ -96,31 +104,68 @@ export function ChangePanel({
         </Notice>
       ) : null}
       {error ? <Notice tone="danger">{error}</Notice> : null}
-      <Button
-        pending={pending}
-        disabled={
-          pending ||
-          (needed === 1 && (funded ? !effectsOk : !SPONSOR_URL)) ||
-          (needed > 1 && !update)
-        }
-        onClick={() =>
-          run(async () => {
-            const o = await change(
-              net.rpc,
-              networkSender(net.rpc),
-              wallet,
-              signerOf(wallet),
-              op,
-              balance,
-            );
-            setOutcome(o);
-            onDone?.(o);
-            await refresh();
-          })
-        }
-      >
-        {label}
-      </Button>
+      {funded && needed === 1 ? (
+        approved ? (
+          <Button
+            pending={pending}
+            disabled={pending || !effectsOk}
+            onClick={() =>
+              run(async () => {
+                const o: ChangeOutcome = {
+                  sent: await sendChange(
+                    net.rpc,
+                    networkSender(net.rpc),
+                    wallet,
+                    signerOf(wallet),
+                    approved,
+                    balance,
+                  ),
+                };
+                setOutcome(o);
+                onDone?.(o);
+                await refresh();
+              })
+            }
+          >
+            Send the approved change
+          </Button>
+        ) : (
+          <Button
+            pending={pending}
+            disabled={pending || !update}
+            onClick={() =>
+              run(async () => {
+                if (!update) return;
+                setApproved(await approveUpdate(net.rpc, update, signerOf(wallet)));
+              })
+            }
+          >
+            {label}
+          </Button>
+        )
+      ) : (
+        <Button
+          pending={pending}
+          disabled={pending || (needed === 1 && !SPONSOR_URL) || (needed > 1 && !update)}
+          onClick={() =>
+            run(async () => {
+              const o = await change(
+                net.rpc,
+                networkSender(net.rpc),
+                wallet,
+                signerOf(wallet),
+                op,
+                balance,
+              );
+              setOutcome(o);
+              onDone?.(o);
+              await refresh();
+            })
+          }
+        >
+          {label}
+        </Button>
+      )}
     </div>
   );
 }

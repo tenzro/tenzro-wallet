@@ -2,10 +2,10 @@ import { Button, Input, Logo } from '@tenzro/ui';
 import { StrictMode, useCallback, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 
-import { CodeBox, Field, Notice, useAction } from '../../apps/web/components/ui';
-import { createAccount } from '../../apps/web/lib/account';
-import { CHAIN_ID, WALLET_NAME, rpId } from '../../apps/web/lib/config';
-import { network } from '../../apps/web/lib/network';
+import { CodeBox, Field, Notice } from '../../apps/web/components/ui';
+import { parseTnzo } from '../../apps/web/lib/bytes';
+import { CHAIN_ID, WALLET_NAME } from '../../apps/web/lib/config';
+import { transfer } from '../../apps/web/lib/send';
 import { WALLET_ORIGIN, checkChain, loadStored, rpcCall, saveStored } from './shared';
 import type { StoredWallet } from './shared';
 
@@ -35,6 +35,12 @@ function Header({ onBack }: { onBack?: () => void }) {
 
 function openWallet(path = '') {
   void chrome.tabs.create({ url: `${WALLET_ORIGIN}${path}` });
+}
+
+/** Hands a request to the wallet page through the bridge tab; the passkey signs there. */
+async function openBridge(request: { method: string; params?: unknown }) {
+  await chrome.storage.session.set({ bridgeRequest: request });
+  await chrome.tabs.create({ url: chrome.runtime.getURL('bridge.html') });
 }
 
 function Popup() {
@@ -87,7 +93,7 @@ function Popup() {
           </Notice>
         ) : null}
         {!stored ? (
-          <SignedOut onCreated={refresh} disabled={!!chainError || checking} />
+          <SignedOut disabled={!!chainError || checking} />
         ) : view === 'receive' ? (
           <Receive account={stored.account} />
         ) : view === 'send' ? (
@@ -100,50 +106,25 @@ function Popup() {
   );
 }
 
-function SignedOut({ onCreated, disabled }: { onCreated: () => void; disabled: boolean }) {
-  const [name, setName] = useState('');
-  const create = useAction();
+function SignedOut({ disabled }: { disabled: boolean }) {
   return (
-    <>
-      <section className="space-y-2">
-        <h1 className="text-lg font-medium tracking-tight">Your account</h1>
-        <p className="text-sm text-foreground-muted">
-          Open your wallet to create an account or sign in. A passkey approves every payment on your
-          wallet provider's page.
-        </p>
-        <Button width="full" onClick={() => openWallet()}>
-          Open wallet
-        </Button>
-      </section>
-      <section className="space-y-3 border-t border-border-default pt-4">
-        <h2 className="text-sm font-medium">Create an account here</h2>
-        <Field label="Your name" hint="Shown on the passkey prompt.">
-          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Alex" />
-        </Field>
-        {create.error ? <Notice tone="danger">{create.error}</Notice> : null}
-        <Button
-          width="full"
-          variant="secondary"
-          pending={create.pending}
-          disabled={disabled || !name.trim()}
-          onClick={() =>
-            create.run(async () => {
-              const net = await network();
-              const w = await createAccount(net.rpc, net.second, {
-                rpId: rpId(),
-                rpName: WALLET_NAME,
-                name: name.trim(),
-                deviceLabel: 'Browser extension',
-              });
-              await saveStored({ account: w.account, did: w.did });
-              onCreated();
-            })
-          }
-        >
-          Create with a passkey
-        </Button>
-      </section>
-    </>
+    <section className="space-y-3">
+      <h1 className="text-lg font-medium tracking-tight">Your account</h1>
+      <p className="text-sm text-foreground-muted">
+        Connect the account you made in your wallet. Your passkey signs on your wallet provider's
+        page, never in the extension.
+      </p>
+      <Button
+        width="full"
+        disabled={disabled}
+        onClick={() => openBridge({ method: 'tenzro_connect' })}
+      >
+        Connect wallet
+      </Button>
+      <Button width="full" variant="secondary" onClick={() => openWallet()}>
+        Open wallet to create an account
+      </Button>
+    </section>
   );
 }
 
@@ -171,6 +152,7 @@ function Account({
         </Button>
       </div>
       <p className="break-all font-mono text-xs text-foreground-muted">{stored.account}</p>
+      <LastPayment />
       <Button
         size="sm"
         variant="ghost"
@@ -200,7 +182,14 @@ function Receive({ account }: { account: string }) {
 function Send() {
   const [to, setTo] = useState('');
   const [amount, setAmount] = useState('');
-  const ok = /^0x[0-9a-fA-F]{40}([0-9a-fA-F]{24})?$/.test(to.trim()) && Number(amount) > 0;
+  const ok = (() => {
+    try {
+      transfer(to.trim(), parseTnzo(amount));
+      return true;
+    } catch {
+      return false;
+    }
+  })();
   return (
     <section className="space-y-3">
       <h1 className="text-lg font-medium tracking-tight">Send TNZO</h1>
@@ -221,15 +210,17 @@ function Send() {
         />
       </Field>
       <Notice>
-        Your wallet shows what the network says this does, and your passkey approves it there.
+        Your wallet shows what the network says this does, and your passkey approves it there. The
+        extension never signs.
       </Notice>
       <Button
         width="full"
         disabled={!ok}
         onClick={() =>
-          openWallet(
-            `/send#to=${encodeURIComponent(to.trim())}&amount=${encodeURIComponent(amount.trim())}`,
-          )
+          openBridge({
+            method: 'tenzro_sendTransaction',
+            params: transfer(to.trim(), parseTnzo(amount)),
+          })
         }
       >
         Review in wallet
@@ -243,3 +234,16 @@ createRoot(document.getElementById('root') as HTMLElement).render(
     <Popup />
   </StrictMode>,
 );
+
+/** The hash of the last payment the wallet page sent for this extension, kept for the session. */
+function LastPayment() {
+  const [hash, setHash] = useState('');
+  useEffect(() => {
+    chrome.storage.session.get('lastPayment').then((r) => setHash((r.lastPayment as string) ?? ''));
+  }, []);
+  return hash ? (
+    <Notice tone="success">
+      Last payment sent. <span className="break-all font-mono text-xs">{hash}</span>
+    </Notice>
+  ) : null;
+}

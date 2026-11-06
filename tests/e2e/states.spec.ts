@@ -46,7 +46,7 @@ test.describe('error and edge states', () => {
     const create = page.getByRole('button', { name: 'Create with a passkey' });
     await expect(create).toBeEnabled({ timeout: 30_000 });
     await create.click();
-    await expect(page.getByRole('alert')).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText('The passkey prompt was closed.')).toBeVisible({ timeout: 30_000 });
     await expect(page.getByText('Receive')).toHaveCount(0);
     await page.screenshot({ path: info.outputPath('passkey-refused.png') });
   });

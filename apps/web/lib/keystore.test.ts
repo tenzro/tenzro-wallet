@@ -1,4 +1,5 @@
 import {
+  KeystoreClient,
   type KeystoreCredential,
   type KeystoreOp,
   type KeystoreRecord,
@@ -17,6 +18,7 @@ import {
   approveRecovery,
   change,
   coApprove,
+  completesWith,
   decodeInvite,
   decodeRequest,
   decodeSigner,
@@ -173,6 +175,30 @@ describe('sending changes', () => {
     expect(update.approvals).toHaveLength(1);
     expect(update.approvals[0]!.public_key).toBe(a.passkey.publicKey);
     expect(await verifies(a.passkey.publicKey, a.api.assertions[0]!)).toBe(true);
+  });
+
+  it("knows when this device's approval completes a request, and so must be checked before it is sent", async () => {
+    const shared = new SoftAuthenticator();
+    const a = await device('Laptop', shared);
+    const b = await device('Phone', shared);
+    const v = view(record([credential(a.passkey), credential(b.passkey)]), 2);
+    const { rpc } = chain(v);
+    const { sender } = recordingSender();
+    const op: KeystoreOp = { set_policy: { policy: 'two_credentials' } };
+    const out = await change(rpc, sender, walletOf(a.passkey), a.signer, op, 5n, NOW);
+    if (!('request' in out)) throw new Error('expected a request');
+    const req = decodeRequest(out.request);
+    expect(completesWith(req.update, b.passkey.publicKey, 2)).toBe(true);
+    // More approvals are still needed: this device only approves, nothing is sent.
+    expect(completesWith(req.update, b.passkey.publicKey, 3)).toBe(false);
+    // Already approved by this device: it cannot approve again.
+    expect(completesWith(req.update, a.passkey.publicKey, 2)).toBe(false);
+    // Once approved, the update carries the approval a node needs to simulate it.
+    const approved = await new KeystoreClient(rpc).approve(req.update, b.signer);
+    expect(approved.approvals.map((x) => x.public_key)).toEqual([
+      a.passkey.publicKey,
+      b.passkey.publicKey,
+    ]);
   });
 
   it('routes a high-risk change through a second passkey, which then sends it', async () => {

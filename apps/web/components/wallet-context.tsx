@@ -68,8 +68,11 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   }, [net, wallet]);
 
   useEffect(() => {
-    refresh().catch(() => undefined);
-    const t = setInterval(() => refresh().catch(() => undefined), POLL_MS);
+    refresh().catch((e: unknown) => console.error('refresh failed', e));
+    const t = setInterval(
+      () => refresh().catch((e: unknown) => console.error('refresh failed', e)),
+      POLL_MS,
+    );
     return () => clearInterval(t);
   }, [refresh]);
 

@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 import { addAuthenticator, fund, rpc, watch } from './authenticator';
+import { finishSetup } from './helpers';
 
 test.describe('account', () => {
   test('the node answers for the chain the wallet was built for', async () => {
@@ -8,7 +9,7 @@ test.describe('account', () => {
     expect(Number.parseInt(id, 16)).toBe(Number(process.env.WALLET_E2E_CHAIN ?? 13380));
   });
 
-  test('registers a passkey, creates the account, signs out and signs back in', async ({
+  test('registers a passkey, creates the account, and signs out', async ({
     page,
     context,
   }, info) => {
@@ -33,9 +34,14 @@ test.describe('account', () => {
     await page.reload();
     await expect(page.getByText('25 TNZO')).toBeVisible({ timeout: 60_000 });
     await page.screenshot({ path: info.outputPath('funded.png') });
+    await finishSetup(page);
     await page.getByRole('button', { name: 'Sign out on this device' }).click();
+    // A fresh account has no keystore on chain until its first keystore change
+    // (linking a device), so after signing out the passkey cannot be resolved yet.
     await page.getByRole('button', { name: 'Sign in with a passkey' }).click();
-    await expect(page.getByText('Receive')).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByText(/No account on the network links this passkey yet/)).toBeVisible({
+      timeout: 30_000,
+    });
     expect(seen.errors).toEqual([]);
   });
 });

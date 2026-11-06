@@ -35,7 +35,7 @@ export async function newDevice(
 }
 
 /** Links device B to the account on page A; returns once A has approved B's request. */
-export async function linkDevice(a: Page, b: Page) {
+export async function linkDevice(a: Page, b: Page): Promise<string> {
   await a.goto('/devices');
   await a.getByRole('button', { name: 'Show invite' }).click();
   const invite = await a.locator('textarea').first().inputValue();
@@ -52,8 +52,19 @@ export async function linkDevice(a: Page, b: Page) {
   await a.goto('/requests');
   await a.getByPlaceholder('tzk1...').fill(code);
   await a.getByRole('button', { name: 'Read request' }).click();
+  if (process.env.WALLET_E2E_DEBUG) {
+    await a.waitForTimeout(5000);
+    console.log(
+      'A WALLET',
+      (await a.evaluate(() => localStorage.getItem('wallet')))?.slice(0, 80),
+      (await a.locator('main').innerText()).slice(-300).replace(/\n/g, ' | '),
+    );
+  }
   await a.getByRole('button', { name: 'Approve with passkey' }).click();
+  // The nodes check the change with this approval; Send is enabled once they agree.
+  await a.getByRole('button', { name: 'Send the approved change' }).click();
   await expect(a.getByText(/Sent\./)).toBeVisible({ timeout: 90_000 });
+  return code;
 }
 
 /**

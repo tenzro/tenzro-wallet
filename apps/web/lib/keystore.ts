@@ -168,6 +168,26 @@ export function hasApproved(update: KeystoreUpdate, publicKey: string): boolean 
   return update.approvals.some((a) => sameId(a.public_key, publicKey));
 }
 
+/**
+ * Whether this device's approval completes `update`, so that it is sent from the
+ * account right after. Nodes can only simulate a change that already carries the
+ * approvals it needs, so such a change is approved first (nothing is sent), then
+ * simulated with that approval, then sent. False when more passkeys must approve
+ * (this device only approves and hands the code on) or when it has approved.
+ */
+export function completesWith(update: KeystoreUpdate, publicKey: string, needed: number): boolean {
+  return !hasApproved(update, publicKey) && update.approvals.length + 1 >= needed;
+}
+
+/** Adds this device's approval to `update`; sends nothing. */
+export function approveUpdate(
+  rpc: RpcClient,
+  update: KeystoreUpdate,
+  signer: HybridSigner,
+): Promise<KeystoreUpdate> {
+  return new KeystoreClient(rpc).approve(update, signer);
+}
+
 /** The digest every approval of `update` signs; shown so two screens can be compared. */
 export async function fingerprint(update: KeystoreUpdate): Promise<string> {
   const d = await keystoreDigest(

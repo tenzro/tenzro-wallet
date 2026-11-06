@@ -22,6 +22,7 @@ test('turns the one-time recovery code on; the account then resolves from its pa
   await download;
   await page.screenshot({ path: info.outputPath('recovery-kit.png') });
   await page.getByRole('button', { name: 'Turn on the code' }).click();
+  await page.getByRole('button', { name: 'Send the approved change' }).click();
   await expect(page.getByText('Status: On')).toBeVisible({ timeout: 90_000 });
   await page.screenshot({ path: info.outputPath('recovery-on.png') });
   // The account's keystore is on chain now: signing out and back in resolves it.

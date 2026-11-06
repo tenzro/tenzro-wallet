@@ -34,7 +34,11 @@ rmSync(dist, { recursive: true, force: true });
 mkdirSync(dist, { recursive: true });
 
 await build({
-  entryPoints: { popup: join(here, 'src/popup.tsx'), background: join(here, 'src/background.ts') },
+  entryPoints: {
+    popup: join(here, 'src/popup.tsx'),
+    background: join(here, 'src/background.ts'),
+    bridge: join(here, 'src/bridge.ts'),
+  },
   outdir: dist,
   bundle: true,
   format: 'esm',
@@ -61,6 +65,7 @@ await build({
 });
 
 cpSync(join(here, 'src/popup.html'), join(dist, 'popup.html'));
+cpSync(join(here, 'src/bridge.html'), join(dist, 'bridge.html'));
 // One design: the wallet's own stylesheet (the site's tokens), compiled by Tailwind, plus Geist shipped in the package.
 const tailwind = await import('node:child_process').then(({ execFileSync }) => {
   const input = join(here, 'dist/_in.css');

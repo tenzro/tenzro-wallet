@@ -30,7 +30,12 @@ export function pickSecond(endpoints: readonly CheckedEndpoint[]): CheckedEndpoi
 }
 
 export async function openNetwork(): Promise<Network> {
-  const endpoints = await discoverEndpoints({ seeds: [...SEEDS], chainId: CHAIN_ID });
+  let endpoints: Awaited<ReturnType<typeof discoverEndpoints>>;
+  try {
+    endpoints = await discoverEndpoints({ seeds: [...SEEDS], chainId: CHAIN_ID });
+  } catch {
+    throw new Error(`No node answers for chain ${CHAIN_ID}.`);
+  }
   if (endpoints.length === 0) {
     throw new Error(`No node answers for chain ${CHAIN_ID}.`);
   }
