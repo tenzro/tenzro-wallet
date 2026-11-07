@@ -10,7 +10,21 @@ import { defineConfig } from '@playwright/test';
  *
  * Build first:
  *   NEXT_PUBLIC_WALLET_RP_ID=localhost NEXT_PUBLIC_WALLET_SEEDS=$WALLET_E2E_RPC \
+ *   NEXT_PUBLIC_WALLET_SECOND_RPC=$WALLET_E2E_RPC \
  *   NEXT_PUBLIC_WALLET_CHAIN_ID=$WALLET_E2E_CHAIN pnpm --filter @tenzro/web build
+ *
+ * NEXT_PUBLIC_WALLET_SECOND_RPC is required here: a solo dev node has no
+ * second operator for `pickSecond()` (lib/network.ts) to find, and every
+ * approval flow (`checkedEffects`, lib/effects.ts) refuses outright with no
+ * second node -- "No second node is available to check what this does, so
+ * it cannot be approved." That's deliberate production safety, not a bug:
+ * never approve a transaction without an independently-operated node
+ * re-deriving its effects. Pointing SECOND_RPC at the SAME solo node here
+ * only exercises the approval code path for devices.spec/recovery.spec; it
+ * does NOT test the "two nodes disagree" case, and must NEVER be done this
+ * way in scripts/deploy.sh (production) -- there, leave SECOND_RPC unset so
+ * `pickSecond()` keeps picking a real, independently-operated endpoint from
+ * the live network's own discovered operator list.
  */
 export default defineConfig({
   testDir: '.',
