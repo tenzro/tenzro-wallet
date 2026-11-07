@@ -28,7 +28,6 @@ function ask(request: Request): Promise<unknown> {
       reject(new Error('The browser blocked the wallet window.'));
       return;
     }
-    let watch: ReturnType<typeof setInterval> | undefined;
     const done = () => {
       window.removeEventListener('message', onMessage);
       clearInterval(watch);
@@ -62,7 +61,7 @@ function ask(request: Request): Promise<unknown> {
       }
     };
     window.addEventListener('message', onMessage);
-    watch = setInterval(() => {
+    const watch = setInterval(() => {
       if (win.closed) {
         done();
         reject(new Error('The wallet window was closed.'));

@@ -6,7 +6,7 @@
  *   - raised: for primary panels (portfolio summary, send composer,
  *     agent mandate review). One small visual lift via subtle elevation.
  *
- * No more per-surface coloured top-line — chain identity lives on the
+ * No more per-surface colored top-line — chain identity lives on the
  * row level (ChainBadge / ChainLogo), not on container chrome.
  */
 
