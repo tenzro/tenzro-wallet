@@ -186,10 +186,14 @@ so give the tests a command that funds an address.
 ```bash
 export WALLET_E2E_RPC=http://127.0.0.1:8545      # the node's JSON-RPC
 export WALLET_E2E_FUND="ssh node-host /path/fund.sh"   # <address> <TNZO>
-NEXT_PUBLIC_WALLET_RP_ID=localhost NEXT_PUBLIC_WALLET_SEEDS=$WALLET_E2E_RPC \
-  NEXT_PUBLIC_WALLET_CHAIN_ID=13380 pnpm --filter @tenzro/web build
+tests/e2e/build.sh          # two routes to the node: seeds 127.0.0.1 and localhost
 pnpm exec playwright test -c tests/e2e/playwright.config.ts
 ```
+
+The build has two routes to the node because the wallet checks every approval
+against a second node before it signs. With one route there is no second node
+and the devices and recovery specs refuse the approval. A solo node is both
+routes under its two names; the node's `cors_allowed_origins` covers both.
 
 The node must list the test origin in `cors_allowed_origins`
 (`http://localhost:4173`). Set `CHROMIUM` to a Chromium binary if

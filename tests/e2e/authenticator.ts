@@ -73,6 +73,8 @@ export function watch(page: Page) {
 }
 
 export const RPC = process.env.WALLET_E2E_RPC ?? 'http://127.0.0.1:8545';
+/** The same node by its other name: the build's second route (tests/e2e/build.sh). */
+export const RPC2 = process.env.WALLET_E2E_RPC2 ?? RPC.replace('127.0.0.1', 'localhost');
 
 export async function rpc<T = unknown>(method: string, params: unknown[] = []): Promise<T> {
   const res = await fetch(RPC, {

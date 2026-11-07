@@ -1,13 +1,15 @@
 import { expect, test } from '@playwright/test';
 
-import { RPC, addAuthenticator, watch } from './authenticator';
+import { RPC, RPC2, addAuthenticator, watch } from './authenticator';
 import { createAccount, fundAccount } from './helpers';
 
 const CORS = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*' };
 
 test.describe('error and edge states', () => {
   test('the network is down', async ({ page }, info) => {
-    await page.route(RPC, (route) => route.abort('connectionrefused'));
+    // both routes of the build are down
+    for (const url of [RPC, RPC2])
+      await page.route(url, (route) => route.abort('connectionrefused'));
     await page.goto('/');
     await expect(page.getByText(/No node answers|Failed|fetch|network/i).first()).toBeVisible({
       timeout: 60_000,
@@ -17,7 +19,7 @@ test.describe('error and edge states', () => {
   });
 
   test('a node that answers for another chain is refused', async ({ page }, info) => {
-    await page.route(RPC, async (route) => {
+    const answerWrongChain = async (route: import('@playwright/test').Route) => {
       if (route.request().method() === 'OPTIONS') {
         return route.fulfill({ status: 204, headers: CORS });
       }
@@ -27,7 +29,8 @@ test.describe('error and edge states', () => {
         headers: { ...CORS, 'content-type': 'application/json' },
         body: JSON.stringify({ jsonrpc: '2.0', id: body.id ?? 1, result: '0x539' }),
       });
-    });
+    };
+    for (const url of [RPC, RPC2]) await page.route(url, answerWrongChain);
     await page.goto('/');
     await expect(page.getByText(/No node answers for chain 13380/)).toBeVisible({
       timeout: 60_000,

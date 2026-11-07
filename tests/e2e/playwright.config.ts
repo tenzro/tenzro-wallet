@@ -8,9 +8,9 @@ import { defineConfig } from '@playwright/test';
  *   WALLET_E2E_CHAIN chain id the build was made for (default 13380)
  *   CHROMIUM         path to a Chromium binary, if Playwright's own is absent
  *
- * Build first:
- *   NEXT_PUBLIC_WALLET_RP_ID=localhost NEXT_PUBLIC_WALLET_SEEDS=$WALLET_E2E_RPC \
- *   NEXT_PUBLIC_WALLET_CHAIN_ID=$WALLET_E2E_CHAIN pnpm --filter @tenzro/web build
+ * Build first, with two routes to the node (the devices and recovery specs
+ * need a second node for the approval check):
+ *   tests/e2e/build.sh
  */
 export default defineConfig({
   testDir: '.',
