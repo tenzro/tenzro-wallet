@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-import { addAuthenticator, fund, rpc, watch } from './authenticator';
+import { addAuthenticator, fundConfirmed, rpc, watch } from './authenticator';
 import { finishSetup } from './helpers';
 
 test.describe('account', () => {
@@ -35,7 +35,7 @@ test.describe('account', () => {
       () => JSON.parse(localStorage.getItem('wallet') ?? '{}').account as string,
     );
     expect(account).toMatch(/^0x[0-9a-f]{40,64}$/i);
-    fund(account, '25');
+    await fundConfirmed(account, '25');
     await page.reload();
     await expect(page.getByText('25 TNZO')).toBeVisible({ timeout: 60_000 });
     await page.screenshot({ path: info.outputPath('funded.png') });

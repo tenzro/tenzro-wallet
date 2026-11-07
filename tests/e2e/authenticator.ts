@@ -86,6 +86,7 @@ export async function rpc<T = unknown>(method: string, params: unknown[] = []): 
 }
 
 import { execFileSync } from 'node:child_process';
+import { expect } from '@playwright/test';
 
 /**
  * Funds `account` from the dev node's genesis-funded test account. The dev node
@@ -98,4 +99,59 @@ export function fund(account: string, tnzo: string): void {
   const slot = account.length === 42 ? `${account}${'00'.repeat(12)}` : account;
   const [bin, ...args] = cmd.split(' ');
   execFileSync(bin as string, [...args, slot, tnzo], { stdio: 'pipe', timeout: 90_000 });
+}
+
+async function balanceOf(account: string): Promise<bigint> {
+  const addr = `0x${account.replace(/^0x/, '').slice(0, 40)}`;
+  return BigInt(await rpc<string>('eth_getBalance', [addr, 'latest']));
+}
+
+/** Resolves once the chain has produced `n` more blocks than it had when called. */
+export async function untilBlocks(n = 1): Promise<void> {
+  const start = Number.parseInt(await rpc<string>('eth_blockNumber'), 16);
+  await expect
+    .poll(async () => Number.parseInt(await rpc<string>('eth_blockNumber'), 16), {
+      timeout: 120_000,
+      intervals: [1_000],
+    })
+    .toBeGreaterThanOrEqual(start + n);
+}
+
+/**
+ * Funds `account` and returns once the committed balance on chain has risen.
+ */
+export async function fundConfirmed(account: string, tnzo: string): Promise<void> {
+  const before = await balanceOf(account);
+  fund(account, tnzo);
+  await expect
+    .poll(() => balanceOf(account), { timeout: 120_000, intervals: [1_000] })
+    .toBeGreaterThan(before);
+}
+
+/** Resolves once the account's keystore is in chain state. */
+export async function untilKeystoreOnChain(account: string): Promise<void> {
+  await expect
+    .poll(
+      async () => {
+        const v = await rpc<{ on_chain?: boolean }>('tenzro_getKeystore', [
+          account.replace(/^0x/, '').slice(0, 40),
+        ]);
+        return v.on_chain === true;
+      },
+      { timeout: 120_000, intervals: [1_000] },
+    )
+    .toBe(true);
+}
+
+/** The account's committed transaction count; it rises when one of its transactions is included. */
+export async function nonceOf(account: string): Promise<number> {
+  const slot = account.length === 42 ? `${account}${'00'.repeat(12)}` : account;
+  return Number.parseInt(await rpc<string>('tenzro_getNonce', [slot]), 16);
+}
+
+/** Resolves once a transaction of `account` has been included after `before`. */
+export async function untilNonceAbove(account: string, before: number): Promise<void> {
+  await expect
+    .poll(() => nonceOf(account), { timeout: 120_000, intervals: [1_000] })
+    .toBeGreaterThan(before);
 }

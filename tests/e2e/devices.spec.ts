@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-import { addAuthenticator, watch } from './authenticator';
+import { addAuthenticator, untilKeystoreOnChain, watch } from './authenticator';
 import { createAccount, finishSetup, fundAccount, linkDevice, newDevice } from './helpers';
 
 test('links a second device with an invite and a request code; it waits before it counts', async ({
@@ -30,7 +30,9 @@ test('links a second device with an invite and a request code; it waits before i
   await expect(page.getByText(/Would fail/)).toBeVisible({ timeout: 60_000 });
   await expect(page.getByRole('button', { name: 'Send the approved change' })).toBeDisabled();
   await page.goto('/devices');
-  await expect(page.getByText(/Counts as a root in/)).toBeVisible({ timeout: 60_000 });
+  await untilKeystoreOnChain(account);
+  await page.reload();
+  await expect(page.getByText(/Counts as a root in/)).toBeVisible({ timeout: 30_000 });
   await page.screenshot({ path: info.outputPath('devices-a.png') });
   await b.page.getByRole('button', { name: 'It is approved' }).click();
   // The wallet reloads on /devices once the keystore links this passkey.
