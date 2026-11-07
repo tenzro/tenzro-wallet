@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test';
 import { expect } from '@playwright/test';
 
-import { fund } from './authenticator';
+import { fundConfirmed, nonceOf, untilNonceAbove } from './authenticator';
 
 export async function createAccount(page: Page, name = 'Playwright') {
   await page.goto('/');
@@ -14,7 +14,7 @@ export async function createAccount(page: Page, name = 'Playwright') {
 }
 
 export async function fundAccount(page: Page, account: string, tnzo: string) {
-  fund(account, tnzo);
+  await fundConfirmed(account, tnzo);
   await page.goto('/');
   await expect(page.getByText(`${tnzo} TNZO`)).toBeVisible({ timeout: 60_000 });
 }
@@ -44,8 +44,7 @@ export async function linkDevice(a: Page, b: Page): Promise<string> {
   await b.getByRole('button', { name: 'Create a passkey here' }).click();
   // A passkey's post-quantum key is enrolled from its own account, which pays the fee.
   await expect(b.getByText("Fund this device's key")).toBeVisible({ timeout: 60_000 });
-  fund((await b.locator('textarea').first().inputValue()).trim(), '1');
-  await b.waitForTimeout(8000); // the node's mempool sees the funding one block later
+  await fundConfirmed((await b.locator('textarea').first().inputValue()).trim(), '1');
   await b.getByRole('button', { name: 'Continue' }).click();
   await expect(b.getByText('Approve on your other device')).toBeVisible({ timeout: 90_000 });
   const code = await b.locator('textarea').first().inputValue();
@@ -75,8 +74,10 @@ export async function finishSetup(page: Page) {
   await page.goto('/');
   await expect(page.getByText('Finish setting up')).toBeVisible({ timeout: 30_000 });
   const fee = (await page.locator('textarea').first().inputValue()).trim();
-  fund(fee, '1');
-  await page.waitForTimeout(8000); // the node's mempool sees the funding one block later
+  await fundConfirmed(fee, '1');
+  const nonce = await nonceOf(fee);
   await page.getByRole('button', { name: 'Enrol the key' }).click();
   await expect(page.getByText('Finish setting up')).toHaveCount(0, { timeout: 90_000 });
+  // The enrolment is in chain state once the fee account's transaction is included.
+  await untilNonceAbove(fee, nonce);
 }
