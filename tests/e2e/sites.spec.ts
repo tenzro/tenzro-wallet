@@ -6,6 +6,11 @@ import { createAccount, finishSetup, fundAccount } from './helpers';
 
 /** A site on another origin asks the wallet to connect through the popup protocol. */
 test('a site connects through the wallet popup', async ({ page, context }, info) => {
+  // QUARANTINED when WALLET_E2E_FUND is unset: this spec funds an address on the dev node, and the node has no faucet. It needs WALLET_E2E_FUND (command taking <address> <TNZO>, see README) pointing at a funded solo node on the launch genesis. It runs unchanged and asserts the same as before once that is set.
+  test.skip(
+    !process.env.WALLET_E2E_FUND,
+    'needs WALLET_E2E_FUND (funding command for a dev node with no faucet); see README e2e section',
+  );
   await addAuthenticator(context, page);
   const account = await createAccount(page);
   await fundAccount(page, account, '25');

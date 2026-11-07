@@ -20,8 +20,7 @@ coverage/
 # Env (keep .env.example checked in)
 .env
 .env.local
-.env.*
-!.env.example
+.env.*.local
 
 # Logs
 *.log

@@ -90,7 +90,7 @@ import { execFileSync } from 'node:child_process';
 /**
  * Funds `account` from the dev node's genesis-funded test account. The dev node
  * has no faucet; WALLET_E2E_FUND names a command taking `<address> <TNZO>`,
- * for example `ssh node-host /path/fund.sh`.
+ * for example `ssh server3 /srv/walletdev-xxxx/fund.sh`.
  */
 export function fund(account: string, tnzo: string): void {
   const cmd = process.env.WALLET_E2E_FUND;
