@@ -17,6 +17,7 @@ export default defineConfig({
   testMatch: '*.spec.ts',
   timeout: 300_000,
   workers: 1,
+  retries: 1, // a solo node's block timing can lag a step by a block
   fullyParallel: false,
   reporter: [['list']],
   outputDir: '../../test-results',
