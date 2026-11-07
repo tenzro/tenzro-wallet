@@ -8,7 +8,9 @@ import { defineConfig } from '@playwright/test';
  *   WALLET_E2E_CHAIN chain id the build was made for (default 13380)
  *   CHROMIUM         path to a Chromium binary, if Playwright's own is absent
  *
- * Build first:
+ * Build first (pnpm --filter @tenzro/ui build first if its dist/ doesn't
+ * exist yet -- @tenzro/web resolves it at build time, not via a pnpm/turbo
+ * dependency-graph step, see the root README's own Build/Develop sections):
  *   NEXT_PUBLIC_WALLET_RP_ID=localhost NEXT_PUBLIC_WALLET_SEEDS=$WALLET_E2E_RPC \
  *   NEXT_PUBLIC_WALLET_SECOND_RPC=$WALLET_E2E_RPC \
  *   NEXT_PUBLIC_WALLET_CHAIN_ID=$WALLET_E2E_CHAIN pnpm --filter @tenzro/web build
