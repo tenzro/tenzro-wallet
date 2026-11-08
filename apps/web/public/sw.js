@@ -61,7 +61,7 @@ self.addEventListener('fetch', (event) => {
           }
           return res;
         })
-        .catch(() => caches.match(req).then((hit) => hit || caches.match('/dashboard'))),
+        .catch(() => caches.match(req).then((hit) => hit || caches.match('/'))),
     );
   }
 });
